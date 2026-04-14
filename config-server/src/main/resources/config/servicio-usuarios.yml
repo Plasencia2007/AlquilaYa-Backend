@@ -1,0 +1,3 @@
+# Configuración para servicio-usuarios
+server:
+  port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
