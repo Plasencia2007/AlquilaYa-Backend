@@ -3,7 +3,8 @@ import { create } from 'zustand';
 interface AuthModalState {
   isOpen: boolean;
   view: 'login' | 'register';
-  open: (view?: 'login' | 'register') => void;
+  targetRole: 'ESTUDIANTE' | 'PROVEEDOR';
+  open: (view?: 'login' | 'register', role?: 'ESTUDIANTE' | 'PROVEEDOR') => void;
   close: () => void;
   toggleView: () => void;
 }
@@ -11,7 +12,8 @@ interface AuthModalState {
 export const useAuthModal = create<AuthModalState>((set) => ({
   isOpen: false,
   view: 'login',
-  open: (view = 'login') => set({ isOpen: true, view }),
+  targetRole: 'ESTUDIANTE',
+  open: (view = 'login', role = 'ESTUDIANTE') => set({ isOpen: true, view, targetRole: role }),
   close: () => set({ isOpen: false }),
   toggleView: () => set((state) => ({ 
     view: state.view === 'login' ? 'register' : 'login' 

@@ -169,9 +169,18 @@ export default function Navbar() {
         ) : (
           /* ── Guest State (Dropdown Logic) ── */
           <div className="flex items-center gap-8">
-            <Link href="#" className="hidden sm:block font-black text-xs tracking-[0.2em] text-white hover:text-primary transition-all">
-              PUBLICAR
-            </Link>
+            {usuario?.rol === 'PROVEEDOR' ? (
+              <Link href="/landlord" className="hidden sm:block font-black text-xs tracking-[0.2em] text-white hover:text-primary transition-all">
+                PUBLICAR
+              </Link>
+            ) : (
+              <button 
+                onClick={() => openAuthModal('register', 'PROVEEDOR')}
+                className="hidden sm:block font-black text-xs tracking-[0.2em] text-white hover:text-primary transition-all cursor-pointer"
+              >
+                PUBLICAR
+              </button>
+            )}
 
             <div
               className="relative py-1"
@@ -313,13 +322,22 @@ export default function Navbar() {
 
                   {/* Publicar Button (Featured) */}
                   <div className="pt-4">
-                    <Link 
-                      href="#" 
-                      onClick={() => setMobileOpen(false)}
-                      className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all"
-                    >
-                      PUBLICAR TU INMUEBLE
-                    </Link>
+                    {usuario?.rol === 'PROVEEDOR' ? (
+                      <Link 
+                        href="/landlord" 
+                        onClick={() => setMobileOpen(false)}
+                        className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all"
+                      >
+                        PANEL ARRENDADOR
+                      </Link>
+                    ) : (
+                      <button 
+                        onClick={() => { openAuthModal('register', 'PROVEEDOR'); setMobileOpen(false); }}
+                        className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all cursor-pointer"
+                      >
+                        PUBLICAR TU INMUEBLE
+                      </button>
+                    )}
                   </div>
                 </>
               )}

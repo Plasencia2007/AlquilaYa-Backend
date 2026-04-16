@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAuthModal } from './useAuthModal';
 import { useAuth } from './useAuth';
+import { useRouter } from 'next/navigation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -12,36 +13,56 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export default function AuthModal() {
-  const { isOpen, view, close, toggleView } = useAuthModal();
+  const { isOpen, view, targetRole, close, toggleView } = useAuthModal();
   const { iniciarSesion, registrarse } = useAuth();
+  const router = useRouter();
   
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [nombre, setNombre] = useState('');
+  const [currentRol, setCurrentRol] = useState<'ESTUDIANTE' | 'PROVEEDOR'>('ESTUDIANTE');
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Sync animation state when view changes
+  // Sync animation state and role when view/target changes
   useEffect(() => {
     setIsAnimating(true);
+    setCurrentRol(targetRole);
     const timer = setTimeout(() => setIsAnimating(false), 550);
     return () => clearTimeout(timer);
-  }, [view]);
+  }, [view, targetRole]);
 
   if (!isOpen) return null;
 
+  const redirectByRole = (role: string) => {
+    switch (role) {
+      case 'ADMIN':
+        router.push('/admin-master');
+        break;
+      case 'PROVEEDOR':
+        router.push('/landlord');
+        break;
+      case 'ESTUDIANTE':
+      default:
+        router.push('/student');
+        break;
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const exito = await iniciarSesion(correo, contrasena);
-    if (exito) {
+    const usuario = await iniciarSesion(correo, contrasena);
+    if (usuario) {
+      redirectByRole(usuario.rol);
       close();
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    const exito = await registrarse(nombre, correo, contrasena, 'ESTUDIANTE');
-    if (exito) {
+    const usuario = await registrarse(nombre, correo, contrasena, currentRol);
+    if (usuario) {
+      redirectByRole(usuario.rol);
       close();
     }
   };
@@ -159,8 +180,31 @@ export default function AuthModal() {
                 Crea tu cuenta
               </h2>
               <p className="text-[#bda5a8] text-sm font-medium">
-                Únete a AlquilaYa en menos de un minuto.
+                {currentRol === 'PROVEEDOR' ? 'Únete como Arrendador y publica tu inmueble.' : 'Únete a AlquilaYa en menos de un minuto.'}
               </p>
+            </div>
+
+            <div className="flex bg-[#f2ede9] p-1 rounded-xl gap-1">
+              <button 
+                type="button"
+                onClick={() => setCurrentRol('ESTUDIANTE')}
+                className={cn(
+                  "flex-1 py-1.5 text-[10px] font-black tracking-widest rounded-lg transition-all",
+                  currentRol === 'ESTUDIANTE' ? "bg-white text-[#8f0304] shadow-sm" : "text-[#bda5a8] hover:text-[#281721]"
+                )}
+              >
+                SOY ESTUDIANTE
+              </button>
+              <button 
+                type="button"
+                onClick={() => setCurrentRol('PROVEEDOR')}
+                className={cn(
+                  "flex-1 py-1.5 text-[10px] font-black tracking-widest rounded-lg transition-all",
+                  currentRol === 'PROVEEDOR' ? "bg-white text-[#8f0304] shadow-sm" : "text-[#bda5a8] hover:text-[#281721]"
+                )}
+              >
+                SOY ARRENDADOR
+              </button>
             </div>
 
             <form className="space-y-4" onSubmit={handleRegister}>
