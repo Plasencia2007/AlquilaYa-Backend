@@ -1,38 +1,48 @@
 import Cookies from 'js-cookie';
-import { Usuario, PayloadJWT } from '@/types/auth';
-import { encodeJWT } from '@/utils/jwt';
-import { MOCK_USUARIOS } from '@/mocks/usuarios';
+import { Usuario } from '@/types/auth';
+import { api } from '@/utils/api';
 
 const NOMBRE_COOKIE_AUTH = 'auth-token';
 
 export const servicioAuth = {
   iniciarSesion: async (correo: string, contrasena: string): Promise<Usuario | null> => {
-    // Simular latencia de red
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      const response = await api.post('/usuarios/auth/login', {
+        correo,
+        password: contrasena
+      });
 
-    const usuarioEncontrado = MOCK_USUARIOS.find(
-      u => u.correo === correo && u.contrasena === contrasena
-    );
-
-    if (usuarioEncontrado) {
-      const payload: PayloadJWT = {
-        sub: usuarioEncontrado.id,
-        correo: usuarioEncontrado.correo,
-        nombre: usuarioEncontrado.nombre,
-        rol: usuarioEncontrado.rol,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24), // 24 horas
-      };
-
-      const token = encodeJWT(payload);
+      const { token, ...usuario } = response.data;
+      
+      // Guardar el token en la cookie
       Cookies.set(NOMBRE_COOKIE_AUTH, token, { expires: 1 }); // 1 día
-
-      // El tipo Usuario no incluye la contraseña
-      const { contrasena: _, ...usuarioSinContrasena } = usuarioEncontrado;
-      return usuarioSinContrasena;
+      
+      return usuario as Usuario;
+    } catch (error) {
+      console.error('Error en inicio de sesión:', error);
+      return null;
     }
+  },
 
-    return null;
+  registrarse: async (nombre: string, correo: string, contrasena: string, rol: string): Promise<Usuario | null> => {
+    try {
+      const response = await api.post('/usuarios/auth/register', {
+        nombre,
+        correo,
+        password: contrasena,
+        rol: rol.toUpperCase()
+      });
+
+      const { token, ...usuario } = response.data;
+      
+      // Guardar el token en la cookie
+      Cookies.set(NOMBRE_COOKIE_AUTH, token, { expires: 1 }); // 1 día
+      
+      return usuario as Usuario;
+    } catch (error) {
+      console.error('Error en registro:', error);
+      return null;
+    }
   },
 
   cerrarSesion: () => {
@@ -43,10 +53,11 @@ export const servicioAuth = {
     try {
       const partes = token.split('.');
       if (partes.length !== 3) return null;
-      const payload: PayloadJWT = JSON.parse(atob(partes[1]));
+      // El payload es la segunda parte (índice 1)
+      const payload = JSON.parse(atob(partes[1]));
       return {
         id: payload.sub,
-        correo: payload.correo,
+        correo: payload.sub, // En el backend puse el correo como subject
         nombre: payload.nombre,
         rol: payload.rol
       };

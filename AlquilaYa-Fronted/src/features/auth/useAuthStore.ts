@@ -7,6 +7,7 @@ import { servicioAuth } from './servicioAuth';
 
 interface AccionesAuth {
   iniciarSesion: (correo: string, contrasena: string) => Promise<Usuario | null>;
+  registrarse: (nombre: string, correo: string, contrasena: string, rol: string) => Promise<Usuario | null>;
   cerrarSesion: () => void;
   inicializar: () => void;
   reiniciar: () => void;
@@ -37,6 +38,22 @@ export const useAuthStore = create<EstadoAuth & AccionesAuth>((set) => ({
     set({ cargando: true });
     try {
       const usuario = await servicioAuth.iniciarSesion(correo, contrasena);
+      if (usuario) {
+        set({ usuario, estaAutenticado: true, cargando: false });
+        return usuario;
+      }
+      set({ cargando: false });
+      return null;
+    } catch (error) {
+      set({ cargando: false });
+      return null;
+    }
+  },
+
+  registrarse: async (nombre: string, correo: string, contrasena: string, rol: string) => {
+    set({ cargando: true });
+    try {
+      const usuario = await servicioAuth.registrarse(nombre, correo, contrasena, rol);
       if (usuario) {
         set({ usuario, estaAutenticado: true, cargando: false });
         return usuario;

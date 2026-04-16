@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from './useAuthStore';
 
 export const useAuth = () => {
-  const { inicializar, cargando, estaAutenticado, usuario, iniciarSesion, cerrarSesion } = useAuthStore();
+  const { inicializar, cargando, estaAutenticado, usuario, iniciarSesion, cerrarSesion, registrarse } = useAuthStore();
   
   useEffect(() => {
     // Sincronización inicial estable: solo se dispara si cargando es true
@@ -19,6 +19,7 @@ export const useAuth = () => {
     cerrarSesion, 
     cargando, 
     iniciarSesion, 
+    registrarse,
     inicializar 
   };
 };

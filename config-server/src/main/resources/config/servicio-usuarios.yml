@@ -1,3 +1,21 @@
 # Configuración para servicio-usuarios
 server:
   port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/testdb
+    username: postgres
+    password: oracle123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 86400000 # 24 horas

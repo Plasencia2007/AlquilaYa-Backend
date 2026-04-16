@@ -13,7 +13,7 @@ function cn(...inputs: ClassValue[]) {
 
 export default function AuthModal() {
   const { isOpen, view, close, toggleView } = useAuthModal();
-  const { iniciarSesion } = useAuth();
+  const { iniciarSesion, registrarse } = useAuth();
   
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
@@ -40,7 +40,10 @@ export default function AuthModal() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Intento de registro', { nombre, correo, contrasena });
+    const exito = await registrarse(nombre, correo, contrasena, 'ESTUDIANTE');
+    if (exito) {
+      close();
+    }
   };
 
   return (
