@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* ── Nueva Paleta de Colores AlquilaYa ── */
+  --color-primary: #bb0506;
+  /* Color principal de acción (Rojo vibrante) */
+  --color-primary-container: #900304;
+  /* Color primario oscuro (Rojo profundo) */
+  --color-on-primary: #ffffff;
+  /* Texto sobre color primario */
+
+  --color-secondary: #c0494b;
+  /* Color secundario/acento (Rojo coral) */
+  --color-secondary-container: #d29c9a;
+  /* Color secundario suave (Rosa pálido) */
+  --color-on-secondary: #ffffff;
+
+  --color-tertiary: #d29c9a;
+  /* Color terciario de apoyo (Rosa pálido) */
+
+  --color-background: #29131b;
+  /* Color de fondo principal (Borgoña oscuro) */
+  --color-on-background: rgba(226, 225, 223, 1.000);
+  /* Color de texto principal (Gris claro/Hueso) */
+
+  --color-surface: #29131b;
+  /* Color de superficies (Fondo oscuro) */
+  --color-on-surface: rgba(226, 225, 223, 1.000);
+  /* Texto sobre superficies */
+  --color-surface-variant: #373a52;
+  /* Color para superficies secundarias (Azul grisáceo) */
+  --color-on-surface-variant: rgba(226, 225, 223, 0.8);
+
+  --color-surface-container-lowest: #29131b;
+  --color-surface-container-low: #2d1620;
+  --color-surface-container: #373a52;
+  --color-surface-container-high: #3f425e;
+  --color-surface-container-highest: #4b4e6b;
+
+  --color-outline: #7d7f8e;
+  /* Color de bordes y separadores (Gris neutro) */
+  --color-outline-variant: #373a52;
+
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+
+  /* ── Tipografía ── */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-headline: 'Manrope', sans-serif;
+  --font-display: 'Manrope', sans-serif;
+
+  /* ── Variables Core para Tailwind ── */
+  --background: var(--color-background);
+  --foreground: var(--color-on-background);
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .brand-logo {
+    font-family: var(--font-headline);
+  }
+}
+
+/* ── Capa de Utilidades Custom ── */
+@layer utilities {
+  .editorial-shadow {
+    box-shadow: 0 20px 40px rgba(30, 78, 216, 0.06);
+  }
+
+  .glass-nav {
+    backdrop-filter: blur(24px);
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* Scrollbar sutil */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-gray-300);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gray-400);
+  }
+
+  /* Animaciones */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideLeft {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out forwards;
+  }
+
+  .animate-slide-left {
+    animation: slideLeft 0.3s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+  }
+}
