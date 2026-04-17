@@ -1,0 +1,13 @@
+com\alquilaya\serviciopropiedades\config\KafkaConfig.class
+com\alquilaya\serviciopropiedades\enums\EstadoPropiedad.class
+com\alquilaya\serviciopropiedades\config\CloudinaryConfig.class
+com\alquilaya\serviciopropiedades\entities\Propiedad.class
+com\alquilaya\serviciopropiedades\config\JwtService.class
+com\alquilaya\serviciopropiedades\ServicioPropiedadesApplication.class
+com\alquilaya\serviciopropiedades\entities\Propiedad$PropiedadBuilder.class
+com\alquilaya\serviciopropiedades\config\SecurityConfig.class
+com\alquilaya\serviciopropiedades\services\CloudinaryService.class
+com\alquilaya\serviciopropiedades\config\JwtAuthenticationFilter.class
+com\alquilaya\serviciopropiedades\repositories\PropiedadRepository.class
+com\alquilaya\serviciopropiedades\controllers\PropiedadController.class
+com\alquilaya\serviciopropiedades\services\KafkaProducerService.class

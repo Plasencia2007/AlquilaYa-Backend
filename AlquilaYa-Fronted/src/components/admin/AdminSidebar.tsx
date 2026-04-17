@@ -170,7 +170,7 @@ export default function AdminSidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>(['Análisis global', 'Proveedores']);
 
   const toggleItem = (label: string) => {
-    setExpandedItems(prev => 
+    setExpandedItems(prev =>
       prev.includes(label) ? [] : [label]
     );
   };
@@ -181,17 +181,16 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[280px] bg-[#0b1222] border-r border-[#1e293b] flex flex-col z-[60] overflow-hidden">
-      {/* Logo Section */}
-      <Link href="/admin-master" className="px-6 py-5 flex items-center gap-3 hover:opacity-80 transition-opacity">
-        <div className="w-10 h-10 bg-primary/20 border border-primary/30 rounded-xl flex items-center justify-center shadow-lg shadow-primary/5">
-          <span className="material-symbols-outlined text-primary text-2xl">home</span>
+    <aside className="fixed left-0 top-0 h-screen w-[280px] bg-[#0f172a] border-r border-white/5 flex flex-col z-[60] overflow-hidden shadow-[10px_0_40px_rgba(0,0,0,0.4)]">
+      <div className="px-8 py-10 flex items-center gap-4">
+        <div className="w-12 h-12 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] group-hover:scale-105 transition-transform duration-500">
+          <span className="material-symbols-outlined text-primary text-3xl">terminal</span>
         </div>
         <div>
-          <p className="text-xl font-black text-white tracking-tighter leading-none">AlquilaYa</p>
-          <p className="text-[10px] font-bold text-outline uppercase tracking-[0.2em] mt-1 opacity-60">Torre de Control</p>
+          <p className="text-2xl font-black text-white tracking-tighter leading-none italic uppercase">Master</p>
+          <p className="text-[9px] font-black text-primary/80 uppercase tracking-[0.4em] mt-1.5 opacity-80">Torre de Control</p>
         </div>
-      </Link>
+      </div>
 
 
 
@@ -224,42 +223,42 @@ export default function AdminSidebar() {
                         <span className="text-sm font-bold tracking-tight">{item.label}</span>
                       </Link>
                     ) : (
-                    /* Item con acordeón (con subItems) */
-                    <button
-                      onClick={() => toggleItem(item.label)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 group",
-                        isAnySubItemActive
-                          ? "bg-primary text-white"
-                          : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-[20px] opacity-80">
-                          {item.icon}
-                        </span>
-                        <span className="text-sm font-bold tracking-tight">{item.label}</span>
-                      </div>
+                      /* Item con acordeón (con subItems) */
+                      <button
+                        onClick={() => toggleItem(item.label)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 group",
+                          isAnySubItemActive
+                            ? "bg-primary text-white"
+                            : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-[20px] opacity-80">
+                            {item.icon}
+                          </span>
+                          <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                        </div>
 
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span className={cn(
-                            "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black",
-                            isAnySubItemActive ? "bg-white/20 text-white" : "bg-red-500/20 text-red-500"
-                          )}>
-                            {item.badge}
-                          </span>
-                        )}
-                        {hasSubItems && (
-                          <span className={cn(
-                            "material-symbols-outlined text-[18px] transition-transform duration-300",
-                            isExpanded ? "rotate-180" : ""
-                          )}>
-                            expand_more
-                          </span>
-                        )}
-                      </div>
-                    </button>
+                        <div className="flex items-center gap-2">
+                          {item.badge && (
+                            <span className={cn(
+                              "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black",
+                              isAnySubItemActive ? "bg-white/20 text-white" : "bg-red-500/20 text-red-500"
+                            )}>
+                              {item.badge}
+                            </span>
+                          )}
+                          {hasSubItems && (
+                            <span className={cn(
+                              "material-symbols-outlined text-[18px] transition-transform duration-300",
+                              isExpanded ? "rotate-180" : ""
+                            )}>
+                              expand_more
+                            </span>
+                          )}
+                        </div>
+                      </button>
                     )}
 
                     {/* Sub Items Accordion */}
@@ -297,20 +296,23 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="p-3 bg-[#0f172a] border-t border-[#1e293b]">
-        <div className="p-3 rounded-2xl bg-[#1e293b]/50 border border-[#334155]/50 flex items-center justify-between group">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary/20 rounded-full flex items-center justify-center">
-              <span className="text-primary text-xs font-black">AD</span>
+      <div className="p-4 bg-black/40 border-t border-white/5 backdrop-blur-xl">
+        <div className="p-4 rounded-3xl bg-blue-600/10 border border-blue-400/20 flex items-center justify-between group hover:bg-blue-600/20 transition-all duration-500 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 bg-primary border border-white/20 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:rotate-6 transition-transform">
+              <span className="text-white text-sm font-black italic">JD</span>
             </div>
             <div>
-              <p className="text-xs font-black text-white tracking-tight">{usuario?.nombre || 'Admin Master'}</p>
-              <p className="text-[10px] text-[#64748b] font-bold">God view activo</p>
+              <p className="text-sm font-black text-white tracking-tight">{usuario?.nombre || 'Jhon'}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,1)]" />
+                <p className="text-[10px] text-primary font-black uppercase tracking-widest opacity-80">God View Activo</p>
+              </div>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#64748b] hover:bg-red-500/10 hover:text-red-500 transition-all"
+            className="w-10 h-10 rounded-2xl flex items-center justify-center text-white/40 hover:bg-red-500 hover:text-white transition-all duration-300 shadow-xl"
           >
             <span className="material-symbols-outlined text-[20px]">logout</span>
           </button>

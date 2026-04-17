@@ -7,7 +7,13 @@ spring:
             - id: servicio-usuarios
               uri: lb://servicio-usuarios
               predicates:
-                - Path=/usuarios/**
+                - Path=/api/v1/usuarios/**, /api/v1/auth/**
+              filters:
+                - StripPrefix=1
+            - id: servicio-propiedades
+              uri: lb://servicio-propiedades
+              predicates:
+                - Path=/api/v1/propiedades/**
               filters:
                 - StripPrefix=1
           cors-configurations:

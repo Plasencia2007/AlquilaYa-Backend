@@ -1,6 +1,15 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function Footer() {
+  const pathname = usePathname();
+  const hiddenRoutes = ['/admin-master', '/landlord', '/student'];
+  const isHidden = pathname ? hiddenRoutes.some(route => pathname.startsWith(route)) : false;
+
+  if (isHidden) return null;
+
   return (
     <footer className="w-full border-t border-white/5 bg-background flex flex-col md:flex-row justify-between items-center px-12 py-12 gap-8">
       <div className="flex flex-col items-center md:items-start gap-4">

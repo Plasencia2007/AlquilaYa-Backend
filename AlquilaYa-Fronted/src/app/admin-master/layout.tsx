@@ -51,10 +51,10 @@ export default function AdminMasterLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background relative selection:bg-primary/20 animate-fade-in text-on-surface">
+    <div className="min-h-screen bg-[#0f172a] relative selection:bg-primary/20 animate-fade-in flex overflow-hidden">
       <AdminSidebar />
-      <main className="pl-[280px] min-h-screen">
-        <div className="p-8 lg:p-12 max-w-[1600px] mx-auto">
+      <main className="flex-1 pl-[280px] h-screen overflow-y-auto custom-scrollbar bg-[#f8fafc]">
+        <div className="p-10 lg:p-14 max-w-[1600px] mx-auto min-h-full flex flex-col text-slate-900">
           {children}
         </div>
       </main>

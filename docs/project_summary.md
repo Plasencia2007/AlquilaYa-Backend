@@ -1,74 +1,46 @@
-# Proyecto AlquilaYa - Resumen General
+# Resumen del Proyecto: AlquilaYa 🏠🚀
 
-Bienvenido al centro de documentación de **AlquilaYa**. Este documento sirve como una guía viva del estado actual del proyecto, su arquitectura y tecnologías.
+Este documento centraliza el estado actual de la infraestructura, seguridad y lógica de negocio del ecosistema AlquilaYa.
 
-## 🏗️ Arquitectura del Sistema
-El proyecto sigue un patrón de **Microservicios** en el backend con un frontend desacoplado en **Next.js**.
+## 🌉 1. Arquitectura de Microservicios (Backend)
+El backend está construido con **Spring Cloud** y se comunica a través de un **API Gateway**.
 
-### Componentes del Backend (Spring Cloud)
-| Servicio | Puerto | Descripción |
-| :--- | :--- | :--- |
-| `discovery-server` | 8761 | Registro de servicios (Netflix Eureka). |
-| `config-server` | 8888 | Gestión centralizada de archivos YAML/Properties. |
-| `api-gateway` | 8080 | Puerta de enlace única y gestión de CORS. |
-| `servicio-usuarios` | Dinámico | Manejo de usuarios, roles y autenticación (JWT). |
+### 🛠️ Configuración de Red
+- **API Gateway**: `http://localhost:8080` (Puerto de entrada único).
+- **Eureka Server**: `http://localhost:8761` (Descubrimiento de servicios).
+- **Config Server**: `http://localhost:8888` (Configuración centralizada).
 
-## 🚀 Orden de Arranque Recomendado
-Para que el sistema funcione correctamente, arranca los servicios en este orden:
-1.  **`discovery-server`**: Servidor de registro.
-2.  **`config-server`**: Servidor de configuración.
-3.  **`api-gateway`**: Puerta de enlace.
-4.  **`servicio-usuarios`**: Servicio de negocio.
-
-### Componentes del Frontend (Next.js)
-| Carpeta | Stack | Descripción |
-| :--- | :--- | :--- |
-| `AlquilaYa-Fronted` | Next.js 16, React 19, Zustand, Tailwind 4 | Interfaz de usuario premium y lógica de cliente. |
-
-### Herramientas de Pruebas
-| Carpeta | Herramienta | Descripción |
-| :--- | :--- | :--- |
-| `postman` | Postman | Colecciones de peticiones JSON para probar la API sin el frontend. |
-| `database` | PostgreSQL Scripts | Scripts SQL (`schema.sql` y `data.sql`) para inicializar la base de datos de forma manual. |
+### 🛡️ Seguridad e Infraestructura (Nuevos Ajustes)
+- **CORS**: Gestionado **exclusivamente** en el API Gateway para evitar conflictos en el navegador. Origen permitido: `http://localhost:3000`.
+- **JWT**: Clave secreta configurada en formato Base64 para garantizar la compatibilidad entre servicios.
+- **Microservicios**:
+    *   **Servicio Usuarios**: Implementa Auth (Login/Registro) con BCrypt y generación de tokens JWT.
+    *   **Base de Datos**: PostgreSQL para persistencia de usuarios y roles.
 
 ---
 
-## 🚀 Tecnologías Principales
+## 🎨 2. Frontend (Next.js 15)
+El frontend se comunica con el Gateway y gestiona la sesión mediante cookies de seguridad.
 
-### Backend
-- **Lenguaje:** Java 21
-- **Framework:** Spring Boot 3.5.x
-- **Seguridad:** Spring Security + JWT (jjwt)
-- **Base de Datos:** PostgreSQL
-- **Mensajería:** Kafka
-- **Infraestructura:** Spring Cloud Discovery & Gateway
+### 🎭 Lógica de Roles y Sincronización
+Se ha unificado la nomenclatura de roles entre el Backend (Java Enum) y el Frontend (TypeScript):
+- **ARRENDADOR**: Dueño de inmuebles. Su mundo es el Dashboard profesional.
+- **ESTUDIANTE**: Usuario que busca alquileres.
+- **ADMIN**: Administrador del sistema.
 
-### Frontend
-- **Framework:** Next.js 16 (App Router)
-- **Estilos:** Tailwind CSS v4 + Radix UI
-- **Estado:** Zustand (Auth store)
-- **Comunicación:** Axios con interceptores para JWT
-- **Iconos:** Lucide React
-
----
-
-## 🛠️ Configuración de Conexión
-Actualmente, el frontend y el backend se comunican a través del **Gateway** (Puerto 8080).
-- **Variable de Entorno:** `NEXT_PUBLIC_API_URL` en `.env.local` apunta a `http://localhost:8080`.
-- **Rutas API:** 
-  - Login: `/usuarios/auth/login`
-  - Registro: `/usuarios/auth/register`
+### 🚀 Flujo de Usuario Profesional
+- **Redirección Directa**: Al iniciar sesión como `ARRENDADOR`, el sistema redirige instantáneamente a `/landlord/dashboard`.
+- **Navegación Blindada**: Se ha configurado un **Middleware** que:
+    1.  Bloquea el acceso a rutas de otros roles.
+    2.  Fuerza al Arrendador a permanecer en su Dashboard (si intenta entrar al inicio público, el sistema lo devuelve a su panel).
+    3.  Oculta el Navbar público para el rol Arrendador, garantizando una interfaz técnica y limpia.
 
 ---
 
-## 📝 Estado del Proyecto: En Desarrollo
-- [x] Infraestructura de Microservicios base.
-- [x] Servicio de Usuarios con Auth JWT.
-- [x] Configuración de Gateway y CORS.
-- [x] Frontend con Auth Provider y Zustand.
-- [x] Configuración de variables de entorno (`.env.local`).
-- [ ] Implementación de servicios de Propiedades/Alquileres.
-- [ ] Dashboards de usuario y administración.
+## 📂 Documentación Adicional
+- **[infrastructure_guide.md](file:///C:/Users/jhons/.gemini/antigravity/brain/85cb7f7f-6007-48f3-8948-376b955aeab9/infrastructure_guide.md)**: Guía técnica de bajo nivel sobre CORS, JWT y Gateway.
+- **Postman Collection**: Ubicada en `/docs/postman/AlquilaYa_API.json` para pruebas de integración.
 
 ---
-> **Nota:** Este documento debe actualizarse cada vez que se agregue un nuevo servicio, funcionalidad mayor o cambio en la arquitectura.
+> [!IMPORTANT]
+> **Estado Actual**: Infraestructura de Autenticación y Navegación completada al 100% y verificada. La comunicación Frontend-Backend es estable.
