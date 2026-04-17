@@ -30,6 +30,7 @@ public class PropiedadController {
             @RequestPart("propiedad") String propiedadJson,
             @RequestPart("file") MultipartFile file
     ) throws IOException {
+        System.out.println("📥 [CONTROLLER] Petición recibida para CREAR propiedad.");
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
         Propiedad propiedad = mapper.readValue(propiedadJson, Propiedad.class);
@@ -47,6 +48,7 @@ public class PropiedadController {
     @GetMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_CUARTOS')")
     public ResponseEntity<List<Propiedad>> listarPropiedades() {
+        System.out.println("📥 [CONTROLLER] Petición recibida para LISTAR propiedades.");
         return ResponseEntity.ok(propiedadRepository.findAll());
     }
 

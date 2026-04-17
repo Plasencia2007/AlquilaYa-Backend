@@ -25,14 +25,21 @@ public class PermisoEnforcerService {
                     .findFirst()
                     .orElse("");
 
-            if (rol.isEmpty()) return false;
+            System.out.println("🔍 [DEBUG PERMISOS] Usuario detectado con Rol: " + rol + " intentando: " + funcionalidad);
+
+            if (rol.isEmpty()) {
+                System.out.println("❌ [DEBUG PERMISOS] Permiso denegado: Rol vacío o no detectado.");
+                return false;
+            }
 
             // Preguntar al servicio de usuarios
-            return permisoClient.verificarPermiso(rol, funcionalidad);
+            boolean tienePermiso = permisoClient.verificarPermiso(rol, funcionalidad);
+            System.out.println("📊 [DEBUG PERMISOS] Resultado de verificación en servicio-usuarios: " + tienePermiso);
+            
+            return tienePermiso;
         } catch (Throwable t) {
             // Loguear el error crítico y denegar por seguridad en lugar de lanzar 500
-            System.err.println("!!! ERROR CRÍTICO EN PERMISO ENFORCER: " + t.getClass().getName() + " -> " + t.getMessage());
-            t.printStackTrace();
+            System.err.println("!!! [ERROR CRÍTICO] FALLA EN COMUNICACIÓN INTER-SERVICIOS: " + t.getClass().getSimpleName() + " -> " + t.getMessage());
             return false;
         }
     }
