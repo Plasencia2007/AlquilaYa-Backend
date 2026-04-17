@@ -1,22 +1,19 @@
 spring:
   cloud:
     gateway:
-      routes:
-        - id: servicio-usuarios
-          uri: lb://servicio-usuarios
-          predicates:
-            - Path=/usuarios/**
-          filters:
-            - StripPrefix=1
-      globalcors:
-        cors-configurations:
+      server:
+        webmvc:
+          routes:
+            - id: servicio-usuarios
+              uri: lb://servicio-usuarios
+              predicates:
+                - Path=/usuarios/**
+              filters:
+                - StripPrefix=1
+          cors-configurations:
           '[/**]':
-            allowedOrigins: "http://localhost:3000"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
+            allowed-origin-patterns: "http://localhost:*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600

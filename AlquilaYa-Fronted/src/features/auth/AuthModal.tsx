@@ -16,15 +16,14 @@ export default function AuthModal() {
   const { isOpen, view, targetRole, close, toggleView } = useAuthModal();
   const { iniciarSesion, registrarse } = useAuth();
   const router = useRouter();
-  
+
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [nombre, setNombre] = useState('');
-  const [currentRol, setCurrentRol] = useState<'ESTUDIANTE' | 'PROVEEDOR'>('ESTUDIANTE');
+  const [currentRol, setCurrentRol] = useState<'ESTUDIANTE' | 'ARRENDADOR'>('ESTUDIANTE');
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Sync animation state and role when view/target changes
   useEffect(() => {
     setIsAnimating(true);
     setCurrentRol(targetRole);
@@ -39,12 +38,12 @@ export default function AuthModal() {
       case 'ADMIN':
         router.push('/admin-master');
         break;
-      case 'PROVEEDOR':
-        router.push('/landlord');
+      case 'ARRENDADOR':
+        router.push('/landlord/dashboard');
         break;
       case 'ESTUDIANTE':
       default:
-        router.push('/student');
+        router.push('/');
         break;
     }
   };
@@ -70,8 +69,8 @@ export default function AuthModal() {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-[#281721]/60 backdrop-blur-sm animate-fade-in" 
+      <div
+        className="absolute inset-0 bg-[#281721]/60 backdrop-blur-sm animate-fade-in"
         onClick={close}
       />
 
@@ -83,7 +82,7 @@ export default function AuthModal() {
         )}
       >
         {/* Close Button (All devices) */}
-        <button 
+        <button
           onClick={close}
           className="absolute top-6 right-6 text-[#474c64] hover:text-[#281721] transition-colors z-50 p-2"
         >
@@ -91,7 +90,7 @@ export default function AuthModal() {
         </button>
 
         {/* ── Form Panel ── */}
-        <div 
+        <div
           className={cn(
             "w-full md:w-1/2 relative bg-[#e8e3df] overflow-hidden transition-all duration-550 flex flex-col justify-center px-8 md:px-12 py-12",
             view === 'register' ? "md:order-2" : "md:order-1"
@@ -137,8 +136,8 @@ export default function AuthModal() {
                   onChange={(e) => setContrasena(e.target.value)}
                   className="w-full bg-[#f2ede9] text-[#1d1b19] placeholder:text-[#bda5a8] rounded-xl pl-12 pr-12 py-3.5 text-sm border border-transparent focus:border-[#8f0304] focus:bg-white transition-all outline-none"
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setMostrarContrasena(!mostrarContrasena)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-[#bda5a8] hover:text-[#8f0304] transition-colors"
                 >
@@ -180,12 +179,12 @@ export default function AuthModal() {
                 Crea tu cuenta
               </h2>
               <p className="text-[#bda5a8] text-sm font-medium">
-                {currentRol === 'PROVEEDOR' ? 'Únete como Arrendador y publica tu inmueble.' : 'Únete a AlquilaYa en menos de un minuto.'}
+                {currentRol === 'ARRENDADOR' ? 'Únete como Arrendador y publica tu inmueble.' : 'Únete a AlquilaYa en menos de un minuto.'}
               </p>
             </div>
 
             <div className="flex bg-[#f2ede9] p-1 rounded-xl gap-1">
-              <button 
+              <button
                 type="button"
                 onClick={() => setCurrentRol('ESTUDIANTE')}
                 className={cn(
@@ -195,12 +194,12 @@ export default function AuthModal() {
               >
                 SOY ESTUDIANTE
               </button>
-              <button 
+              <button
                 type="button"
-                onClick={() => setCurrentRol('PROVEEDOR')}
+                onClick={() => setCurrentRol('ARRENDADOR')}
                 className={cn(
                   "flex-1 py-1.5 text-[10px] font-black tracking-widest rounded-lg transition-all",
-                  currentRol === 'PROVEEDOR' ? "bg-white text-[#8f0304] shadow-sm" : "text-[#bda5a8] hover:text-[#281721]"
+                  currentRol === 'ARRENDADOR' ? "bg-white text-[#8f0304] shadow-sm" : "text-[#bda5a8] hover:text-[#281721]"
                 )}
               >
                 SOY ARRENDADOR
@@ -261,7 +260,7 @@ export default function AuthModal() {
         </div>
 
         {/* ── Image Panel ── */}
-        <div 
+        <div
           className={cn(
             "hidden md:block w-1/2 relative bg-[#281721] overflow-hidden transition-all duration-550",
             view === 'register' ? "md:order-1" : "md:order-2"

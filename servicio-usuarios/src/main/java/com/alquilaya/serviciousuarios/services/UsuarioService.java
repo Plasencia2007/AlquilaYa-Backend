@@ -26,4 +26,8 @@ public class UsuarioService {
     public Optional<Usuario> buscarPorCorreo(String correo) {
         return usuarioRepository.findByCorreo(correo);
     }
+
+    public boolean verificarPassword(String passwordPlana, String passwordHashed) {
+        return passwordEncoder.matches(passwordPlana, passwordHashed);
+    }
 }

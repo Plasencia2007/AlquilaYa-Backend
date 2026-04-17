@@ -21,9 +21,12 @@ export function middleware(request: NextRequest) {
   const isExpired = payload ? payload.exp < Math.floor(Date.now() / 1000) : true;
   const estaAutenticado = !!payload && !isExpired;
 
+  if (estaAutenticado && rol === 'ARRENDADOR' && (pathname === '/' || pathname === '/search')) {
+    return NextResponse.redirect(new URL('/landlord/dashboard', request.url));
+  }
+
   let response: NextResponse | null = null;
 
-  // --- 1. Rutas privadas de administrador (/admin-master) ---
   if (pathname.startsWith('/admin-master')) {
     if (!estaAutenticado) {
       response = NextResponse.redirect(new URL('/', request.url));
@@ -35,7 +38,7 @@ export function middleware(request: NextRequest) {
   else if (pathname.startsWith('/landlord')) {
     if (!estaAutenticado) {
       response = NextResponse.redirect(new URL('/', request.url));
-    } else if (rol !== 'PROVEEDOR') {
+    } else if (rol !== 'ARRENDADOR') {
       response = NextResponse.redirect(new URL('/', request.url));
     }
   }
@@ -56,8 +59,8 @@ export function middleware(request: NextRequest) {
   // ESTRATEGIA SEGURIDAD 1000%: Desactivar caché en rutas privadas para evitar
   // que el navegador muestre versiones cacheadas (bfcache) al usar el botón "Atrás".
   if (
-    pathname.startsWith('/admin-master') || 
-    pathname.startsWith('/landlord') || 
+    pathname.startsWith('/admin-master') ||
+    pathname.startsWith('/landlord') ||
     pathname.startsWith('/student')
   ) {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

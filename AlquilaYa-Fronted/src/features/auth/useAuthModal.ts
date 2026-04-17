@@ -3,8 +3,8 @@ import { create } from 'zustand';
 interface AuthModalState {
   isOpen: boolean;
   view: 'login' | 'register';
-  targetRole: 'ESTUDIANTE' | 'PROVEEDOR';
-  open: (view?: 'login' | 'register', role?: 'ESTUDIANTE' | 'PROVEEDOR') => void;
+  targetRole: 'ESTUDIANTE' | 'ARRENDADOR';
+  open: (view?: 'login' | 'register', role?: 'ESTUDIANTE' | 'ARRENDADOR') => void;
   close: () => void;
   toggleView: () => void;
 }

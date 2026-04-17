@@ -22,14 +22,14 @@ export default function LandlordLayout({
     // Seguridad Multinivel: Si el navegador restaura la página desde caché (bfcache)
     // forzamos una verificación real.
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted && (!estaAutenticado || usuario?.rol !== 'PROVEEDOR')) {
+      if (event.persisted && (!estaAutenticado || usuario?.rol !== 'ARRENDADOR')) {
         router.replace('/');
       }
     };
     window.addEventListener('pageshow', handlePageShow);
 
     if (isMounted && !cargando) {
-      if (!estaAutenticado || usuario?.rol !== 'PROVEEDOR') {
+      if (!estaAutenticado || usuario?.rol !== 'ARRENDADOR') {
         router.replace('/');
       }
     }
@@ -38,7 +38,7 @@ export default function LandlordLayout({
   }, [estaAutenticado, usuario, cargando, isMounted, router]);
 
   // Bloqueo visual preventivo: No renderiza nada si hay dudas sobre la sesión o el rol
-  if (!isMounted || cargando || !estaAutenticado || usuario?.rol !== 'PROVEEDOR') {
+  if (!isMounted || cargando || !estaAutenticado || usuario?.rol !== 'ARRENDADOR') {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0b1222] flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">

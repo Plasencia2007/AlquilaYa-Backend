@@ -63,11 +63,11 @@ export default function Navbar() {
     };
   }, []);
 
-  if (isHidden) return null;
+  // Ocultar Navbar totalmente para Arrendadores logueados o en rutas privadas
+  if (isHidden || (estaAutenticado && usuario?.rol === 'ARRENDADOR')) return null;
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-primary/10 px-6 sm:px-12 py-3.5 flex justify-between items-center transition-all duration-300 editorial-shadow">
-      {/* ── Left Side: Logo & Navigation ── */}
       <div className="flex items-center gap-12">
         <Link href="/" className="flex items-center gap-2 group transition-transform active:scale-95">
           <span className="text-xl font-black tracking-tighter text-primary">
@@ -117,7 +117,7 @@ export default function Navbar() {
                   <p className="text-[10px] text-on-surface-variant">{usuario?.correo}</p>
                 </div>
 
-                {usuario?.rol === 'PROVEEDOR' ? (
+                {usuario?.rol === 'ARRENDADOR' ? (
                   <Link href="/landlord/dashboard"
                     onClick={() => setMenuOpen(false)}
                     className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-on-surface hover:bg-white/5 hover:text-primary transition-colors">
@@ -169,13 +169,13 @@ export default function Navbar() {
         ) : (
           /* ── Guest State (Dropdown Logic) ── */
           <div className="flex items-center gap-8">
-            {usuario?.rol === 'PROVEEDOR' ? (
+            {usuario?.rol === 'ARRENDADOR' ? (
               <Link href="/landlord" className="hidden sm:block font-black text-xs tracking-[0.2em] text-white hover:text-primary transition-all">
                 PUBLICAR
               </Link>
             ) : (
-              <button 
-                onClick={() => openAuthModal('register', 'PROVEEDOR')}
+              <button
+                onClick={() => openAuthModal('register', 'ARRENDADOR')}
                 className="hidden sm:block font-black text-xs tracking-[0.2em] text-white hover:text-primary transition-all cursor-pointer"
               >
                 PUBLICAR
@@ -212,28 +212,28 @@ export default function Navbar() {
                   <div className="w-full h-px bg-white/5 mb-4" />
 
                   <div className="flex flex-col gap-3">
-                    <button 
+                    <button
                       onClick={() => { openAuthModal('login'); setGuestMenuOpen(false); }}
                       className="flex items-center gap-3 text-[11px] font-bold text-on-surface hover:text-primary transition-colors group text-left w-full cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[18px] text-outline group-hover:text-primary">chat_bubble</span>
                       Mis contactos
                     </button>
-                    <button 
+                    <button
                       onClick={() => { openAuthModal('login'); setGuestMenuOpen(false); }}
                       className="flex items-center gap-3 text-[11px] font-bold text-on-surface hover:text-primary transition-colors group text-left w-full cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[18px] text-outline group-hover:text-primary">favorite</span>
                       Favoritos
                     </button>
-                    <button 
+                    <button
                       onClick={() => { openAuthModal('login'); setGuestMenuOpen(false); }}
                       className="flex items-center gap-3 text-[11px] font-bold text-on-surface hover:text-primary transition-colors group text-left w-full cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[18px] text-outline group-hover:text-primary">notifications</span>
                       Alertas
                     </button>
-                    <button 
+                    <button
                       onClick={() => { openAuthModal('login'); setGuestMenuOpen(false); }}
                       className="flex items-center gap-3 text-[11px] font-bold text-on-surface hover:text-primary transition-colors group text-left w-full cursor-pointer"
                     >
@@ -245,7 +245,7 @@ export default function Navbar() {
                   <div className="w-full h-px bg-white/5 my-4" />
 
                   <div className="flex flex-col gap-3">
-                    <button 
+                    <button
                       onClick={() => { openAuthModal('login'); setGuestMenuOpen(false); }}
                       className="flex items-center gap-2 text-[11px] font-bold text-on-surface hover:text-primary transition-colors group text-left w-full cursor-pointer"
                     >
@@ -271,10 +271,10 @@ export default function Navbar() {
         <div className="fixed inset-0 z-[100] md:hidden bg-white animate-fade-in flex flex-col h-screen">
           {/* Mobile Header (Light) - FIJO en la parte superior */}
           <div className="p-6 flex justify-between items-center border-b border-slate-100 bg-white sticky top-0 z-20">
-             <span className="text-2xl font-black tracking-tighter text-primary">
+            <span className="text-2xl font-black tracking-tighter text-primary">
               Alquila<span className="text-slate-900">Ya</span>
             </span>
-            <button 
+            <button
               onClick={() => setMobileOpen(false)}
               className="p-2 rounded-full hover:bg-slate-100 transition-colors"
               aria-label="Cerrar menú"
@@ -285,33 +285,90 @@ export default function Navbar() {
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-10 bg-white min-h-0">
-              {!estaAutenticado && (
-                <>
-                  {/* Guest Header (White Theme) */}
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                      Ingresa y accede a los avisos que contactaste, tus favoritos y las búsquedas guardadas.
-                    </p>
-                    <button 
-                      onClick={() => { openAuthModal('login'); setMobileOpen(false); }}
-                      className="w-full bg-primary text-white py-4 rounded-xl font-black text-sm tracking-widest text-center block shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
-                    >
-                      INGRESAR
-                    </button>
-                  </div>
+            {!estaAutenticado && (
+              <>
+                {/* Guest Header (White Theme) */}
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Ingresa y accede a los avisos que contactaste, tus favoritos y las búsquedas guardadas.
+                  </p>
+                  <button
+                    onClick={() => { openAuthModal('login'); setMobileOpen(false); }}
+                    className="w-full bg-primary text-white py-4 rounded-xl font-black text-sm tracking-widest text-center block shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+                  >
+                    INGRESAR
+                  </button>
+                </div>
 
-                  {/* Student Quick Links (Dark Text on White) */}
+                {/* Student Quick Links (Dark Text on White) */}
+                <div className="flex flex-col gap-2">
+                  {[
+                    { href: '/login', icon: 'chat_bubble', text: 'Mis contactos' },
+                    { href: '/login', icon: 'favorite', text: 'Favoritos' },
+                    { href: '/login', icon: 'notifications', text: 'Búsquedas y alertas' },
+                    { href: '/login', icon: 'visibility', text: 'Historial' },
+                    { href: '/login', icon: 'person', text: 'Mi cuenta' },
+                  ].map((item) => (
+                    <button
+                      key={item.text}
+                      onClick={() => { openAuthModal('login'); setMobileOpen(false); }}
+                      className="flex items-center gap-4 text-base font-bold text-slate-900 hover:text-primary transition-colors py-4 border-b border-slate-50 group text-left w-full cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[24px] text-slate-400 group-hover:text-primary transition-colors">{item.icon}</span>
+                      {item.text}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Publicar Button (Featured) */}
+                <div className="pt-4">
+                  {usuario?.rol === 'ARRENDADOR' ? (
+                    <Link
+                      href="/landlord"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all"
+                    >
+                      PANEL ARRENDADOR
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => { openAuthModal('register', 'ARRENDADOR'); setMobileOpen(false); }}
+                      className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all cursor-pointer"
+                    >
+                      PUBLICAR TU INMUEBLE
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {estaAutenticado && usuario && (
+              <div className="flex flex-col gap-6">
+                <div className="bg-slate-50 p-6 rounded-2xl flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center font-black text-white text-xl">
+                    {usuario.nombre.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-lg">{usuario.nombre}</p>
+                    <p className="text-sm text-slate-500 truncate w-48">{usuario.correo}</p>
+                  </div>
+                </div>
+                {usuario.rol === 'ARRENDADOR' ? (
+                  <Link href="/landlord/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 text-lg font-bold text-slate-900 py-3">
+                    <span className="material-symbols-outlined text-slate-400">dashboard</span> PANEL DE CONTROL
+                  </Link>
+                ) : (
                   <div className="flex flex-col gap-2">
                     {[
-                      { href: '/login', icon: 'chat_bubble', text: 'Mis contactos' },
-                      { href: '/login', icon: 'favorite', text: 'Favoritos' },
-                      { href: '/login', icon: 'notifications', text: 'Búsquedas y alertas' },
-                      { href: '/login', icon: 'visibility', text: 'Historial' },
-                      { href: '/login', icon: 'person', text: 'Mi cuenta' },
+                      { href: '/student/messages', icon: 'chat_bubble', text: 'Mis contactos' },
+                      { href: '/student/favorites', icon: 'favorite', text: 'Favoritos' },
+                      { href: '/student/alerts', icon: 'notifications', text: 'Búsquedas y alertas' },
+                      { href: '/student/history', icon: 'visibility', text: 'Historial' },
+                      { href: '/student/profile', icon: 'person', text: 'Mi cuenta' },
                     ].map((item) => (
-                      <button 
+                      <button
                         key={item.text}
-                        onClick={() => { openAuthModal('login'); setMobileOpen(false); }} 
+                        onClick={() => { router.push(item.href); setMobileOpen(false); }}
                         className="flex items-center gap-4 text-base font-bold text-slate-900 hover:text-primary transition-colors py-4 border-b border-slate-50 group text-left w-full cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[24px] text-slate-400 group-hover:text-primary transition-colors">{item.icon}</span>
@@ -319,81 +376,24 @@ export default function Navbar() {
                       </button>
                     ))}
                   </div>
+                )}
+                <button onClick={() => { cerrarSesion(); setMobileOpen(false); }} className="flex items-center gap-4 text-lg font-bold text-primary text-left py-3 mt-4">
+                  <span className="material-symbols-outlined font-black">logout</span> CERRAR SESIÓN
+                </button>
+              </div>
+            )}
 
-                  {/* Publicar Button (Featured) */}
-                  <div className="pt-4">
-                    {usuario?.rol === 'PROVEEDOR' ? (
-                      <Link 
-                        href="/landlord" 
-                        onClick={() => setMobileOpen(false)}
-                        className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all"
-                      >
-                        PANEL ARRENDADOR
-                      </Link>
-                    ) : (
-                      <button 
-                        onClick={() => { openAuthModal('register', 'PROVEEDOR'); setMobileOpen(false); }}
-                        className="w-full border-2 border-primary text-primary py-4 rounded-xl font-black text-sm tracking-widest text-center block hover:bg-primary/5 transition-all cursor-pointer"
-                      >
-                        PUBLICAR TU INMUEBLE
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {estaAutenticado && usuario && (
-                <div className="flex flex-col gap-6">
-                  <div className="bg-slate-50 p-6 rounded-2xl flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center font-black text-white text-xl">
-                      {usuario.nombre.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900 text-lg">{usuario.nombre}</p>
-                      <p className="text-sm text-slate-500 truncate w-48">{usuario.correo}</p>
-                    </div>
-                  </div>
-                  {usuario.rol === 'PROVEEDOR' ? (
-                    <Link href="/landlord/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 text-lg font-bold text-slate-900 py-3">
-                      <span className="material-symbols-outlined text-slate-400">dashboard</span> PANEL DE CONTROL
-                    </Link>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {[
-                        { href: '/student/messages', icon: 'chat_bubble', text: 'Mis contactos' },
-                        { href: '/student/favorites', icon: 'favorite', text: 'Favoritos' },
-                        { href: '/student/alerts', icon: 'notifications', text: 'Búsquedas y alertas' },
-                        { href: '/student/history', icon: 'visibility', text: 'Historial' },
-                        { href: '/student/profile', icon: 'person', text: 'Mi cuenta' },
-                      ].map((item) => (
-                        <button 
-                          key={item.text}
-                          onClick={() => { router.push(item.href); setMobileOpen(false); }} 
-                          className="flex items-center gap-4 text-base font-bold text-slate-900 hover:text-primary transition-colors py-4 border-b border-slate-50 group text-left w-full cursor-pointer"
-                        >
-                          <span className="material-symbols-outlined text-[24px] text-slate-400 group-hover:text-primary transition-colors">{item.icon}</span>
-                          {item.text}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button onClick={() => { cerrarSesion(); setMobileOpen(false); }} className="flex items-center gap-4 text-lg font-bold text-primary text-left py-3 mt-4">
-                    <span className="material-symbols-outlined font-black">logout</span> CERRAR SESIÓN
-                  </button>
-                </div>
-              )}
-
-              {/* Base Navigation Section (Base List) */}
-              <div className="mt-auto pt-10 border-t border-slate-100 flex flex-col gap-6 pb-10">
-                <Link href="/" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
-                  INICIO <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
-                </Link>
-                <Link href="/search" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
-                  EXPLORAR <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
-                </Link>
-                <Link href="#" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
-                  GARANTÍA <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
-                </Link>
+            {/* Base Navigation Section (Base List) */}
+            <div className="mt-auto pt-10 border-t border-slate-100 flex flex-col gap-6 pb-10">
+              <Link href="/" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
+                INICIO <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
+              </Link>
+              <Link href="/search" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
+                EXPLORAR <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
+              </Link>
+              <Link href="#" onClick={() => setMobileOpen(false)} className="flex justify-between items-center text-xl font-black tracking-widest text-slate-400 hover:text-primary transition-colors">
+                GARANTÍA <ChevronDown className="-rotate-90 w-5 h-5 opacity-30" />
+              </Link>
             </div>
           </div>
         </div>

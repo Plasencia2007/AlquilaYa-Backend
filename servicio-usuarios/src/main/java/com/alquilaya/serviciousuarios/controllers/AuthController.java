@@ -7,7 +7,6 @@ import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,7 +16,6 @@ public class AuthController {
 
     private final UsuarioService usuarioService;
     private final JwtService jwtService;
-    private final PasswordEncoder passwordEncoder;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
@@ -40,21 +38,25 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
-        Usuario usuario = usuarioService.buscarPorCorreo(request.getCorreo())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
-        if (!passwordEncoder.matches(request.getPassword(), usuario.getPassword())) {
-            throw new RuntimeException("Contraseña incorrecta");
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+        try {
+            return usuarioService.buscarPorCorreo(request.getCorreo())
+                    .map(usuario -> {
+                        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
+                            return ResponseEntity.status(401).body("Contraseña incorrecta");
+                        }
+                        
+                        String token = jwtService.generateToken(usuario);
+                        return ResponseEntity.ok(AuthResponse.builder()
+                                .token(token)
+                                .nombre(usuario.getNombre())
+                                .correo(usuario.getCorreo())
+                                .rol(usuario.getRol().name())
+                                .build());
+                    })
+                    .orElse(ResponseEntity.status(401).body("Usuario no encontrado"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error interno en el servidor: " + e.getMessage());
         }
-
-        String token = jwtService.generateToken(usuario);
-
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .nombre(usuario.getNombre())
-                .correo(usuario.getCorreo())
-                .rol(usuario.getRol().name())
-                .build());
     }
 }
