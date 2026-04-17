@@ -33,8 +33,10 @@ public class AuthDtos {
     @NoArgsConstructor
     public static class AuthResponse {
         private String token;
+        private Long id; // ID del Usuario
         private String nombre;
         private String correo;
         private String rol;
+        private Long perfilId; // El ID de la tabla Arrendador o Estudiante
     }
 }

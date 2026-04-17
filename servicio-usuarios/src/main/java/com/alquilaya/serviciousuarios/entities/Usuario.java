@@ -42,4 +42,7 @@ public class Usuario {
 
     @UpdateTimestamp
     private LocalDateTime fechaActualizacion;
+
+    @Transient
+    private Long perfilId;
 }

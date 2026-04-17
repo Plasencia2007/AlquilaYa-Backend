@@ -4,6 +4,8 @@ import com.alquilaya.serviciousuarios.config.JwtService;
 import com.alquilaya.serviciousuarios.dto.AuthDtos.*;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
+import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
+import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,8 @@ public class AuthController {
 
     private final UsuarioService usuarioService;
     private final JwtService jwtService;
+    private final ArrendadorRepository arrendadorRepository;
+    private final EstudianteRepository estudianteRepository;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
@@ -27,13 +31,16 @@ public class AuthController {
                 .build();
 
         Usuario usuarioCreado = usuarioService.registrarUsuario(usuario);
-        String token = jwtService.generateToken(usuarioCreado);
+        Long perfilId = obtenerPerfilId(usuarioCreado);
+        String token = jwtService.generateToken(usuarioCreado, perfilId);
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
+                .id(usuarioCreado.getId())
                 .nombre(usuarioCreado.getNombre())
                 .correo(usuarioCreado.getCorreo())
                 .rol(usuarioCreado.getRol().name())
+                .perfilId(perfilId)
                 .build());
     }
 
@@ -46,17 +53,33 @@ public class AuthController {
                             return ResponseEntity.status(401).body("Contraseña incorrecta");
                         }
                         
-                        String token = jwtService.generateToken(usuario);
+                        Long perfilId = obtenerPerfilId(usuario);
+                        String token = jwtService.generateToken(usuario, perfilId);
                         return ResponseEntity.ok(AuthResponse.builder()
                                 .token(token)
+                                .id(usuario.getId())
                                 .nombre(usuario.getNombre())
                                 .correo(usuario.getCorreo())
                                 .rol(usuario.getRol().name())
+                                .perfilId(perfilId)
                                 .build());
                     })
                     .orElse(ResponseEntity.status(401).body("Usuario no encontrado"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error interno en el servidor: " + e.getMessage());
         }
+    }
+
+    private Long obtenerPerfilId(Usuario usuario) {
+        if (usuario.getRol() == Rol.ARRENDADOR) {
+            return arrendadorRepository.findByUsuario(usuario)
+                    .map(com.alquilaya.serviciousuarios.entities.Arrendador::getId)
+                    .orElse(null);
+        } else if (usuario.getRol() == Rol.ESTUDIANTE) {
+            return estudianteRepository.findByUsuario(usuario)
+                    .map(com.alquilaya.serviciousuarios.entities.Estudiante::getId)
+                    .orElse(null);
+        }
+        return null;
     }
 }

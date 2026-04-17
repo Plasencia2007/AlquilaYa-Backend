@@ -24,8 +24,10 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
-    public String generateToken(Usuario usuario) {
+    public String generateToken(Usuario usuario, Long perfilId) {
         Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("userId", usuario.getId());
+        extraClaims.put("perfilId", perfilId);
         extraClaims.put("rol", usuario.getRol().name());
         extraClaims.put("nombre", usuario.getNombre());
         return generateToken(extraClaims, usuario.getCorreo());

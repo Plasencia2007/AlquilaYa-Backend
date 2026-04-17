@@ -5,6 +5,7 @@ export interface Usuario {
   nombre: string;
   correo: string;
   rol: RolUsuario;
+  perfilId?: number; // El ID de Arrendador o Estudiante
   avatar?: string;
   telefono?: string;
   biografia?: string;
@@ -12,7 +13,8 @@ export interface Usuario {
 
 export interface PayloadJWT {
   sub: string;
-  correo: string;
+  userId: string;
+  perfilId?: number;
   nombre: string;
   rol: RolUsuario;
   iat: number;

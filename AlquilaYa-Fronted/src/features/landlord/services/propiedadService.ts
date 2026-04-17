@@ -1,13 +1,11 @@
-import axios from 'axios';
-
-const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { api } from '@/utils/api';
 
 export interface PropiedadRequest {
   titulo: string;
   descripcion: string;
   precio: number;
   direccion: string;
-  arrendadorId: number;
+  arrendadorId: string;
   ubicacionGps?: string;
 }
 
@@ -22,11 +20,10 @@ export const propiedadService = {
     formData.append('propiedad', JSON.stringify(propiedad));
     formData.append('file', file);
 
-    const response = await axios.post(`${API_GATEWAY_URL}/api/v1/propiedades`, formData, {
+    // Sin la barra inicial '/' para que Axios use la baseURL: http://localhost:8080/api/v1
+    const response = await api.post('propiedades', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        // El interceptor de axios debería añadir el token automáticamente,
-        // pero podemos ser explícitos si es necesario.
       },
     });
 
@@ -37,15 +34,15 @@ export const propiedadService = {
    * Obtiene todas las propiedades (para vista general administrador)
    */
   async obtenerTodas() {
-    const response = await axios.get(`${API_GATEWAY_URL}/api/v1/propiedades`);
+    const response = await api.get('propiedades');
     return response.data;
   },
 
   /**
    * Obtiene las propiedades de un arrendador específico
    */
-  async obtenerPorArrendador(arrendadorId: number) {
-    const response = await axios.get(`${API_GATEWAY_URL}/api/v1/propiedades/arrendador/${arrendadorId}`);
+  async obtenerPorArrendador(arrendadorId: string) {
+    const response = await api.get(`propiedades/arrendador/${arrendadorId}`);
     return response.data;
   }
 };

@@ -1,8 +1,7 @@
 # Configuración para el Servicio de Propiedades
-server:
-  port: 0
-
 spring:
+  application:
+    name: servicio-propiedades
   datasource:
     url: jdbc:postgresql://localhost:5433/alquilaya_propiedades
     username: postgres
@@ -15,11 +14,12 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
-# Configuración específica de Kafka para este servicio
   kafka:
     template:
       default-topic: propiedades-topic
+
+server:
+  port: 8082
 
 # Configuración de Cloudinary (Fase 3 - Real)
 cloudinary:

@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
+import com.alquilaya.serviciopropiedades.services.PermisoEnforcerService;
 import com.alquilaya.serviciopropiedades.services.KafkaProducerService;
 import com.alquilaya.serviciopropiedades.services.CloudinaryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.io.IOException;
 import java.util.List;
 
@@ -23,6 +25,7 @@ public class PropiedadController {
     private final CloudinaryService cloudinaryService;
 
     @PostMapping(consumes = {"multipart/form-data"})
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
     public ResponseEntity<Propiedad> crearPropiedad(
             @RequestPart("propiedad") String propiedadJson,
             @RequestPart("file") MultipartFile file
@@ -42,11 +45,13 @@ public class PropiedadController {
     }
 
     @GetMapping
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_CUARTOS')")
     public ResponseEntity<List<Propiedad>> listarPropiedades() {
         return ResponseEntity.ok(propiedadRepository.findAll());
     }
 
     @GetMapping("/arrendador/{arrendadorId}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_CUARTOS')")
     public ResponseEntity<List<Propiedad>> listarPorArrendador(@PathVariable Long arrendadorId) {
         return ResponseEntity.ok(propiedadRepository.findByArrendadorId(arrendadorId));
     }

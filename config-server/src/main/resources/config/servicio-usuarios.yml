@@ -1,8 +1,7 @@
 # Configuración para servicio-usuarios
-server:
-  port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
-
 spring:
+  application:
+    name: servicio-usuarios
   datasource:
     url: jdbc:postgresql://localhost:5433/postgres
     username: postgres
@@ -15,6 +14,9 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
 
 jwt:
   secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u
