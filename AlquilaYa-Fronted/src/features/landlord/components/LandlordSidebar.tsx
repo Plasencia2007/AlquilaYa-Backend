@@ -122,7 +122,7 @@ export default function LandlordSidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>(['PROPIEDADES', 'RESERVAS']);
 
   const toggleItem = (label: string) => {
-    setExpandedItems(prev => 
+    setExpandedItems(prev =>
       prev.includes(label) ? [] : [label]
     );
   };

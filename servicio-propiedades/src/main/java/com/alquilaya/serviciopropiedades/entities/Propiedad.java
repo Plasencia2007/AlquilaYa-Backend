@@ -39,6 +39,7 @@ public class Propiedad {
     @Column(name = "imagen_url")
     private String imagenUrl;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     private EstadoPropiedad estado = EstadoPropiedad.PENDIENTE;
 

@@ -15,7 +15,15 @@ El backend está construido con **Spring Cloud** y se comunica a través de un *
 - **JWT**: Clave secreta configurada en formato Base64 para garantizar la compatibilidad entre servicios.
 - **Microservicios**:
     *   **Servicio Usuarios**: Implementa Auth (Login/Registro) con BCrypt y generación de tokens JWT.
-    *   **Base de Datos**: PostgreSQL para persistencia de usuarios y roles.
+    *   **Servicio Propiedades**: Gestión de anuncios, cuartos y multimedia. Implementa integración con Cloudinary.
+    *   **Mensajería (Kafka)**: Arquitectura orientada a eventos usando Kafka/Zookeeper para comunicación asíncrona.
+- **Bases de Datos (Docker/Local)**:
+    *   `postgres/postgis` (Puerto 5433): Gestión de usuarios e inventario de inmuebles.
+
+### 🏹 Estándar de API (v1)
+Se ha unificado el sistema bajo el prefijo `/api/v1/` para garantizar un enrutamiento limpio en el Gateway (`StripPrefix=0`):
+- `/api/v1/usuarios/auth/**` -> Servicio Usuarios.
+- `/api/v1/propiedades/**` -> Servicio Propiedades.
 
 ---
 
@@ -35,6 +43,10 @@ Se ha unificado la nomenclatura de roles entre el Backend (Java Enum) y el Front
     2.  Fuerza al Arrendador a permanecer en su Dashboard (si intenta entrar al inicio público, el sistema lo devuelve a su panel).
     3.  Oculta el Navbar público para el rol Arrendador, garantizando una interfaz técnica y limpia.
 
+### 📸 Gestión de Medios y Multimedia
+- **Cloudinary SDK**: Integrado en el Backend para la subida de fotos reales mediante `multipart/form-data`.
+- **Propiedad Service (FE)**: Servicio especializado para manejar la lógica de publicación con pre-visualización de fotos.
+
 ---
 
 ## 📂 Documentación Adicional
@@ -43,4 +55,4 @@ Se ha unificado la nomenclatura de roles entre el Backend (Java Enum) y el Front
 
 ---
 > [!IMPORTANT]
-> **Estado Actual**: Infraestructura de Autenticación y Navegación completada al 100% y verificada. La comunicación Frontend-Backend es estable.
+> **Estado Actual**: Fase de Microservicios y Medios (Fase 1) completada al 100%. El sistema permite loguearse y publicar propiedades con fotos reales alojadas en Cloudinary.

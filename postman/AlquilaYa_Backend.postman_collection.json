@@ -16,10 +16,19 @@
 							"name": "Registro de Usuario",
 							"request": {
 								"method": "POST",
-								"header": [],
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"nombre\": \"Usuario de Prueba\",\n    \"correo\": \"test@alquilaya.com\",\n    \"password\": \"password123\",\n    \"rol\": \"USER\"\n}",
+									"raw": "{\n    \"nombre\": \"Usuario de Prueba\",\n    \"correo\": \"test@alquilaya.com\",\n    \"password\": \"password123\",\n    \"rol\": \"ARRENDADOR\"\n}",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -27,11 +36,13 @@
 									}
 								},
 								"url": {
-									"raw": "{{baseUrl}}/usuarios/auth/register",
+									"raw": "{{baseUrl}}/api/v1/usuarios/auth/register",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
+										"api",
+										"v1",
 										"usuarios",
 										"auth",
 										"register"
@@ -44,7 +55,16 @@
 							"name": "Login de Usuario",
 							"request": {
 								"method": "POST",
-								"header": [],
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
 								"body": {
 									"mode": "raw",
 									"raw": "{\n    \"correo\": \"test@alquilaya.com\",\n    \"password\": \"password123\"\n}",
@@ -60,6 +80,8 @@
 										"{{baseUrl}}"
 									],
 									"path": [
+										"api",
+										"v1",
 										"usuarios",
 										"auth",
 										"login"
@@ -71,12 +93,96 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "Propiedades (Microservicio)",
+			"item": [
+				{
+					"name": "Crear Propiedad con Foto (Multipart)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "propiedad",
+									"value": "{\n    \"titulo\": \"Habitación Moderna UNI\",\n    \"descripcion\": \"Excelente iluminación, cerca a centros comerciales.\",\n    \"precio\": 600.00,\n    \"direccion\": \"Av. Habich 123\",\n    \"arrendadorId\": 1\n}",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/propiedades",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"propiedades"
+							]
+						},
+						"description": "Crea una nueva propiedad enviando un JSON descriptivo y una imagen física."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Todas las Propiedades",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/propiedades",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"propiedades"
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"variable": [
 		{
 			"key": "baseUrl",
 			"value": "http://localhost:8080"
+		},
+		{
+			"key": "token",
+			"value": "pega_aquí_tu_jwt",
+			"type": "string"
 		}
 	]
 }
