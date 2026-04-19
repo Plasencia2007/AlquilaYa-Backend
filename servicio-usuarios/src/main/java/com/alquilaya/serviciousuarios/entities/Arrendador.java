@@ -1,10 +1,13 @@
 package com.alquilaya.serviciousuarios.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "arrendadores")
@@ -20,6 +23,8 @@ public class Arrendador {
 
     @OneToOne
     @JoinColumn(name = "usuario_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JsonIgnore
     private Usuario usuario;
 
     @Column(name = "nombre_comercial")

@@ -39,6 +39,21 @@ public class AuthController {
                 .build());
     }
 
+    @PostMapping("/register-admin")
+    public ResponseEntity<AuthResponse> registerAdmin(@Valid @RequestBody AdminRegisterRequest request) {
+        Usuario admin = usuarioService.registrarAdmin(request);
+        String token = jwtService.generateToken(admin, null);
+
+        return ResponseEntity.ok(AuthResponse.builder()
+                .token(token)
+                .id(admin.getId())
+                .nombre(admin.getNombre())
+                .correo(admin.getCorreo())
+                .rol(admin.getRol().name())
+                .perfilId(null)
+                .build());
+    }
+
     @PostMapping("/verify-otp")
     public ResponseEntity<?> verifyOtp(@RequestBody java.util.Map<String, String> request) {
         String telefono = request.get("telefono");
@@ -56,6 +71,7 @@ public class AuthController {
         try {
             return usuarioService.buscarPorCorreo(request.getCorreo())
                     .map(usuario -> {
+                        // Solo para Estudiantes y Arrendadores se pide verificación
                         if (!usuario.isTelefonoVerificado()) {
                             return ResponseEntity.status(403).body("Debes verificar tu número de WhatsApp antes de ingresar");
                         }
@@ -73,7 +89,32 @@ public class AuthController {
                     })
                     .orElse(ResponseEntity.status(401).body("Usuario no encontrado"));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error interno en el servidor: " + e.getMessage());
+            return ResponseEntity.status(500).body("Error interno en el servidor");
+        }
+    }
+
+    @PostMapping("/login-admin")
+    public ResponseEntity<?> loginAdmin(@Valid @RequestBody LoginRequest request) {
+        try {
+            return usuarioService.buscarPorCorreo(request.getCorreo())
+                    .map(admin -> {
+                        if (admin.getRol() != Rol.ADMIN) {
+                            return ResponseEntity.status(403).body("Acceso denegado: No es un administrador");
+                        }
+
+                        String token = jwtService.generateToken(admin, null);
+                        return ResponseEntity.ok(AuthResponse.builder()
+                                .token(token)
+                                .id(admin.getId())
+                                .nombre(admin.getNombre())
+                                .correo(admin.getCorreo())
+                                .rol(admin.getRol().name())
+                                .perfilId(null)
+                                .build());
+                    })
+                    .orElse(ResponseEntity.status(401).body("Administrador no encontrado"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error interno en el servidor");
         }
     }
 

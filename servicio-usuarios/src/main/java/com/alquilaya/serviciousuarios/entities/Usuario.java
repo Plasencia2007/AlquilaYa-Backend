@@ -52,9 +52,17 @@ public class Usuario {
     @Builder.Default
     private boolean telefonoVerificado = false;
 
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private java.util.List<DocumentoVerificacion> documentos;
+
+    @OneToOne(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private Arrendador arrendador;
+
+    @OneToOne(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private Estudiante estudiante;
 
     @CreationTimestamp
     @Column(updatable = false)

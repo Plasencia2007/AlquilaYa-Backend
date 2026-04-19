@@ -28,11 +28,33 @@ public class UsuarioService {
     private final OtpService otpService;
 
     @Transactional
+    public Usuario registrarAdmin(com.alquilaya.serviciousuarios.dto.AuthDtos.AdminRegisterRequest request) {
+        if (usuarioRepository.existsByCorreo(request.getCorreo())) {
+            throw new RuntimeException("El correo ya está registrado");
+        }
+
+        Usuario admin = Usuario.builder()
+                .nombre(request.getNombre())
+                .apellido("") // No requerido para admin inicial
+                .dni("") // No requerido para admin inicial
+                .correo(request.getCorreo())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .rol(Rol.ADMIN)
+                .estado(EstadoUsuario.ACTIVE)
+                .telefonoVerificado(true)
+                .build();
+
+        return usuarioRepository.save(admin);
+    }
+
+    @Transactional
     public Usuario registrarUsuario(RegisterRequest request) {
         if (usuarioRepository.existsByCorreo(request.getCorreo())) {
             throw new RuntimeException("El correo ya está registrado");
         }
 
+        Rol rol = Rol.valueOf(request.getRol().toUpperCase());
+        
         Usuario usuario = Usuario.builder()
                 .nombre(request.getNombre())
                 .apellido(request.getApellido())
@@ -40,7 +62,10 @@ public class UsuarioService {
                 .correo(request.getCorreo())
                 .telefono(request.getTelefono())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .rol(Rol.valueOf(request.getRol().toUpperCase()))
+                .rol(rol)
+                // Excepción para ADMIN: Se activa automáticamente
+                .estado(rol == Rol.ADMIN ? EstadoUsuario.ACTIVE : EstadoUsuario.PENDING)
+                .telefonoVerificado(rol == Rol.ADMIN)
                 .build();
 
         Usuario savedUser = usuarioRepository.save(usuario);
@@ -68,12 +93,64 @@ public class UsuarioService {
             estudianteRepository.save(estudiante);
         }
 
-        // 3. Enviar OTP vía WhatsApp (Simulación o Real según el microservicio)
-        if (usuario.getTelefono() != null) {
+        // Enviar OTP vía WhatsApp solo si NO es ADMIN
+        if (usuario.getTelefono() != null && rol != Rol.ADMIN) {
             otpService.generarYEnviarOtp(usuario.getTelefono());
         }
 
         return savedUser;
+    }
+
+    public java.util.List<Usuario> listarTodos() {
+        return usuarioRepository.findAll();
+    }
+
+    public java.util.List<Usuario> listarPorRol(Rol rol) {
+        return usuarioRepository.findByRol(rol);
+    }
+
+    @Transactional
+    public Usuario actualizarUsuario(Long id, Map<String, Object> updates) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (updates.containsKey("nombre")) usuario.setNombre((String) updates.get("nombre"));
+        if (updates.containsKey("apellido")) usuario.setApellido((String) updates.get("apellido"));
+        if (updates.containsKey("dni")) usuario.setDni((String) updates.get("dni"));
+        if (updates.containsKey("telefono")) usuario.setTelefono((String) updates.get("telefono"));
+        if (updates.containsKey("estado")) usuario.setEstado(EstadoUsuario.valueOf((String) updates.get("estado")));
+
+        // Actualización de detalles de perfil si se proporcionan
+        if (updates.containsKey("detallesPerfil")) {
+            Map<String, Object> details = (Map<String, Object>) updates.get("detallesPerfil");
+            if (usuario.getRol() == Rol.ARRENDADOR) {
+                arrendadorRepository.findByUsuario(usuario).ifPresent(a -> {
+                    if (details.containsKey("telefono")) a.setTelefono((String) details.get("telefono"));
+                    if (details.containsKey("ruc")) a.setRuc((String) details.get("ruc"));
+                    if (details.containsKey("nombreComercial")) a.setNombreComercial((String) details.get("nombreComercial"));
+                    if (details.containsKey("direccionPropiedades")) a.setDireccionPropiedades((String) details.get("direccionPropiedades"));
+                    if (details.containsKey("latitud")) a.setLatitud(details.get("latitud") != null ? ((Number) details.get("latitud")).doubleValue() : null);
+                    if (details.containsKey("longitud")) a.setLongitud(details.get("longitud") != null ? ((Number) details.get("longitud")).doubleValue() : null);
+                    if (details.containsKey("esEmpresa")) a.setEsEmpresa((Boolean) details.get("esEmpresa"));
+                    arrendadorRepository.save(a);
+                });
+            } else if (usuario.getRol() == Rol.ESTUDIANTE) {
+                estudianteRepository.findByUsuario(usuario).ifPresent(e -> {
+                    if (details.containsKey("universidad")) e.setUniversidad((String) details.get("universidad"));
+                    if (details.containsKey("codigoEstudiante")) e.setCodigoEstudiante((String) details.get("codigoEstudiante"));
+                    if (details.containsKey("carrera")) e.setCarrera((String) details.get("carrera"));
+                    if (details.containsKey("ciclo")) e.setCiclo(details.get("ciclo") != null ? Integer.parseInt(details.get("ciclo").toString()) : null);
+                    estudianteRepository.save(e);
+                });
+            }
+        }
+
+        return usuarioRepository.save(usuario);
+    }
+
+    @Transactional
+    public void eliminarUsuario(Long id) {
+        usuarioRepository.deleteById(id);
     }
 
     @Transactional

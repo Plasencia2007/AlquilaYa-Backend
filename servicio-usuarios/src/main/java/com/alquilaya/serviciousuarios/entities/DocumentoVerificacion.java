@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.entities;
 
 import com.alquilaya.serviciousuarios.enums.EstadoVerificacion;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,6 +10,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 
@@ -26,6 +30,8 @@ public class DocumentoVerificacion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JsonIgnore
     private Usuario usuario;
 
     @Enumerated(EnumType.STRING)

@@ -57,4 +57,24 @@ public class PropiedadController {
     public ResponseEntity<List<Propiedad>> listarPorArrendador(@PathVariable Long arrendadorId) {
         return ResponseEntity.ok(propiedadRepository.findByArrendadorId(arrendadorId));
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<Propiedad> actualizarPropiedad(@PathVariable Long id, @RequestBody Propiedad updates) {
+        return propiedadRepository.findById(id)
+                .map(p -> {
+                    if (updates.getTitulo() != null) p.setTitulo(updates.getTitulo());
+                    if (updates.getDescripcion() != null) p.setDescripcion(updates.getDescripcion());
+                    if (updates.getPrecio() != null) p.setPrecio(updates.getPrecio());
+                    // Otros campos...
+                    return ResponseEntity.ok(propiedadRepository.save(p));
+                }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<Void> eliminarPropiedad(@PathVariable Long id) {
+        propiedadRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

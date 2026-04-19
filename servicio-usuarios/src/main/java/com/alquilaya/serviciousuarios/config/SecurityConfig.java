@@ -26,8 +26,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/usuarios/auth/**").permitAll()
-                        .requestMatchers("/api/v1/usuarios/permisos/check").authenticated() // Permitir validación para todos los logueados
+                        .requestMatchers("/api/v1/usuarios/permisos/check").authenticated()
                         .requestMatchers("/api/v1/usuarios/permisos/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
