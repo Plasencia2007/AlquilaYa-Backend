@@ -18,7 +18,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!cargando && estaAutenticado && usuario) {
-      if (usuario.rol === 'PROVEEDOR') {
+      if (usuario.rol === 'ARRENDADOR') {
         router.replace('/landlord/dashboard');
       } else if (usuario.rol === 'ADMIN') {
         router.replace('/admin-master');
@@ -29,7 +29,7 @@ export default function Home() {
   const destacados = MOCK_PROPIEDADES.filter(p => p.disponible).slice(0, 3);
 
   // Solo mostramos el spinner si el rol requiere redirección inmediata (evita flicker)
-  const requiereRedireccion = usuario && (usuario.rol === 'PROVEEDOR' || usuario.rol === 'ADMIN');
+  const requiereRedireccion = usuario && (usuario.rol === 'ARRENDADOR' || usuario.rol === 'ADMIN');
 
   if (!cargando && estaAutenticado && requiereRedireccion) {
     return (
@@ -204,7 +204,15 @@ export default function Home() {
               <li className="flex items-center gap-4 text-xs md:text-sm font-semibold"><span className="material-symbols-outlined text-white/70 text-lg">check_circle</span> Dashboard de gestión</li>
               <li className="flex items-center gap-4 text-xs md:text-sm font-semibold"><span className="material-symbols-outlined text-white/70 text-lg">check_circle</span> Pagos automatizados</li>
             </ul>
-            <Button variant="white" size="xl" className="w-full rounded-xl">
+            <Button 
+              variant="white" 
+              size="xl" 
+              className="w-full rounded-xl"
+              onClick={() => {
+                if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
+                else router.push('/landlord/dashboard');
+              }}
+            >
               Publicar mi cuarto
             </Button>
           </Card>
@@ -234,7 +242,14 @@ export default function Home() {
             <h2 className="text-4xl md:text-[5rem] font-extrabold leading-[1.1] mb-8 tracking-tighter">Convierte tu espacio en ingresos.</h2>
             <p className="text-base md:text-2xl text-on-surface-variant mb-12 max-w-xl mx-auto lg:mx-0 leading-relaxed italic">Únete a cientos de proveedores que confían en AlquilaYa.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button size="xl" className="px-10 rounded-xl w-full sm:w-auto">
+              <Button 
+                size="xl" 
+                className="px-10 rounded-xl w-full sm:w-auto"
+                onClick={() => {
+                  if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
+                  else router.push('/landlord/dashboard');
+                }}
+              >
                 Publicar mi cuarto
               </Button>
               <Button variant="ghost" size="xl" className="px-10 border border-outline-variant/30 bg-white rounded-xl w-full sm:w-auto">

@@ -53,7 +53,7 @@ export default function LandlordLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-surface-container-lowest animate-fade-in relative selection:bg-blue-500/20">
+    <div className="flex h-screen overflow-hidden bg-surface-container-lowest animate-fade-in relative selection:bg-blue-500/20">
       <LandlordSidebar />
       <main className="flex-1 overflow-y-auto pl-[280px]">
         <div className="max-w-[1400px] mx-auto p-10">

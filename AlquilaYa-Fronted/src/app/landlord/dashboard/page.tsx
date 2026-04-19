@@ -6,12 +6,16 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/features/auth/useAuth';
 import { cn } from '@/utils/cn';
+import VerificationPanel from '@/features/auth/VerificationPanel';
 
 export default function LandlordDashboardPage() {
   const { usuario } = useAuth();
 
   return (
     <div className="space-y-10 animate-fade-in py-4">
+      
+      {/* ── Identidad ── */}
+      <VerificationPanel />
       
       {/* ── Minimalist Header ── */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-4">

@@ -1,11 +1,9 @@
 package com.alquilaya.serviciousuarios.entities;
 
+import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -25,6 +23,12 @@ public class Usuario {
 
     @Column(nullable = false)
     private String nombre;
+    
+    @Column(nullable = false)
+    private String apellido;
+
+    @Column(nullable = false, length = 8)
+    private String dni;
 
     @Column(nullable = false, unique = true)
     private String correo;
@@ -35,6 +39,22 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Rol rol;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EstadoUsuario estado = EstadoUsuario.PENDING;
+
+    @Column(length = 20)
+    private String telefono;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean telefonoVerificado = false;
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL)
+    @ToString.Exclude
+    private java.util.List<DocumentoVerificacion> documentos;
 
     @CreationTimestamp
     @Column(updatable = false)

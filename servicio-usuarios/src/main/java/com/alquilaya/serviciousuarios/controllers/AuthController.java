@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/v1/usuarios/auth")
 @RequiredArgsConstructor
@@ -22,15 +24,8 @@ public class AuthController {
     private final EstudianteRepository estudianteRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
-        Usuario usuario = Usuario.builder()
-                .nombre(request.getNombre())
-                .correo(request.getCorreo())
-                .password(request.getPassword())
-                .rol(Rol.valueOf(request.getRol().toUpperCase()))
-                .build();
-
-        Usuario usuarioCreado = usuarioService.registrarUsuario(usuario);
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        Usuario usuarioCreado = usuarioService.registrarUsuario(request);
         Long perfilId = obtenerPerfilId(usuarioCreado);
         String token = jwtService.generateToken(usuarioCreado, perfilId);
 
@@ -44,15 +39,27 @@ public class AuthController {
                 .build());
     }
 
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@RequestBody java.util.Map<String, String> request) {
+        String telefono = request.get("telefono");
+        String codigo = request.get("codigo");
+
+        if (usuarioService.confirmarTelefono(telefono, codigo)) {
+            return ResponseEntity.ok("Teléfono verificado exitosamente");
+        } else {
+            return ResponseEntity.status(400).body("Código inválido o expirado");
+        }
+    }
+
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         try {
             return usuarioService.buscarPorCorreo(request.getCorreo())
                     .map(usuario -> {
-                        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
-                            return ResponseEntity.status(401).body("Contraseña incorrecta");
+                        if (!usuario.isTelefonoVerificado()) {
+                            return ResponseEntity.status(403).body("Debes verificar tu número de WhatsApp antes de ingresar");
                         }
-                        
+
                         Long perfilId = obtenerPerfilId(usuario);
                         String token = jwtService.generateToken(usuario, perfilId);
                         return ResponseEntity.ok(AuthResponse.builder()

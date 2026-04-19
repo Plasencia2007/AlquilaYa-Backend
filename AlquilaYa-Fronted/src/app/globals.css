@@ -165,4 +165,36 @@
   .animate-scale-in {
     animation: scaleIn 0.2s ease-out forwards;
   }
+
+  /* ── Estilos para react-phone-number-input ── */
+  .alquilaya-phone-input {
+    display: flex;
+    align-items: center;
+    background: #f2ede9; /* Mismo que los otros inputs */
+    border-radius: 0.75rem;
+    padding: 0 1rem;
+    height: 52px;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+  }
+
+  .alquilaya-phone-input:focus-within {
+    border-color: #8f0304;
+    background: white;
+  }
+
+  .alquilaya-phone-input .PhoneInputInput {
+    border: none;
+    background: transparent;
+    outline: none;
+    padding-left: 0.75rem;
+    font-size: 0.875rem;
+    color: #1d1b19;
+    height: 100%;
+    width: 100%;
+  }
+
+  .alquilaya-phone-input .PhoneInputCountry {
+    margin-right: 0.5rem;
+  }
 }

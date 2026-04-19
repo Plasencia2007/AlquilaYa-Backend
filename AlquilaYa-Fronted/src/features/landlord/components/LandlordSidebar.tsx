@@ -133,7 +133,7 @@ export default function LandlordSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[280px] bg-[#0b1222] border-r border-[#1e293b] flex flex-col z-[60] overflow-hidden">
+    <aside className="fixed left-0 top-0 h-screen w-[280px] bg-[#0b1222] border-r border-[#1e293b] flex flex-col z-[60] overflow-y-auto custom-scrollbar">
       {/* Logo Section */}
       <div className="px-6 py-5">
         <div className="flex items-center gap-3">

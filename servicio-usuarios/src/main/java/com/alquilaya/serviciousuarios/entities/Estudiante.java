@@ -27,6 +27,10 @@ public class Estudiante {
     @Column(name = "codigo_estudiante")
     private String codigoEstudiante;
 
+    private String carrera;
+
+    private Integer ciclo;
+
     @Builder.Default
     private boolean verificado = false;
 }

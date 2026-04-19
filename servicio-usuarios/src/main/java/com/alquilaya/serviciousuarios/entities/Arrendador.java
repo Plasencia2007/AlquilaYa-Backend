@@ -29,6 +29,15 @@ public class Arrendador {
     
     private String telefono;
 
+    @Column(name = "direccion_propiedades")
+    private String direccionPropiedades;
+
+    private Double latitud;
+    private Double longitud;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean esEmpresa;
+
     @Builder.Default
     private Double calificacion = 5.0;
 }

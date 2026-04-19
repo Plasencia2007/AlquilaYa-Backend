@@ -27,13 +27,17 @@ export const servicioAuth = {
     }
   },
 
-  registrarse: async (nombre: string, correo: string, contrasena: string, rol: string): Promise<Usuario | null> => {
+  registrarse: async (nombre: string, apellido: string, dni: string, correo: string, contrasena: string, rol: string, detallesPerfil: any, telefono: string): Promise<Usuario | null> => {
     try {
       const response = await api.post('usuarios/auth/register', {
         nombre,
+        apellido,
+        dni,
         correo,
         password: contrasena,
-        rol: rol.toUpperCase()
+        rol: rol.toUpperCase(),
+        telefono,
+        detallesPerfil
       });
 
       const { token, id, ...usuarioRest } = response.data;
