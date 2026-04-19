@@ -15,7 +15,20 @@ public class PermisoEnforcerService {
     public boolean tienePermiso(String funcionalidad) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
+            System.out.println("🔐 [PERMISO ENFORCER] Authentication: " + (auth != null ? "EXISTS" : "NULL"));
+            
+            if (auth == null) {
+                System.out.println("❌ [PERMISO ENFORCER] Auth es NULL");
+                return false;
+            }
+            
+            System.out.println("✅ [PERMISO ENFORCER] Auth no es null");
+            System.out.println("   - isAuthenticated(): " + auth.isAuthenticated());
+            System.out.println("   - Authorities: " + auth.getAuthorities());
+            System.out.println("   - Principal: " + auth.getPrincipal());
+            
+            if (!auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
+                System.out.println("❌ [PERMISO ENFORCER] Usuario no autenticado o sin authorities");
                 return false;
             }
 
@@ -25,21 +38,22 @@ public class PermisoEnforcerService {
                     .findFirst()
                     .orElse("");
 
-            System.out.println("🔍 [DEBUG PERMISOS] Usuario detectado con Rol: " + rol + " intentando: " + funcionalidad);
+            System.out.println("🔍 [PERMISO ENFORCER] Usuario con Rol: '" + rol + "' intentando: '" + funcionalidad + "'");
 
             if (rol.isEmpty()) {
-                System.out.println("❌ [DEBUG PERMISOS] Permiso denegado: Rol vacío o no detectado.");
+                System.out.println("❌ [PERMISO ENFORCER] Rol vacío o no detectado.");
                 return false;
             }
 
             // Preguntar al servicio de usuarios
+            System.out.println("📞 [PERMISO ENFORCER] Llamando a servicio-usuarios para verificar: " + rol + " -> " + funcionalidad);
             boolean tienePermiso = permisoClient.verificarPermiso(rol, funcionalidad);
-            System.out.println("📊 [DEBUG PERMISOS] Resultado de verificación en servicio-usuarios: " + tienePermiso);
+            System.out.println("📊 [PERMISO ENFORCER] Resultado: " + (tienePermiso ? "✅ PERMITIDO" : "❌ DENEGADO"));
             
             return tienePermiso;
         } catch (Throwable t) {
-            // Loguear el error crítico y denegar por seguridad en lugar de lanzar 500
-            System.err.println("!!! [ERROR CRÍTICO] FALLA EN COMUNICACIÓN INTER-SERVICIOS: " + t.getClass().getSimpleName() + " -> " + t.getMessage());
+            System.err.println("!!! [ERROR CRÍTICO EN PERMISO ENFORCER] " + t.getClass().getSimpleName() + " -> " + t.getMessage());
+            t.printStackTrace();
             return false;
         }
     }

@@ -30,7 +30,10 @@ public class PropiedadController {
             @RequestPart("propiedad") String propiedadJson,
             @RequestPart("file") MultipartFile file
     ) throws IOException {
-        System.out.println("📥 [CONTROLLER] Petición recibida para CREAR propiedad.");
+        System.out.println("✅ [CONTROLLER POST] MÉTODO EJECUTADO - @PreAuthorize PASÓ");
+        System.out.println("📥 [CONTROLLER POST] Archivo recibido: " + file.getOriginalFilename() + " (" + file.getSize() + " bytes)");
+        System.out.println("📥 [CONTROLLER POST] JSON de propiedad: " + propiedadJson);
+        
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
         Propiedad propiedad = mapper.readValue(propiedadJson, Propiedad.class);
@@ -42,6 +45,7 @@ public class PropiedadController {
         
         kafkaProducerService.enviarEventoPropiedad("Nueva propiedad creada con foto: " + nuevaPropiedad.getTitulo() + " (ID: " + nuevaPropiedad.getId() + ")");
         
+        System.out.println("✅ [CONTROLLER POST] Propiedad creada exitosamente con ID: " + nuevaPropiedad.getId());
         return ResponseEntity.ok(nuevaPropiedad);
     }
 
