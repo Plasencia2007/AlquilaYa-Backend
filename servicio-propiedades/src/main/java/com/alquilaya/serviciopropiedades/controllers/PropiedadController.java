@@ -7,6 +7,7 @@ import com.alquilaya.serviciopropiedades.services.KafkaProducerService;
 import com.alquilaya.serviciopropiedades.services.CloudinaryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import java.io.IOException;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/propiedades")
 @RequiredArgsConstructor
@@ -30,29 +32,26 @@ public class PropiedadController {
             @RequestPart("propiedad") String propiedadJson,
             @RequestPart("file") MultipartFile file
     ) throws IOException {
-        System.out.println("✅ [CONTROLLER POST] MÉTODO EJECUTADO - @PreAuthorize PASÓ");
-        System.out.println("📥 [CONTROLLER POST] Archivo recibido: " + file.getOriginalFilename() + " (" + file.getSize() + " bytes)");
-        System.out.println("📥 [CONTROLLER POST] JSON de propiedad: " + propiedadJson);
-        
+        log.info("[POST] Archivo: {} ({} bytes)", file.getOriginalFilename(), file.getSize());
+
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
         Propiedad propiedad = mapper.readValue(propiedadJson, Propiedad.class);
 
         String urlFoto = cloudinaryService.uploadFile(file);
         propiedad.setImagenUrl(urlFoto);
-        
+
         Propiedad nuevaPropiedad = propiedadRepository.save(propiedad);
-        
-        kafkaProducerService.enviarEventoPropiedad("Nueva propiedad creada con foto: " + nuevaPropiedad.getTitulo() + " (ID: " + nuevaPropiedad.getId() + ")");
-        
-        System.out.println("✅ [CONTROLLER POST] Propiedad creada exitosamente con ID: " + nuevaPropiedad.getId());
+        kafkaProducerService.enviarEventoPropiedad("Nueva propiedad creada: " + nuevaPropiedad.getTitulo() + " (ID: " + nuevaPropiedad.getId() + ")");
+
+        log.info("[POST] Propiedad creada con ID: {}", nuevaPropiedad.getId());
         return ResponseEntity.ok(nuevaPropiedad);
     }
 
     @GetMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_CUARTOS')")
     public ResponseEntity<List<Propiedad>> listarPropiedades() {
-        System.out.println("📥 [CONTROLLER] Petición recibida para LISTAR propiedades.");
+        log.debug("[GET] Listando propiedades");
         return ResponseEntity.ok(propiedadRepository.findAll());
     }
 

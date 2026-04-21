@@ -31,6 +31,10 @@ cloudinary:
   api-key: 387589685746197
   api-secret: ccDoynk9aR2ibapCNqo6LWxyZao
 
+feign:
+  circuitbreaker:
+    enabled: true
+
 # Sincronización de Seguridad con Usuarios
 jwt:
   secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u

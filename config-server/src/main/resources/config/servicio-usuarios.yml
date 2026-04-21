@@ -21,3 +21,7 @@ server:
 jwt:
   secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u
   expiration: 86400000 # 24 horas
+
+notification:
+  service:
+    url: http://localhost:8081

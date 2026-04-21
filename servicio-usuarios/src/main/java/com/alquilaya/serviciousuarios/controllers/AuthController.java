@@ -71,7 +71,10 @@ public class AuthController {
         try {
             return usuarioService.buscarPorCorreo(request.getCorreo())
                     .map(usuario -> {
-                        // Solo para Estudiantes y Arrendadores se pide verificación
+                        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
+                            return ResponseEntity.status(401).body("Credenciales incorrectas");
+                        }
+
                         if (!usuario.isTelefonoVerificado()) {
                             return ResponseEntity.status(403).body("Debes verificar tu número de WhatsApp antes de ingresar");
                         }
@@ -87,7 +90,7 @@ public class AuthController {
                                 .perfilId(perfilId)
                                 .build());
                     })
-                    .orElse(ResponseEntity.status(401).body("Usuario no encontrado"));
+                    .orElse(ResponseEntity.status(401).body("Credenciales incorrectas"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error interno en el servidor");
         }
@@ -98,6 +101,10 @@ public class AuthController {
         try {
             return usuarioService.buscarPorCorreo(request.getCorreo())
                     .map(admin -> {
+                        if (!usuarioService.verificarPassword(request.getPassword(), admin.getPassword())) {
+                            return ResponseEntity.status(401).body("Credenciales incorrectas");
+                        }
+
                         if (admin.getRol() != Rol.ADMIN) {
                             return ResponseEntity.status(403).body("Acceso denegado: No es un administrador");
                         }
@@ -112,7 +119,7 @@ public class AuthController {
                                 .perfilId(null)
                                 .build());
                     })
-                    .orElse(ResponseEntity.status(401).body("Administrador no encontrado"));
+                    .orElse(ResponseEntity.status(401).body("Credenciales incorrectas"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error interno en el servidor");
         }

@@ -3,6 +3,8 @@ package com.alquilaya.serviciousuarios.services;
 import com.alquilaya.serviciousuarios.entities.OtpVerification;
 import com.alquilaya.serviciousuarios.repositories.OtpVerificationRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -11,19 +13,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OtpService {
 
     private final OtpVerificationRepository otpRepository;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String WHATSAPP_SERVICE_URL = "http://localhost:8081/api/v1/notifications/whatsapp/send-otp";
+
+    @Value("${notification.service.url:http://localhost:8081}")
+    private String notificationServiceUrl;
 
     public void generarYEnviarOtp(String telefono) {
-        // 1. Generar código de 6 dígitos
         String codigo = String.format("%06d", new Random().nextInt(999999));
 
-        // 2. Guardar en DB
         OtpVerification otp = OtpVerification.builder()
                 .telefono(telefono)
                 .codigo(codigo)
@@ -31,17 +34,15 @@ public class OtpService {
                 .build();
         otpRepository.save(otp);
 
-        // 3. Llamar al microservicio de WhatsApp
         Map<String, String> request = new HashMap<>();
         request.put("telefono", telefono);
         request.put("codigo", codigo);
 
         try {
-            restTemplate.postForObject(WHATSAPP_SERVICE_URL, request, String.class);
-            System.out.println("OTP enviado a " + telefono + ": " + codigo);
+            restTemplate.postForObject(notificationServiceUrl + "/api/v1/notifications/whatsapp/send-otp", request, String.class);
+            log.info("OTP enviado a {}", telefono);
         } catch (Exception e) {
-            System.err.println("Error enviando OTP via WhatsApp: " + e.getMessage());
-            // En producción, aquí podrías manejar reintentos o fallbacks a SMS
+            log.error("Error enviando OTP via WhatsApp a {}: {}", telefono, e.getMessage());
         }
     }
 

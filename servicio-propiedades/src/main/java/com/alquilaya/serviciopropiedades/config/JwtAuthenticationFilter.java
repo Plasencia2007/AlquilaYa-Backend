@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -33,35 +35,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String jwt;
         final String userEmail;
 
-        System.out.println("🔐 [JWT FILTER] Procesando request: " + request.getRequestURI());
-        
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            System.out.println("❌ [JWT FILTER] No hay header Authorization o no comienza con 'Bearer '");
             filterChain.doFilter(request, response);
             return;
         }
 
         jwt = authHeader.substring(7);
-        System.out.println("✅ [JWT FILTER] Token extraído del header");
-        
+
         try {
             userEmail = jwtService.extractUsername(jwt);
-            System.out.println("✅ [JWT FILTER] Email extraído del token: " + userEmail);
-            
+
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                System.out.println("🔍 [JWT FILTER] Validando token para: " + userEmail);
-                
                 if (jwtService.isTokenValid(jwt, userEmail)) {
-                    System.out.println("✅ [JWT FILTER] Token válido");
-                    
-                    // Extraer rol con seguridad
                     String rol = jwtService.extractClaim(jwt, claims -> claims.get("rol", String.class));
-                    System.out.println("🎭 [JWT FILTER] Rol extraído del token: " + rol);
-                    
+
                     if (rol != null && !rol.isEmpty()) {
                         List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + rol));
-                        System.out.println("✅ [JWT FILTER] Authority creado: ROLE_" + rol);
-                        
                         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                                 userEmail,
                                 jwt,
@@ -69,25 +58,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         );
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
-                        System.out.println("✅ [JWT FILTER] SecurityContext poblado con usuario: " + userEmail);
+                        log.debug("[JWT] Autenticado: {} rol={}", userEmail, rol);
                     } else {
-                        System.out.println("❌ [JWT FILTER] Rol vacío o nulo en el token");
+                        log.warn("[JWT] Token sin claim de rol para: {}", userEmail);
                     }
                 } else {
-                    System.out.println("❌ [JWT FILTER] Token inválido o expirado");
-                }
-            } else {
-                if (userEmail == null) {
-                    System.out.println("❌ [JWT FILTER] No se pudo extraer email del token");
-                } else {
-                    System.out.println("⚠️ [JWT FILTER] Ya existe autenticación en SecurityContext");
+                    log.warn("[JWT] Token inválido o expirado para: {}", userEmail);
                 }
             }
         } catch (Exception e) {
-            System.err.println("❌ [JWT FILTER] ERROR procesando JWT: " + e.getClass().getSimpleName() + " -> " + e.getMessage());
-            e.printStackTrace();
+            log.error("[JWT] Error procesando token: {}", e.getMessage());
         }
-        
+
         filterChain.doFilter(request, response);
     }
 }

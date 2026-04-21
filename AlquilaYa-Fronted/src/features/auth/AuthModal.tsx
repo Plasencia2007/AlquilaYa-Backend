@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { X } from 'lucide-react';
 import { useAuthModal } from './useAuthModal';
 import { useAuth } from './useAuth';
+import { servicioAuth } from './servicioAuth';
 import { useRouter } from 'next/navigation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -27,7 +28,7 @@ const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), {
 
 export default function AuthModal() {
   const { isOpen, view, targetRole, close, toggleView, open: openAuthModal } = useAuthModal();
-  const { iniciarSesion, registrarse } = useAuth();
+  const { iniciarSesion, registrarse, inicializar } = useAuth();
   const router = useRouter();
 
   // React Hook Form - Login
@@ -75,12 +76,15 @@ export default function AuthModal() {
   const [step, setStep] = useState(0); // 0: Marketing(AR), 1: Cuenta, 2: Perfil, 3: WhatsApp OTP
   const [otpCodigo, setOtpCodigo] = useState('');
   const [errorOtp, setErrorOtp] = useState('');
+  const [errorLogin, setErrorLogin] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     setIsAnimating(true);
     setCurrentRol(targetRole);
     setRegValue('rol', targetRole);
+    setErrorLogin('');
+    setErrorOtp('');
     if (view === 'register') {
       setStep(targetRole === 'ARRENDADOR' ? 0 : 1);
     } else {
@@ -99,10 +103,15 @@ export default function AuthModal() {
   };
 
   const handleLogin = async (data: LoginFormData) => {
-    const usuario = await iniciarSesion(data.correo, data.password);
-    if (usuario) {
-      redirectByRole(usuario.rol);
-      close();
+    setErrorLogin('');
+    try {
+      const usuario = await iniciarSesion(data.correo, data.password);
+      if (usuario) {
+        redirectByRole(usuario.rol);
+        close();
+      }
+    } catch (error: any) {
+      setErrorLogin(error?.message || 'Credenciales incorrectas');
     }
   };
 
@@ -190,7 +199,7 @@ export default function AuthModal() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCodigo.length !== 6) return;
-    
+
     setIsVerifying(true);
     setErrorOtp('');
 
@@ -202,15 +211,18 @@ export default function AuthModal() {
       });
 
       if (response.ok) {
-        // Verificación exitosa
-        alert("¡Cuenta verificada con éxito!");
+        // OTP correcto: activar sesión moviendo el token de memoria a cookie
+        const usuario = servicioAuth.completarActivacion();
+        if (usuario) {
+          inicializar(); // sincroniza el store con la nueva cookie
+        }
         close();
         router.push(currentRol === 'ARRENDADOR' ? '/landlord/dashboard' : '/');
       } else {
         const errorMsg = await response.text();
-        setErrorOtp(errorMsg || "Código incorrecto");
+        setErrorOtp(errorMsg || "Código incorrecto. Inténtalo de nuevo.");
       }
-    } catch (err) {
+    } catch {
       setErrorOtp("Error de conexión con el servidor");
     } finally {
       setIsVerifying(false);
@@ -348,6 +360,13 @@ export default function AuthModal() {
                 </button>
                 <a href="#" className="text-xs font-semibold text-[#8f0304] hover:text-[#ba0405] transition-colors">¿Olvidaste tu contraseña?</a>
               </div>
+
+              {errorLogin && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <AlertCircle size={15} className="text-red-500 shrink-0" />
+                  <p className="text-xs text-red-600 font-semibold">{errorLogin}</p>
+                </div>
+              )}
 
               <button type="submit" className="w-full bg-[#8f0304] hover:bg-[#ba0405] text-white font-bold rounded-full py-4 transition-all shadow-xl shadow-[#8f0304]/20 active:scale-95">
                 Ingresar

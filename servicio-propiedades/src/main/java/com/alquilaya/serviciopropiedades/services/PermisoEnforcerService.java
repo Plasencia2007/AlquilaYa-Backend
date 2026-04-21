@@ -2,10 +2,12 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.clients.PermisoClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service("permisoEnforcer")
 @RequiredArgsConstructor
 public class PermisoEnforcerService {
@@ -15,45 +17,27 @@ public class PermisoEnforcerService {
     public boolean tienePermiso(String funcionalidad) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            System.out.println("🔐 [PERMISO ENFORCER] Authentication: " + (auth != null ? "EXISTS" : "NULL"));
-            
-            if (auth == null) {
-                System.out.println("❌ [PERMISO ENFORCER] Auth es NULL");
-                return false;
-            }
-            
-            System.out.println("✅ [PERMISO ENFORCER] Auth no es null");
-            System.out.println("   - isAuthenticated(): " + auth.isAuthenticated());
-            System.out.println("   - Authorities: " + auth.getAuthorities());
-            System.out.println("   - Principal: " + auth.getPrincipal());
-            
-            if (!auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
-                System.out.println("❌ [PERMISO ENFORCER] Usuario no autenticado o sin authorities");
+
+            if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
+                log.warn("[PERMISO] Sin autenticación para funcionalidad: {}", funcionalidad);
                 return false;
             }
 
-            // Extraer el rol de forma segura del primer authority
             String rol = auth.getAuthorities().stream()
                     .map(a -> a.getAuthority().replace("ROLE_", ""))
                     .findFirst()
                     .orElse("");
 
-            System.out.println("🔍 [PERMISO ENFORCER] Usuario con Rol: '" + rol + "' intentando: '" + funcionalidad + "'");
-
             if (rol.isEmpty()) {
-                System.out.println("❌ [PERMISO ENFORCER] Rol vacío o no detectado.");
+                log.warn("[PERMISO] Rol vacío en token para funcionalidad: {}", funcionalidad);
                 return false;
             }
 
-            // Preguntar al servicio de usuarios
-            System.out.println("📞 [PERMISO ENFORCER] Llamando a servicio-usuarios para verificar: " + rol + " -> " + funcionalidad);
             boolean tienePermiso = permisoClient.verificarPermiso(rol, funcionalidad);
-            System.out.println("📊 [PERMISO ENFORCER] Resultado: " + (tienePermiso ? "✅ PERMITIDO" : "❌ DENEGADO"));
-            
+            log.debug("[PERMISO] rol={} funcionalidad={} resultado={}", rol, funcionalidad, tienePermiso);
             return tienePermiso;
         } catch (Throwable t) {
-            System.err.println("!!! [ERROR CRÍTICO EN PERMISO ENFORCER] " + t.getClass().getSimpleName() + " -> " + t.getMessage());
-            t.printStackTrace();
+            log.error("[PERMISO] Error verificando permiso '{}': {}", funcionalidad, t.getMessage());
             return false;
         }
     }

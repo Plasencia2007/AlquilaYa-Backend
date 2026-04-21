@@ -4,7 +4,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(name = "servicio-usuarios")
+@FeignClient(name = "servicio-usuarios", fallback = PermisoClientFallback.class)
 public interface PermisoClient {
 
     @GetMapping("/api/v1/usuarios/permisos/check")

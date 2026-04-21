@@ -1,6 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
+const KafkaConsumer = require('./KafkaConsumer');
 const app = express();
 const port = 8081;
 
@@ -27,9 +28,17 @@ client.on('qr', (qr) => {
 });
 
 // Client Ready
-client.on('ready', () => {
+client.on('ready', async () => {
     console.log('WhatsApp Client is READY!');
     isReady = true;
+
+    const kafkaConsumer = new KafkaConsumer(client);
+    try {
+        await kafkaConsumer.start();
+        console.log('Kafka Consumer started successfully');
+    } catch (err) {
+        console.error('Error starting Kafka Consumer:', err.message);
+    }
 });
 
 client.on('authenticated', () => {

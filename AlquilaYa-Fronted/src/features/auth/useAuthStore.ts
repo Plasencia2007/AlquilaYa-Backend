@@ -44,9 +44,11 @@ export const useAuthStore = create<EstadoAuth & AccionesAuth>((set) => ({
       }
       set({ cargando: false });
       return null;
-    } catch (error) {
+    } catch (error: any) {
       set({ cargando: false });
-      return null;
+      // Propaga el mensaje de error del backend para que el modal lo muestre
+      const mensaje = error?.response?.data || error?.message || 'Error al iniciar sesión';
+      throw new Error(typeof mensaje === 'string' ? mensaje : JSON.stringify(mensaje));
     }
   },
 
@@ -54,12 +56,10 @@ export const useAuthStore = create<EstadoAuth & AccionesAuth>((set) => ({
     set({ cargando: true });
     try {
       const usuario = await servicioAuth.registrarse(nombre, apellido, dni, correo, contrasena, rol, detallesPerfil, telefono);
-      if (usuario) {
-        set({ usuario, estaAutenticado: true, cargando: false });
-        return usuario;
-      }
+      // NO se activa la sesión aquí. El usuario debe verificar el OTP primero.
+      // completarActivacion() se llama desde AuthModal tras verificar el OTP.
       set({ cargando: false });
-      return null;
+      return usuario ?? null;
     } catch (error) {
       set({ cargando: false });
       return null;
