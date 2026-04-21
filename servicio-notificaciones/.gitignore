@@ -16,3 +16,4 @@ out/
 .local-data/
 .wwebjs_auth/
 .wwebjs_cache/
+storage/
