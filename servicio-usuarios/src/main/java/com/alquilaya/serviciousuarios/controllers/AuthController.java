@@ -1,12 +1,15 @@
 package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.config.JwtService;
-import com.alquilaya.serviciousuarios.dto.AuthDtos.*;
+import com.alquilaya.serviciousuarios.dto.*;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
+import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
+import com.alquilaya.serviciousuarios.exceptions.OtpInvalidoException;
+import com.alquilaya.serviciousuarios.exceptions.TelefonoNoVerificadoException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -55,74 +58,63 @@ public class AuthController {
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@RequestBody java.util.Map<String, String> request) {
-        String telefono = request.get("telefono");
-        String codigo = request.get("codigo");
-
-        if (usuarioService.confirmarTelefono(telefono, codigo)) {
+    public ResponseEntity<String> verifyOtp(@Valid @RequestBody VerificarOtpRequest request) {
+        if (usuarioService.confirmarTelefono(request.getTelefono(), request.getCodigo())) {
             return ResponseEntity.ok("Teléfono verificado exitosamente");
         } else {
-            return ResponseEntity.status(400).body("Código inválido o expirado");
+            throw new OtpInvalidoException("El código OTP es incorrecto o ha expirado. Solicita uno nuevo desde la pantalla de verificación.");
         }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        try {
-            return usuarioService.buscarPorCorreo(request.getCorreo())
-                    .map(usuario -> {
-                        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
-                            return ResponseEntity.status(401).body("Credenciales incorrectas");
-                        }
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        Usuario usuario = usuarioService.buscarPorCorreo(request.getCorreo())
+                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos"));
 
-                        if (!usuario.isTelefonoVerificado()) {
-                            return ResponseEntity.status(403).body("Debes verificar tu número de WhatsApp antes de ingresar");
-                        }
-
-                        Long perfilId = obtenerPerfilId(usuario);
-                        String token = jwtService.generateToken(usuario, perfilId);
-                        return ResponseEntity.ok(AuthResponse.builder()
-                                .token(token)
-                                .id(usuario.getId())
-                                .nombre(usuario.getNombre())
-                                .correo(usuario.getCorreo())
-                                .rol(usuario.getRol().name())
-                                .perfilId(perfilId)
-                                .build());
-                    })
-                    .orElse(ResponseEntity.status(401).body("Credenciales incorrectas"));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error interno en el servidor");
+        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
+            throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
+
+        if (!usuario.isTelefonoVerificado()) {
+            throw new TelefonoNoVerificadoException("Debes verificar tu número de WhatsApp antes de iniciar sesión. Revisa tu WhatsApp para el código OTP.");
+        }
+
+        Long perfilId = obtenerPerfilId(usuario);
+        String token = jwtService.generateToken(usuario, perfilId);
+        
+        return ResponseEntity.ok(AuthResponse.builder()
+                .token(token)
+                .id(usuario.getId())
+                .nombre(usuario.getNombre())
+                .correo(usuario.getCorreo())
+                .rol(usuario.getRol().name())
+                .perfilId(perfilId)
+                .build());
     }
 
     @PostMapping("/login-admin")
-    public ResponseEntity<?> loginAdmin(@Valid @RequestBody LoginRequest request) {
-        try {
-            return usuarioService.buscarPorCorreo(request.getCorreo())
-                    .map(admin -> {
-                        if (!usuarioService.verificarPassword(request.getPassword(), admin.getPassword())) {
-                            return ResponseEntity.status(401).body("Credenciales incorrectas");
-                        }
+    public ResponseEntity<AuthResponse> loginAdmin(@Valid @RequestBody LoginRequest request) {
+        Usuario admin = usuarioService.buscarPorCorreo(request.getCorreo())
+                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos"));
 
-                        if (admin.getRol() != Rol.ADMIN) {
-                            return ResponseEntity.status(403).body("Acceso denegado: No es un administrador");
-                        }
-
-                        String token = jwtService.generateToken(admin, null);
-                        return ResponseEntity.ok(AuthResponse.builder()
-                                .token(token)
-                                .id(admin.getId())
-                                .nombre(admin.getNombre())
-                                .correo(admin.getCorreo())
-                                .rol(admin.getRol().name())
-                                .perfilId(null)
-                                .build());
-                    })
-                    .orElse(ResponseEntity.status(401).body("Credenciales incorrectas"));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error interno en el servidor");
+        if (!usuarioService.verificarPassword(request.getPassword(), admin.getPassword())) {
+            throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
+
+        if (admin.getRol() != Rol.ADMIN) {
+            throw new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException("No tienes permisos de administrador para acceder a este recurso");
+        }
+
+        String token = jwtService.generateToken(admin, null);
+        
+        return ResponseEntity.ok(AuthResponse.builder()
+                .token(token)
+                .id(admin.getId())
+                .nombre(admin.getNombre())
+                .correo(admin.getCorreo())
+                .rol(admin.getRol().name())
+                .perfilId(null)
+                .build());
     }
 
     private Long obtenerPerfilId(Usuario usuario) {

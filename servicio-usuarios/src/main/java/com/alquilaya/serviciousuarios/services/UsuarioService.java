@@ -1,6 +1,6 @@
 package com.alquilaya.serviciousuarios.services;
 
-import com.alquilaya.serviciousuarios.dto.AuthDtos.RegisterRequest;
+import com.alquilaya.serviciousuarios.dto.*;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
@@ -9,16 +9,19 @@ import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
+import com.alquilaya.serviciousuarios.exceptions.CorreoYaRegistradoException;
+import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
@@ -28,15 +31,15 @@ public class UsuarioService {
     private final OtpService otpService;
 
     @Transactional
-    public Usuario registrarAdmin(com.alquilaya.serviciousuarios.dto.AuthDtos.AdminRegisterRequest request) {
+    public Usuario registrarAdmin(AdminRegisterRequest request) {
         if (usuarioRepository.existsByCorreo(request.getCorreo())) {
-            throw new RuntimeException("El correo ya está registrado");
+            throw new CorreoYaRegistradoException("El correo " + request.getCorreo() + " ya está registrado en AlquilaYa");
         }
 
         Usuario admin = Usuario.builder()
                 .nombre(request.getNombre())
-                .apellido("") // No requerido para admin inicial
-                .dni("") // No requerido para admin inicial
+                .apellido("ADMIN")
+                .dni("00000000")
                 .correo(request.getCorreo())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .rol(Rol.ADMIN)
@@ -44,13 +47,14 @@ public class UsuarioService {
                 .telefonoVerificado(true)
                 .build();
 
+        log.info("Registrando nuevo administrador: {}", request.getCorreo());
         return usuarioRepository.save(admin);
     }
 
     @Transactional
     public Usuario registrarUsuario(RegisterRequest request) {
         if (usuarioRepository.existsByCorreo(request.getCorreo())) {
-            throw new RuntimeException("El correo ya está registrado");
+            throw new CorreoYaRegistradoException("El correo " + request.getCorreo() + " ya está registrado en AlquilaYa. Si ya tienes cuenta, intenta iniciar sesión.");
         }
 
         Rol rol = Rol.valueOf(request.getRol().toUpperCase());
@@ -63,38 +67,46 @@ public class UsuarioService {
                 .telefono(request.getTelefono())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .rol(rol)
-                // Excepción para ADMIN: Se activa automáticamente
                 .estado(rol == Rol.ADMIN ? EstadoUsuario.ACTIVE : EstadoUsuario.PENDING)
                 .telefonoVerificado(rol == Rol.ADMIN)
                 .build();
 
         Usuario savedUser = usuarioRepository.save(usuario);
-        Map<String, Object> details = request.getDetallesPerfil();
+        log.info("Usuario básico guardado con ID: {} y Rol: {}", savedUser.getId(), savedUser.getRol());
 
-        if (savedUser.getRol() == Rol.ARRENDADOR) {
+        if (rol == Rol.ARRENDADOR) {
+            if (request.getDetallesArrendador() == null) {
+                throw new IllegalArgumentException("Los datos de arrendador son obligatorios para el rol ARRENDADOR");
+            }
+            DetallesArrendadorRequest det = request.getDetallesArrendador();
             Arrendador arrendador = Arrendador.builder()
                     .usuario(savedUser)
-                    .telefono((String) details.get("telefono"))
-                    .ruc((String) details.get("ruc"))
-                    .direccionPropiedades((String) details.get("direccionCuartos"))
-                    .latitud(details.get("latitud") != null ? ((Number) details.get("latitud")).doubleValue() : null)
-                    .longitud(details.get("longitud") != null ? ((Number) details.get("longitud")).doubleValue() : null)
-                    .esEmpresa(details.get("esEmpresa") != null && (Boolean) details.get("esEmpresa"))
+                    .telefono(det.getTelefono())
+                    .ruc(det.getRuc())
+                    .nombreComercial(det.getNombreComercial())
+                    .direccionPropiedades(det.getDireccionCuartos())
+                    .latitud(det.getLatitud())
+                    .longitud(det.getLongitud())
+                    .esEmpresa(det.getEsEmpresa() != null && det.getEsEmpresa())
                     .build();
             arrendadorRepository.save(arrendador);
-        } else if (savedUser.getRol() == Rol.ESTUDIANTE) {
+        } else if (rol == Rol.ESTUDIANTE) {
+            if (request.getDetallesEstudiante() == null) {
+                throw new IllegalArgumentException("Los datos de estudiante son obligatorios para el rol ESTUDIANTE");
+            }
+            DetallesEstudianteRequest det = request.getDetallesEstudiante();
             Estudiante estudiante = Estudiante.builder()
                     .usuario(savedUser)
-                    .universidad((String) details.get("universidad"))
-                    .codigoEstudiante((String) details.get("codigoEstudiante"))
-                    .carrera((String) details.get("carrera"))
-                    .ciclo(details.get("ciclo") != null ? Integer.parseInt(details.get("ciclo").toString()) : null)
+                    .universidad(det.getUniversidad())
+                    .codigoEstudiante(det.getCodigoEstudiante())
+                    .carrera(det.getCarrera())
+                    .ciclo(det.getCiclo())
                     .build();
             estudianteRepository.save(estudiante);
         }
 
-        // Enviar OTP vía WhatsApp solo si NO es ADMIN
         if (usuario.getTelefono() != null && rol != Rol.ADMIN) {
+            log.debug("Enviando OTP a {}", usuario.getTelefono());
             otpService.generarYEnviarOtp(usuario.getTelefono());
         }
 
@@ -110,39 +122,37 @@ public class UsuarioService {
     }
 
     @Transactional
-    public Usuario actualizarUsuario(Long id, Map<String, Object> updates) {
+    public Usuario actualizarUsuario(Long id, ActualizarUsuarioRequest updates) {
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + id));
 
-        if (updates.containsKey("nombre")) usuario.setNombre((String) updates.get("nombre"));
-        if (updates.containsKey("apellido")) usuario.setApellido((String) updates.get("apellido"));
-        if (updates.containsKey("dni")) usuario.setDni((String) updates.get("dni"));
-        if (updates.containsKey("telefono")) usuario.setTelefono((String) updates.get("telefono"));
-        if (updates.containsKey("estado")) usuario.setEstado(EstadoUsuario.valueOf((String) updates.get("estado")));
+        if (updates.getNombre() != null) usuario.setNombre(updates.getNombre());
+        if (updates.getApellido() != null) usuario.setApellido(updates.getApellido());
+        if (updates.getDni() != null) usuario.setDni(updates.getDni());
+        if (updates.getTelefono() != null) usuario.setTelefono(updates.getTelefono());
+        if (updates.getEstado() != null) usuario.setEstado(updates.getEstado());
 
-        // Actualización de detalles de perfil si se proporcionan
-        if (updates.containsKey("detallesPerfil")) {
-            Map<String, Object> details = (Map<String, Object>) updates.get("detallesPerfil");
-            if (usuario.getRol() == Rol.ARRENDADOR) {
-                arrendadorRepository.findByUsuario(usuario).ifPresent(a -> {
-                    if (details.containsKey("telefono")) a.setTelefono((String) details.get("telefono"));
-                    if (details.containsKey("ruc")) a.setRuc((String) details.get("ruc"));
-                    if (details.containsKey("nombreComercial")) a.setNombreComercial((String) details.get("nombreComercial"));
-                    if (details.containsKey("direccionPropiedades")) a.setDireccionPropiedades((String) details.get("direccionPropiedades"));
-                    if (details.containsKey("latitud")) a.setLatitud(details.get("latitud") != null ? ((Number) details.get("latitud")).doubleValue() : null);
-                    if (details.containsKey("longitud")) a.setLongitud(details.get("longitud") != null ? ((Number) details.get("longitud")).doubleValue() : null);
-                    if (details.containsKey("esEmpresa")) a.setEsEmpresa((Boolean) details.get("esEmpresa"));
-                    arrendadorRepository.save(a);
-                });
-            } else if (usuario.getRol() == Rol.ESTUDIANTE) {
-                estudianteRepository.findByUsuario(usuario).ifPresent(e -> {
-                    if (details.containsKey("universidad")) e.setUniversidad((String) details.get("universidad"));
-                    if (details.containsKey("codigoEstudiante")) e.setCodigoEstudiante((String) details.get("codigoEstudiante"));
-                    if (details.containsKey("carrera")) e.setCarrera((String) details.get("carrera"));
-                    if (details.containsKey("ciclo")) e.setCiclo(details.get("ciclo") != null ? Integer.parseInt(details.get("ciclo").toString()) : null);
-                    estudianteRepository.save(e);
-                });
-            }
+        if (usuario.getRol() == Rol.ARRENDADOR && updates.getDetallesArrendador() != null) {
+            arrendadorRepository.findByUsuario(usuario).ifPresent(a -> {
+                DetallesArrendadorRequest det = updates.getDetallesArrendador();
+                if (det.getTelefono() != null) a.setTelefono(det.getTelefono());
+                if (det.getRuc() != null) a.setRuc(det.getRuc());
+                if (det.getNombreComercial() != null) a.setNombreComercial(det.getNombreComercial());
+                if (det.getDireccionCuartos() != null) a.setDireccionPropiedades(det.getDireccionCuartos());
+                if (det.getLatitud() != null) a.setLatitud(det.getLatitud());
+                if (det.getLongitud() != null) a.setLongitud(det.getLongitud());
+                if (det.getEsEmpresa() != null) a.setEsEmpresa(det.getEsEmpresa());
+                arrendadorRepository.save(a);
+            });
+        } else if (usuario.getRol() == Rol.ESTUDIANTE && updates.getDetallesEstudiante() != null) {
+            estudianteRepository.findByUsuario(usuario).ifPresent(e -> {
+                DetallesEstudianteRequest det = updates.getDetallesEstudiante();
+                if (det.getUniversidad() != null) e.setUniversidad(det.getUniversidad());
+                if (det.getCodigoEstudiante() != null) e.setCodigoEstudiante(det.getCodigoEstudiante());
+                if (det.getCarrera() != null) e.setCarrera(det.getCarrera());
+                if (det.getCiclo() != null) e.setCiclo(det.getCiclo());
+                estudianteRepository.save(e);
+            });
         }
 
         return usuarioRepository.save(usuario);
@@ -150,6 +160,9 @@ public class UsuarioService {
 
     @Transactional
     public void eliminarUsuario(Long id) {
+        if (!usuarioRepository.existsById(id)) {
+            throw new RecursoNoEncontradoException("No se encontró el usuario con ID " + id);
+        }
         usuarioRepository.deleteById(id);
     }
 

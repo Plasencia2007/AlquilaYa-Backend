@@ -1,20 +1,23 @@
 package com.alquilaya.serviciousuarios.controllers;
 
+import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
-import com.alquilaya.serviciousuarios.enums.EstadoVerificacion;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
 import com.alquilaya.serviciousuarios.services.DocumentoService;
+import com.alquilaya.serviciousuarios.validaciones.anotaciones.ArchivoValido;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/usuarios/documentos")
 @RequiredArgsConstructor
+@Validated
 public class DocumentoController {
 
     private final DocumentoService documentoService;
@@ -23,7 +26,7 @@ public class DocumentoController {
     public ResponseEntity<DocumentoVerificacion> uploadDocumento(
             @RequestParam("usuarioId") Long usuarioId,
             @RequestParam("tipo") TipoDocumento tipo,
-            @RequestParam("archivo") MultipartFile archivo) {
+            @RequestParam("archivo") @ArchivoValido MultipartFile archivo) {
         
         return ResponseEntity.ok(documentoService.subirDocumento(usuarioId, tipo, archivo));
     }
@@ -41,11 +44,8 @@ public class DocumentoController {
     @PatchMapping("/admin/verify/{id}")
     public ResponseEntity<DocumentoVerificacion> verifyDocumento(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> request) {
+            @Valid @RequestBody VerificarDocumentoRequest request) {
         
-        EstadoVerificacion estado = EstadoVerificacion.valueOf((String) request.get("estado"));
-        String comentario = (String) request.get("comentario");
-        
-        return ResponseEntity.ok(documentoService.verificarDocumento(id, estado, comentario));
+        return ResponseEntity.ok(documentoService.verificarDocumento(id, request.getEstado(), request.getComentario()));
     }
 }

@@ -8,7 +8,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "permisos")
+@Table(name = "permisos", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_permiso_rol_funcionalidad", columnNames = {"rol", "funcionalidad"})
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -24,7 +26,7 @@ public class Permiso {
     private Rol rol;
 
     @Column(nullable = false)
-    private String funcionalidad; // Ej: "PROPIEDADES_CREAR"
+    private String funcionalidad; // Ej: "VER_CUARTOS"
 
     @Column(nullable = false)
     private boolean habilitado;

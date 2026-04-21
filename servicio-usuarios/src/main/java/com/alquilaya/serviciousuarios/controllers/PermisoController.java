@@ -1,9 +1,12 @@
 package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.entities.Permiso;
+import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.services.PermisoService;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/usuarios/permisos")
 @RequiredArgsConstructor
+@Validated
 public class PermisoController {
 
     private final PermisoService permisoService;
@@ -30,14 +34,11 @@ public class PermisoController {
 
     @GetMapping("/check")
     public ResponseEntity<Boolean> verificarPermiso(
-            @RequestParam String rol,
-            @RequestParam String funcionalidad
+            @RequestParam @NotBlank(message = "El rol es obligatorio") String rol,
+            @RequestParam @NotBlank(message = "La funcionalidad es obligatoria") String funcionalidad
     ) {
-        try {
-            com.alquilaya.serviciousuarios.enums.Rol enumRol = com.alquilaya.serviciousuarios.enums.Rol.valueOf(rol.toUpperCase());
-            return ResponseEntity.ok(permisoService.tienePermiso(enumRol, funcionalidad));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(false);
-        }
+        // El handler global atrapará IllegalArgumentException si el rol no existe
+        Rol enumRol = Rol.valueOf(rol.toUpperCase());
+        return ResponseEntity.ok(permisoService.tienePermiso(enumRol, funcionalidad));
     }
 }

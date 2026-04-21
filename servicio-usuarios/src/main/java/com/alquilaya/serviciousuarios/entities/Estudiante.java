@@ -2,6 +2,8 @@ package com.alquilaya.serviciousuarios.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,6 +36,7 @@ public class Estudiante {
 
     private String carrera;
 
+    @Min(1) @Max(12)
     private Integer ciclo;
 
     @Builder.Default

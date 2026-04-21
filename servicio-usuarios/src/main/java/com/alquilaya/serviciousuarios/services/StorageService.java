@@ -1,5 +1,7 @@
 package com.alquilaya.serviciousuarios.services;
 
+import com.alquilaya.serviciousuarios.exceptions.ArchivoInvalidoException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -15,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class StorageService {
 
     @Value("${storage.location:uploads/documents}")
@@ -27,20 +30,25 @@ public class StorageService {
         this.rootLocation = Paths.get(storageLocation);
         try {
             Files.createDirectories(rootLocation);
+            log.info("Directorio de almacenamiento inicializado en: {}", rootLocation.toAbsolutePath());
         } catch (IOException e) {
-            throw new RuntimeException("No se pudo inicializar el almacenamiento", e);
+            log.error("No se pudo inicializar el almacenamiento en {}", storageLocation, e);
+            throw new ArchivoInvalidoException("No se pudo inicializar el almacenamiento de archivos");
         }
     }
 
     public String store(MultipartFile file) {
-        String filename = StringUtils.cleanPath(file.getOriginalFilename());
+        String originalName = StringUtils.cleanPath(file.getOriginalFilename());
         try {
             if (file.isEmpty()) {
-                throw new RuntimeException("Fallo al guardar archivo vacío " + filename);
+                throw new ArchivoInvalidoException("No se puede guardar un archivo vacío " + originalName);
             }
             
-            // Generar nombre único para evitar colisiones
-            String extension = filename.substring(filename.lastIndexOf("."));
+            String extension = "";
+            if (originalName.contains(".")) {
+                extension = originalName.substring(originalName.lastIndexOf("."));
+            }
+            
             String uniqueName = UUID.randomUUID().toString() + extension;
             
             try (InputStream inputStream = file.getInputStream()) {
@@ -48,14 +56,19 @@ public class StorageService {
                         StandardCopyOption.REPLACE_EXISTING);
             }
             
-            // Retornamos la ruta relativa para guardarla en la BD
+            log.debug("Archivo guardado exitosamente: {} -> {}", originalName, uniqueName);
             return uniqueName;
         } catch (IOException e) {
-            throw new RuntimeException("Fallo al guardar archivo " + filename, e);
+            log.error("Error al guardar el archivo {}", originalName, e);
+            throw new ArchivoInvalidoException("Fallo al guardar el archivo " + originalName + ": " + e.getMessage());
         }
     }
 
     public Path load(String filename) {
         return rootLocation.resolve(filename);
+    }
+
+    public Path getRootLocation() {
+        return this.rootLocation;
     }
 }

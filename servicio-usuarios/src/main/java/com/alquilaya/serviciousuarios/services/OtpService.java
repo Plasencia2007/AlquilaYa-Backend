@@ -1,6 +1,7 @@
 package com.alquilaya.serviciousuarios.services;
 
 import com.alquilaya.serviciousuarios.entities.OtpVerification;
+import com.alquilaya.serviciousuarios.exceptions.OtpInvalidoException;
 import com.alquilaya.serviciousuarios.repositories.OtpVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,26 +40,39 @@ public class OtpService {
         request.put("codigo", codigo);
 
         try {
+            log.debug("Intentando enviar OTP a {}", telefono);
             restTemplate.postForObject(notificationServiceUrl + "/api/v1/notifications/whatsapp/send-otp", request, String.class);
-            log.info("OTP enviado a {}", telefono);
+            log.info("OTP generado y enviado exitosamente a {}", telefono);
         } catch (Exception e) {
-            log.error("Error enviando OTP via WhatsApp a {}: {}", telefono, e.getMessage());
+            log.error("Fallo crítico al enviar OTP via WhatsApp a {}: {}", telefono, e.getMessage());
+            // No lanzamos excepción para no romper el flujo de registro, pero queda en logs
         }
     }
 
     public boolean verificarOtp(String telefono, String codigo) {
+        log.debug("Verificando OTP para teléfono: {}", telefono);
         return otpRepository.findFirstByTelefonoOrderByFechaCreacionDesc(telefono)
                 .map(otp -> {
-                    if (otp.isExpirado() || otp.isUtilizado()) {
+                    if (otp.isExpirado()) {
+                        log.warn("El OTP para {} ha expirado", telefono);
+                        return false;
+                    }
+                    if (otp.isUtilizado()) {
+                        log.warn("El OTP para {} ya ha sido utilizado", telefono);
                         return false;
                     }
                     if (otp.getCodigo().equals(codigo)) {
                         otp.setUtilizado(true);
                         otpRepository.save(otp);
+                        log.info("OTP verificado correctamente para {}", telefono);
                         return true;
                     }
+                    log.warn("Código OTP incorrecto para {}", telefono);
                     return false;
                 })
-                .orElse(false);
+                .orElseGet(() -> {
+                    log.warn("No se encontró ningún registro de OTP para {}", telefono);
+                    return false;
+                });
     }
 }

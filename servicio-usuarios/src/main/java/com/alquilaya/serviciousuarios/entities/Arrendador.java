@@ -2,6 +2,8 @@ package com.alquilaya.serviciousuarios.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,12 +39,16 @@ public class Arrendador {
     @Column(name = "direccion_propiedades")
     private String direccionPropiedades;
 
+    @DecimalMin("-90.0") @DecimalMax("90.0")
     private Double latitud;
+
+    @DecimalMin("-180.0") @DecimalMax("180.0")
     private Double longitud;
 
     @Column(columnDefinition = "boolean default false")
     private boolean esEmpresa;
 
     @Builder.Default
+    @DecimalMin("0.0") @DecimalMax("5.0")
     private Double calificacion = 5.0;
 }

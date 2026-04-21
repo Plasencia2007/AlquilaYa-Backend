@@ -10,6 +10,7 @@ import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.PermisoRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
+@Slf4j
 public class DataInitializer implements CommandLineRunner {
 
     private final PermisoRepository permisoRepository;
@@ -35,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private void inicializarPermisos() {
         if (permisoRepository.count() == 0) {
+            log.info("Iniciando creación de permisos por defecto...");
             List<String> funcionalidades = Arrays.asList(
                     "VER_CUARTOS",
                     "PUBLICAR_CUARTOS",
@@ -46,9 +49,8 @@ public class DataInitializer implements CommandLineRunner {
                 for (String func : funcionalidades) {
                     boolean habilitado = false;
 
-                    // Lógica por defecto
                     if (rol == Rol.ADMIN) {
-                        habilitado = true; // El Admin puede todo
+                        habilitado = true;
                     } else if (rol == Rol.ARRENDADOR) {
                         if (func.equals("VER_CUARTOS") || func.equals("PUBLICAR_CUARTOS") || func.equals("GESTIONAR_CUARTOS")) {
                             habilitado = true;
@@ -66,7 +68,7 @@ public class DataInitializer implements CommandLineRunner {
                             .build());
                 }
             }
-            System.out.println("✅ Permisos dinámicos inicializados con éxito.");
+            log.info("✅ Permisos dinámicos inicializados con éxito.");
         }
     }
 
@@ -79,7 +81,7 @@ public class DataInitializer implements CommandLineRunner {
                             .usuario(u)
                             .nombreComercial("Negocio de " + u.getNombre())
                             .build());
-                    System.out.println("🏠 Perfil de Arrendador creado para: " + u.getNombre());
+                    log.info("🏠 Perfil de Arrendador (fallback) creado para: {}", u.getNombre());
                 }
             } else if (u.getRol() == Rol.ESTUDIANTE) {
                 if (estudianteRepository.findByUsuario(u).isEmpty()) {
@@ -87,7 +89,7 @@ public class DataInitializer implements CommandLineRunner {
                             .usuario(u)
                             .universidad("Por definir")
                             .build());
-                    System.out.println("🎓 Perfil de Estudiante creado para: " + u.getNombre());
+                    log.info("🎓 Perfil de Estudiante (fallback) creado para: {}", u.getNombre());
                 }
             }
         }
