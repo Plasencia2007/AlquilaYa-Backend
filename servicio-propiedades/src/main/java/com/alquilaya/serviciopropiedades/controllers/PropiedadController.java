@@ -11,11 +11,14 @@ import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.services.CloudinaryService;
 import com.alquilaya.serviciopropiedades.services.KafkaProducerService;
 import com.alquilaya.serviciopropiedades.services.PropiedadService;
+import com.alquilaya.serviciopropiedades.validaciones.anotaciones.ArchivoImagenValido;
+import com.alquilaya.serviciopropiedades.validaciones.validators.ArchivoImagenValidoValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/propiedades")
 @RequiredArgsConstructor
+@Validated
 public class PropiedadController {
 
     private final PropiedadRepository propiedadRepository;
@@ -44,7 +48,7 @@ public class PropiedadController {
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
     public ResponseEntity<Propiedad> crearPropiedad(
             @RequestPart("propiedad") String propiedadJson,
-            @RequestPart(value = "file", required = false) MultipartFile file
+            @RequestPart(value = "file", required = false) @ArchivoImagenValido MultipartFile file
     ) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
@@ -165,6 +169,10 @@ public class PropiedadController {
         for (int i = 0; i < files.size(); i++) {
             MultipartFile f = files.get(i);
             if (f.isEmpty()) continue;
+            String errorValidacion = ArchivoImagenValidoValidator.validar(f);
+            if (errorValidacion != null) {
+                throw new IllegalArgumentException("Archivo " + f.getOriginalFilename() + ": " + errorValidacion);
+            }
             String url = cloudinaryService.uploadFile(f);
             PropiedadImagen img = PropiedadImagen.builder()
                     .propiedad(propiedad)

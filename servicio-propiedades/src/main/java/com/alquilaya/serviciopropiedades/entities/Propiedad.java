@@ -3,6 +3,9 @@ package com.alquilaya.serviciopropiedades.entities;
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
 import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
 import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
+import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CercaDeUpeu;
+import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLatitud;
+import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLongitud;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +25,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@CercaDeUpeu
 public class Propiedad {
 
     @Id
@@ -84,8 +88,10 @@ public class Propiedad {
     @Builder.Default
     private List<String> reglas = new ArrayList<>();
 
+    @CoordenadaLatitud
     private Double latitud;
 
+    @CoordenadaLongitud
     private Double longitud;
 
     private Integer distanciaMetros;
