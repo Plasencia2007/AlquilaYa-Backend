@@ -40,13 +40,73 @@
 					"response": []
 				},
 				{
-					"name": "Registrar Usuario",
+					"name": "Register Admin",
 					"request": {
 						"method": "POST",
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Nuevo\",\n  \"apellido\": \"Usuario\",\n  \"dni\": \"87654321\",\n  \"correo\": \"nuevo@mail.com\",\n  \"password\": \"password123\",\n  \"rol\": \"ESTUDIANTE\",\n  \"detallesPerfil\": {\n    \"universidad\": \"PUCP\",\n    \"carrera\": \"Diseño\"\n  }\n}",
+							"raw": "{\n  \"nombre\": \"Admin\",\n  \"apellido\": \"General\",\n  \"dni\": \"11111111\",\n  \"correo\": \"admin_nuevo@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"987654321\",\n  \"rol\": \"ADMIN\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register Estudiante",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Estudiante\",\n  \"dni\": \"22222222\",\n  \"correo\": \"juan@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"988888888\",\n  \"rol\": \"ESTUDIANTE\",\n  \"detallesEstudiante\": {\n    \"universidad\": \"UPeU\",\n    \"codigoEstudiante\": \"202312345\",\n    \"carrera\": \"Ingeniería de Sistemas\",\n    \"ciclo\": 5\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register Arrendador",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Carlos\",\n  \"apellido\": \"Duenos\",\n  \"dni\": \"33333333\",\n  \"correo\": \"carlos@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"999999999\",\n  \"rol\": \"ARRENDADOR\",\n  \"detallesArrendador\": {\n    \"telefono\": \"999999999\",\n    \"ruc\": \"10333333331\",\n    \"nombreComercial\": \"Habitaciones Carlos\",\n    \"direccionCuartos\": \"Jr. Los Pinos 123\",\n    \"latitud\": -12.0431,\n    \"longitud\": -77.0282,\n    \"esEmpresa\": false\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -137,6 +197,18 @@
 					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/buscar?precioMax=1000&tipo=HABITACION" }
 				},
 				{
+					"name": "Actualizar (Editar Todo)",
+					"request": {
+						"method": "PUT",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Habitación Suite Ejecutiva\",\n  \"descripcion\": \"Habitación de lujo con todos los servicios\",\n  \"precio\": 1200.00,\n  \"direccion\": \"Av. Universitaria 456\",\n  \"area\": 25.5,\n  \"nroPiso\": 3,\n  \"estaDisponible\": true,\n  \"detallesPerfil\": \"...\",\n  \"serviciosIncluidos\": [\"WIFI\", \"AGUA\", \"LUZ\", \"LIMPIEZA\"],\n  \"reglas\": [\"NO_MASCOTAS\", \"NO_FUMAR\"],\n  \"latitud\": -12.0431,\n  \"longitud\": -77.0282\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/propiedades/1"
+					}
+				},
+				{
 					"name": "Actualizar Disponibilidad",
 					"request": {
 						"method": "PATCH",
@@ -158,7 +230,7 @@
 			"name": "04. TABLA RESERVAS",
 			"item": [
 				{
-					"name": "Crear Reserva",
+					"name": "Solicitar Reserva",
 					"request": {
 						"method": "POST",
 						"body": {
@@ -170,24 +242,130 @@
 					}
 				},
 				{
+					"name": "Mis Reservas (Estudiante)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/reservas/mis" }
+				},
+				{
+					"name": "Gestionar Reservas (Arrendador)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/reservas/arrendador" }
+				},
+				{
+					"name": "Filtrar por Estado",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/reservas/arrendador/estado/SOLICITADA" }
+				},
+				{
 					"name": "Obtener por ID",
 					"request": { "method": "GET", "url": "{{base_url}}/api/v1/reservas/1" }
 				},
 				{
-					"name": "Actualizar (Admin)",
+					"name": "Actualizar (CRUD Básico)",
 					"request": {
 						"method": "PUT",
 						"body": {
 							"mode": "raw",
-							"raw": "{\"montoTotal\": 1500.00}",
+							"raw": "{\n  \"montoTotal\": 1500.00,\n  \"estado\": \"APROBADA\"\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": "{{base_url}}/api/v1/reservas/1"
 					}
 				},
 				{
+					"name": "Aprobar",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/reservas/1/aprobar" }
+				},
+				{
+					"name": "Rechazar",
+					"request": {
+						"method": "PATCH",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Ya no está disponible\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/reservas/1/rechazar"
+					}
+				},
+				{
+					"name": "Cancelar",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/reservas/1/cancelar" }
+				},
+				{
+					"name": "Finalizar",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/reservas/1/finalizar" }
+				},
+				{
 					"name": "Eliminar",
 					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/reservas/1" }
+				}
+			]
+		},
+		{
+			"name": "05. TABLA FAVORITOS",
+			"item": [
+				{
+					"name": "Toggle (Agregar/Quitar)",
+					"request": { "method": "POST", "url": "{{base_url}}/api/v1/favoritos/1" }
+				},
+				{
+					"name": "Mis Favoritos",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/favoritos/mis" }
+				},
+				{
+					"name": "Check si es Favorito",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/favoritos/check/1" }
+				},
+				{
+					"name": "Eliminar por ID",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/favoritos/1" }
+				}
+			]
+		},
+		{
+			"name": "06. TABLA RESEÑAS",
+			"item": [
+				{
+					"name": "Reseñar Propiedad",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"propiedadId\": 1,\n  \"puntuacion\": 5,\n  \"comentario\": \"Excelente lugar\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/resenas/propiedad"
+					}
+				},
+				{
+					"name": "Reseñar Arrendador",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"arrendadorId\": 1,\n  \"puntuacion\": 4,\n  \"comentario\": \"Muy atento\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/resenas/arrendador"
+					}
+				},
+				{
+					"name": "Listar por Propiedad",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/resenas/propiedad/1" }
+				},
+				{
+					"name": "Listar por Arrendador",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/resenas/arrendador/1" }
+				},
+				{
+					"name": "Calificación Promedio Arrendador",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/resenas/arrendador/1/calificacion" }
+				},
+				{
+					"name": "Ocultar Reseña (Moderador)",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/resenas/1/ocultar?tipo=PROPIEDAD" }
+				},
+				{
+					"name": "Eliminar Reseña (Moderador)",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/resenas/1?tipo=ARRENDADOR" }
 				}
 			]
 		}

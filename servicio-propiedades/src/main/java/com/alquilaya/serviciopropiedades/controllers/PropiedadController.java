@@ -103,13 +103,26 @@ public class PropiedadController {
                     if (updates.getNroPiso() != null) p.setNroPiso(updates.getNroPiso());
                     if (updates.getEstaDisponible() != null) p.setEstaDisponible(updates.getEstaDisponible());
                     if (updates.getDisponibleDesde() != null) p.setDisponibleDesde(updates.getDisponibleDesde());
-                    if (updates.getServiciosIncluidos() != null) p.setServiciosIncluidos(updates.getServiciosIncluidos());
-                    if (updates.getReglas() != null) p.setReglas(updates.getReglas());
+                    
+                    if (updates.getServiciosIncluidos() != null) {
+                        p.getServiciosIncluidos().clear();
+                        p.getServiciosIncluidos().addAll(updates.getServiciosIncluidos());
+                    }
+                    if (updates.getReglas() != null) {
+                        p.getReglas().clear();
+                        p.getReglas().addAll(updates.getReglas());
+                    }
+
                     if (updates.getLatitud() != null || updates.getLongitud() != null) {
                         if (updates.getLatitud() != null) p.setLatitud(updates.getLatitud());
                         if (updates.getLongitud() != null) p.setLongitud(updates.getLongitud());
                         propiedadService.calcularYSetearDistancia(p);
                     }
+                    
+                    if (updates.getAprobadoPorAdmin() != null) p.setAprobadoPorAdmin(updates.getAprobadoPorAdmin());
+                    if (updates.getEstado() != null) p.setEstado(updates.getEstado());
+                    if (updates.getArrendadorId() != null) p.setArrendadorId(updates.getArrendadorId());
+
                     return ResponseEntity.ok(propiedadRepository.save(p));
                 }).orElse(ResponseEntity.notFound().build());
     }

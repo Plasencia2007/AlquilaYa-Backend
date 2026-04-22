@@ -43,7 +43,7 @@ public class RegisterRequest {
     private String telefono;
 
     @NotBlank(message = "El rol es obligatorio")
-    @Pattern(regexp = "^(ESTUDIANTE|ARRENDADOR)$", message = "El rol debe ser ESTUDIANTE o ARRENDADOR")
+    @Pattern(regexp = "^(ESTUDIANTE|ARRENDADOR|ADMIN)$", message = "El rol debe ser ESTUDIANTE, ARRENDADOR o ADMIN")
     private String rol;
 
     @Valid

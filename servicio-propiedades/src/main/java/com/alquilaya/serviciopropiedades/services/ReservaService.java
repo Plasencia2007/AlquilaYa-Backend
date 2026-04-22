@@ -178,10 +178,14 @@ public class ReservaService {
     @Transactional
     public Reserva actualizarReserva(Long id, Reserva updates) {
         Reserva r = obtenerPorId(id);
+        if (updates.getPropiedadId() != null) r.setPropiedadId(updates.getPropiedadId());
+        if (updates.getEstudianteId() != null) r.setEstudianteId(updates.getEstudianteId());
+        if (updates.getArrendadorId() != null) r.setArrendadorId(updates.getArrendadorId());
         if (updates.getFechaInicio() != null) r.setFechaInicio(updates.getFechaInicio());
         if (updates.getFechaFin() != null) r.setFechaFin(updates.getFechaFin());
         if (updates.getEstado() != null) r.setEstado(updates.getEstado());
         if (updates.getMontoTotal() != null) r.setMontoTotal(updates.getMontoTotal());
+        if (updates.getMotivoRechazo() != null) r.setMotivoRechazo(updates.getMotivoRechazo());
         return reservaRepository.save(r);
     }
 

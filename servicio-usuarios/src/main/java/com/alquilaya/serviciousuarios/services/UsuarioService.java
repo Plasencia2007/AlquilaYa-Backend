@@ -103,6 +103,9 @@ public class UsuarioService {
                     .ciclo(det.getCiclo())
                     .build();
             estudianteRepository.save(estudiante);
+        } else if (rol == Rol.ADMIN) {
+            log.info("Registrando usuario con rol ADMIN de forma simplificada");
+            // No se requieren detalles adicionales para ADMIN
         }
 
         if (usuario.getTelefono() != null && rol != Rol.ADMIN) {
