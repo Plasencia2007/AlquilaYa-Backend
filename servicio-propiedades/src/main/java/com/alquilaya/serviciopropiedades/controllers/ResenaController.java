@@ -35,6 +35,11 @@ public class ResenaController {
         return ResponseEntity.ok(resenaService.resenarArrendador(req, CurrentUserProvider.get()));
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<Object> obtenerPorId(@PathVariable Long id, @RequestParam String tipo) {
+        return ResponseEntity.ok(resenaService.obtenerPorId(id, tipo));
+    }
+
     @GetMapping("/propiedad/{propiedadId}")
     public ResponseEntity<List<ResenaResponseDTO>> porPropiedad(@PathVariable Long propiedadId) {
         return ResponseEntity.ok(resenaService.listarPorPropiedad(propiedadId));
@@ -56,5 +61,14 @@ public class ResenaController {
             @PathVariable Long id,
             @RequestParam String tipo) {
         return ResponseEntity.ok(resenaService.ocultar(id, tipo));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_RESENAS')")
+    public ResponseEntity<Void> eliminar(
+            @PathVariable Long id,
+            @RequestParam String tipo) {
+        resenaService.eliminarResena(id, tipo);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -3,6 +3,7 @@ package com.alquilaya.serviciopropiedades.controllers;
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
 import com.alquilaya.serviciopropiedades.dto.CrearReservaRequest;
 import com.alquilaya.serviciopropiedades.dto.ReservaResponseDTO;
+import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
 import com.alquilaya.serviciopropiedades.services.ReservaService;
 import jakarta.validation.Valid;
@@ -52,6 +53,25 @@ public class ReservaController {
         Long arrendadorId = CurrentUserProvider.requirePerfilId();
         return ResponseEntity.ok(reservaService.listarDelArrendadorPorEstado(arrendadorId, estado)
                 .stream().map(ReservaResponseDTO::from).toList());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ReservaResponseDTO> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(ReservaResponseDTO.from(reservaService.obtenerPorId(id)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
+    public ResponseEntity<ReservaResponseDTO> actualizar(@PathVariable Long id, @RequestBody Reserva updates) {
+        return ResponseEntity.ok(ReservaResponseDTO.from(reservaService.actualizarReserva(id, updates)));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+        reservaService.eliminarReserva(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/aprobar")

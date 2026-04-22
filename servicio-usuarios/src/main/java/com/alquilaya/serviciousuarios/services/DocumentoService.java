@@ -69,6 +69,19 @@ public class DocumentoService {
         return guardado;
     }
 
+    public DocumentoVerificacion obtenerPorId(Long id) {
+        return documentoRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el documento con ID " + id));
+    }
+
+    @Transactional
+    public void eliminarDocumento(Long id) {
+        DocumentoVerificacion doc = obtenerPorId(id);
+        // Opcional: eliminar el archivo físico del storage si se desea
+        documentoRepository.delete(doc);
+        log.info("Documento {} eliminado", id);
+    }
+
     private void enviarNotificacionStatus(DocumentoVerificacion doc) {
         String telefono = doc.getUsuario().getTelefono();
         if (telefono == null || telefono.isEmpty()) {

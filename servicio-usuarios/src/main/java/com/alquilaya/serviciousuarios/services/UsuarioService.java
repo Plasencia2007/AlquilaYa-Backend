@@ -117,6 +117,11 @@ public class UsuarioService {
         return usuarioRepository.findAll();
     }
 
+    public Usuario obtenerPorId(Long id) {
+        return usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + id));
+    }
+
     public java.util.List<Usuario> listarPorRol(Rol rol) {
         return usuarioRepository.findByRol(rol);
     }

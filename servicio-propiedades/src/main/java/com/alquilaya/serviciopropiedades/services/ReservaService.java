@@ -86,7 +86,7 @@ public class ReservaService {
 
     @Transactional
     public Reserva aprobar(Long reservaId, CurrentUser current) {
-        Reserva r = obtener(reservaId);
+        Reserva r = obtenerPorId(reservaId);
         validarArrendador(r, current);
         if (r.getEstado() != EstadoReserva.SOLICITADA) {
             throw new IllegalStateException("Solo se pueden aprobar reservas en estado SOLICITADA");
@@ -99,7 +99,7 @@ public class ReservaService {
 
     @Transactional
     public Reserva rechazar(Long reservaId, String motivo, CurrentUser current) {
-        Reserva r = obtener(reservaId);
+        Reserva r = obtenerPorId(reservaId);
         validarArrendador(r, current);
         if (r.getEstado() != EstadoReserva.SOLICITADA) {
             throw new IllegalStateException("Solo se pueden rechazar reservas en estado SOLICITADA");
@@ -113,7 +113,7 @@ public class ReservaService {
 
     @Transactional
     public Reserva marcarPagada(Long reservaId) {
-        Reserva r = obtener(reservaId);
+        Reserva r = obtenerPorId(reservaId);
         if (r.getEstado() != EstadoReserva.APROBADA) {
             throw new IllegalStateException("Solo se pueden marcar como PAGADAS reservas APROBADAS");
         }
@@ -125,7 +125,7 @@ public class ReservaService {
 
     @Transactional
     public Reserva cancelar(Long reservaId, CurrentUser current) {
-        Reserva r = obtener(reservaId);
+        Reserva r = obtenerPorId(reservaId);
         if (current == null || current.getPerfilId() == null) {
             throw new IllegalStateException("Sin perfilId en contexto");
         }
@@ -147,7 +147,7 @@ public class ReservaService {
 
     @Transactional
     public Reserva finalizar(Long reservaId, CurrentUser current) {
-        Reserva r = obtener(reservaId);
+        Reserva r = obtenerPorId(reservaId);
         validarArrendador(r, current);
         if (r.getEstado() != EstadoReserva.PAGADA) {
             throw new IllegalStateException("Solo se puede finalizar una reserva en estado PAGADA");
@@ -170,9 +170,27 @@ public class ReservaService {
 
     // ===== Helpers =====
 
-    private Reserva obtener(Long id) {
+    public Reserva obtenerPorId(Long id) {
         return reservaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("No existe la reserva " + id));
+    }
+
+    @Transactional
+    public Reserva actualizarReserva(Long id, Reserva updates) {
+        Reserva r = obtenerPorId(id);
+        if (updates.getFechaInicio() != null) r.setFechaInicio(updates.getFechaInicio());
+        if (updates.getFechaFin() != null) r.setFechaFin(updates.getFechaFin());
+        if (updates.getEstado() != null) r.setEstado(updates.getEstado());
+        if (updates.getMontoTotal() != null) r.setMontoTotal(updates.getMontoTotal());
+        return reservaRepository.save(r);
+    }
+
+    @Transactional
+    public void eliminarReserva(Long id) {
+        if (!reservaRepository.existsById(id)) {
+            throw new IllegalArgumentException("No existe la reserva " + id);
+        }
+        reservaRepository.deleteById(id);
     }
 
     private void validarArrendador(Reserva r, CurrentUser current) {

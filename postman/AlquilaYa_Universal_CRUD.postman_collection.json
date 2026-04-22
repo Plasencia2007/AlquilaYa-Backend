@@ -1,0 +1,209 @@
+{
+	"info": {
+		"_postman_id": "f2e3d4c5-b6a7-498b-90c1-d2e3f4a5b6c7",
+		"name": "AlquilaYa - UNIVERSAL CRUD",
+		"description": "Colección completa con CRUD para todas las tablas del sistema AlquilaYa.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "00. AUTH & SETUP",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"correo\": \"admin@alquilaya.com\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Registrar Usuario",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Nuevo\",\n  \"apellido\": \"Usuario\",\n  \"dni\": \"87654321\",\n  \"correo\": \"nuevo@mail.com\",\n  \"password\": \"password123\",\n  \"rol\": \"ESTUDIANTE\",\n  \"detallesPerfil\": {\n    \"universidad\": \"PUCP\",\n    \"carrera\": \"Diseño\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/usuarios/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "01. TABLA USUARIOS",
+			"item": [
+				{
+					"name": "Listar Todos",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios" }
+				},
+				{
+					"name": "Obtener por ID",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/1" }
+				},
+				{
+					"name": "Actualizar",
+					"request": {
+						"method": "PUT",
+						"body": {
+							"mode": "raw",
+							"raw": "{\"nombre\": \"Nombre Editado\"}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/usuarios/1"
+					}
+				},
+				{
+					"name": "Eliminar",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/usuarios/1" }
+				}
+			]
+		},
+		{
+			"name": "02. TABLA PERMISOS",
+			"item": [
+				{
+					"name": "Listar Todos",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/permisos" }
+				},
+				{
+					"name": "Crear Permiso",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rol\": \"ADMIN\",\n  \"funcionalidad\": \"NUEVA_ACCION\",\n  \"habilitado\": true\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/usuarios/permisos"
+					}
+				},
+				{
+					"name": "Eliminar",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/usuarios/permisos/1" }
+				}
+			]
+		},
+		{
+			"name": "03. TABLA PROPIEDADES",
+			"item": [
+				{
+					"name": "Listar Propiedades",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades" }
+				},
+				{
+					"name": "Buscar con Filtros",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/buscar?precioMax=1000&tipo=HABITACION" }
+				},
+				{
+					"name": "Actualizar Disponibilidad",
+					"request": {
+						"method": "PATCH",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estaDisponible\": false,\n  \"disponibleDesde\": \"2026-06-01\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/propiedades/1/disponibilidad"
+					}
+				},
+				{
+					"name": "Eliminar",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/propiedades/1" }
+				}
+			]
+		},
+		{
+			"name": "04. TABLA RESERVAS",
+			"item": [
+				{
+					"name": "Crear Reserva",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"propiedadId\": 1,\n  \"fechaInicio\": \"2026-05-01\",\n  \"fechaFin\": \"2026-11-30\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/reservas"
+					}
+				},
+				{
+					"name": "Obtener por ID",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/reservas/1" }
+				},
+				{
+					"name": "Actualizar (Admin)",
+					"request": {
+						"method": "PUT",
+						"body": {
+							"mode": "raw",
+							"raw": "{\"montoTotal\": 1500.00}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/reservas/1"
+					}
+				},
+				{
+					"name": "Eliminar",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/reservas/1" }
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8080" },
+		{ "key": "token", "value": "PEGA_AQUÍ_TU_TOKEN" }
+	]
+}

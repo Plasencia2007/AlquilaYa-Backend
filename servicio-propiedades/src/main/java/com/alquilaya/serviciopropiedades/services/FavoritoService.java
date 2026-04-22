@@ -72,6 +72,19 @@ public class FavoritoService {
         return favoritoRepository.existsByEstudianteIdAndPropiedadId(estudianteId, propiedadId);
     }
 
+    public Favorito obtenerPorId(Long id) {
+        return favoritoRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("No existe el favorito " + id));
+    }
+
+    @Transactional
+    public void eliminarFavorito(Long id) {
+        if (!favoritoRepository.existsById(id)) {
+            throw new IllegalArgumentException("No existe el favorito " + id);
+        }
+        favoritoRepository.deleteById(id);
+    }
+
     private Long validarEstudiante(CurrentUser current) {
         if (current == null || current.getPerfilId() == null) {
             throw new IllegalStateException("No hay perfilId en el contexto de seguridad");

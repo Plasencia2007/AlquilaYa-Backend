@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
 import com.alquilaya.serviciopropiedades.dto.FavoritoResponseDTO;
+import com.alquilaya.serviciopropiedades.entities.Favorito;
 import com.alquilaya.serviciopropiedades.services.FavoritoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -35,11 +36,24 @@ public class FavoritoController {
         return ResponseEntity.ok(favoritoService.listarMis(CurrentUserProvider.get()));
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Favorito> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(favoritoService.obtenerPorId(id));
+    }
+
     @GetMapping("/check/{propiedadId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, Boolean>> check(@PathVariable Long propiedadId) {
         return ResponseEntity.ok(Map.of(
                 "favorito", favoritoService.esFavorito(propiedadId, CurrentUserProvider.get())
         ));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+        favoritoService.eliminarFavorito(id);
+        return ResponseEntity.noContent().build();
     }
 }

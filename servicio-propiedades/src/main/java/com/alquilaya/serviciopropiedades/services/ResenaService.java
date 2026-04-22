@@ -160,6 +160,29 @@ public class ResenaService {
         throw new IllegalArgumentException("Tipo inválido. Debe ser PROPIEDAD o ARRENDADOR");
     }
 
+    public Object obtenerPorId(Long id, String tipo) {
+        if ("PROPIEDAD".equalsIgnoreCase(tipo)) {
+            return resenaPropRepo.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de propiedad " + id));
+        } else if ("ARRENDADOR".equalsIgnoreCase(tipo)) {
+            return resenaArrRepo.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de arrendador " + id));
+        }
+        throw new IllegalArgumentException("Tipo inválido. Debe ser PROPIEDAD o ARRENDADOR");
+    }
+
+    @Transactional
+    public void eliminarResena(Long id, String tipo) {
+        if ("PROPIEDAD".equalsIgnoreCase(tipo)) {
+            ResenaPropiedad r = (ResenaPropiedad) obtenerPorId(id, tipo);
+            resenaPropRepo.delete(r);
+            recalcularPropiedad(r.getPropiedadId());
+        } else if ("ARRENDADOR".equalsIgnoreCase(tipo)) {
+            ResenaArrendador r = (ResenaArrendador) obtenerPorId(id, tipo);
+            resenaArrRepo.delete(r);
+        }
+    }
+
     // ======================= HELPERS =======================
 
     private Long validarEstudiante(CurrentUser current) {

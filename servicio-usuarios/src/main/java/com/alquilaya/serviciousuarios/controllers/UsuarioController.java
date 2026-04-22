@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,11 +34,19 @@ public class UsuarioController {
     private final EstudianteRepository estudianteRepository;
 
     @GetMapping
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
     public ResponseEntity<List<Usuario>> listarTodos() {
         return ResponseEntity.ok(usuarioService.listarTodos());
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS') or (authentication.principal.toString() == #id.toString())")
+    public ResponseEntity<Usuario> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(usuarioService.obtenerPorId(id));
+    }
+
     @GetMapping("/rol/{rol}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
     public ResponseEntity<List<Usuario>> listarPorRol(@PathVariable String rol) {
         log.debug("Solicitud recibida para listar usuarios con Rol: {}", rol);
         List<Usuario> usuarios = usuarioService.listarPorRol(Rol.valueOf(rol.toUpperCase()));
@@ -45,6 +55,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO') or (authentication.principal.toString() == #id.toString())")
     public ResponseEntity<Usuario> actualizarUsuario(
             @PathVariable Long id,
             @Valid @RequestBody ActualizarUsuarioRequest updates) {
@@ -53,6 +64,7 @@ public class UsuarioController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('ELIMINAR_USUARIO')")
     public ResponseEntity<Void> eliminarUsuario(@PathVariable Long id) {
         log.warn("Eliminando usuario ID: {}", id);
         usuarioService.eliminarUsuario(id);

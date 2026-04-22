@@ -34,6 +34,24 @@ public class PermisoService {
     public boolean tienePermiso(Rol rol, String funcionalidad) {
         return permisoRepository.findByRolAndFuncionalidad(rol, funcionalidad)
                 .map(Permiso::isHabilitado)
-                .orElse(false); // Por defecto, si no existe la entrada, no tiene permiso
+                .orElse(false);
+    }
+
+    public Permiso obtenerPorId(Long id) {
+        return permisoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Permiso no encontrado con id: " + id));
+    }
+
+    @Transactional
+    public Permiso crearPermiso(Permiso permiso) {
+        return permisoRepository.save(permiso);
+    }
+
+    @Transactional
+    public void eliminarPermiso(Long id) {
+        if (!permisoRepository.existsById(id)) {
+            throw new RuntimeException("Permiso no encontrado con id: " + id);
+        }
+        permisoRepository.deleteById(id);
     }
 }
