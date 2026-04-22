@@ -15,8 +15,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Configuration
 @RequiredArgsConstructor
@@ -36,39 +38,43 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void inicializarPermisos() {
-        if (permisoRepository.count() == 0) {
-            log.info("Iniciando creación de permisos por defecto...");
-            List<String> funcionalidades = Arrays.asList(
-                    "VER_CUARTOS",
-                    "PUBLICAR_CUARTOS",
-                    "GESTIONAR_CUARTOS",
-                    "ADMIN_PANEL"
-            );
+        // Mapa: funcionalidad → roles habilitados por defecto
+        // ADMIN siempre obtiene todo automáticamente.
+        Map<String, Set<Rol>> matriz = Map.ofEntries(
+                Map.entry("VER_CUARTOS", EnumSet.of(Rol.ESTUDIANTE, Rol.ARRENDADOR)),
+                Map.entry("PUBLICAR_CUARTOS", EnumSet.of(Rol.ARRENDADOR)),
+                Map.entry("GESTIONAR_CUARTOS", EnumSet.of(Rol.ARRENDADOR)),
+                Map.entry("ADMIN_PANEL", EnumSet.noneOf(Rol.class)),
+                Map.entry("RESERVAR", EnumSet.of(Rol.ESTUDIANTE)),
+                Map.entry("GESTIONAR_RESERVAS", EnumSet.of(Rol.ARRENDADOR)),
+                Map.entry("AGREGAR_FAVORITOS", EnumSet.of(Rol.ESTUDIANTE)),
+                Map.entry("RESENAR", EnumSet.of(Rol.ESTUDIANTE)),
+                Map.entry("MODERAR_RESENAS", EnumSet.noneOf(Rol.class))
+        );
+
+        int creados = 0;
+        for (Map.Entry<String, Set<Rol>> entry : matriz.entrySet()) {
+            String func = entry.getKey();
+            Set<Rol> habilitadosPorDefecto = entry.getValue();
 
             for (Rol rol : Rol.values()) {
-                for (String func : funcionalidades) {
-                    boolean habilitado = false;
-
-                    if (rol == Rol.ADMIN) {
-                        habilitado = true;
-                    } else if (rol == Rol.ARRENDADOR) {
-                        if (func.equals("VER_CUARTOS") || func.equals("PUBLICAR_CUARTOS") || func.equals("GESTIONAR_CUARTOS")) {
-                            habilitado = true;
-                        }
-                    } else if (rol == Rol.ESTUDIANTE) {
-                        if (func.equals("VER_CUARTOS")) {
-                            habilitado = true;
-                        }
-                    }
-
-                    permisoRepository.save(Permiso.builder()
-                            .rol(rol)
-                            .funcionalidad(func)
-                            .habilitado(habilitado)
-                            .build());
+                if (permisoRepository.findByRolAndFuncionalidad(rol, func).isPresent()) {
+                    continue;
                 }
+                boolean habilitado = (rol == Rol.ADMIN) || habilitadosPorDefecto.contains(rol);
+                permisoRepository.save(Permiso.builder()
+                        .rol(rol)
+                        .funcionalidad(func)
+                        .habilitado(habilitado)
+                        .build());
+                creados++;
             }
-            log.info("✅ Permisos dinámicos inicializados con éxito.");
+        }
+
+        if (creados > 0) {
+            log.info("✅ Permisos upsert completado. {} permisos nuevos creados.", creados);
+        } else {
+            log.debug("Permisos ya sincronizados — no hay nada que insertar.");
         }
     }
 

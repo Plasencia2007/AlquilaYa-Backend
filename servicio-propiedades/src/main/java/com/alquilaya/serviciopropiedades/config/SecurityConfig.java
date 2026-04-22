@@ -31,7 +31,15 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/propiedades/**").authenticated() 
+                        .requestMatchers("/api/v1/propiedades/buscar").permitAll()
+                        .requestMatchers("/api/v1/propiedades/*/publico").permitAll()
+                        .requestMatchers("/api/v1/propiedades/**").authenticated()
+                        .requestMatchers("/api/v1/admin/propiedades/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/reservas/**").authenticated()
+                        .requestMatchers("/api/v1/favoritos/**").authenticated()
+                        .requestMatchers("/api/v1/resenas/propiedad/*").permitAll()
+                        .requestMatchers("/api/v1/resenas/arrendador/*").permitAll()
+                        .requestMatchers("/api/v1/resenas/**").authenticated()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))

@@ -48,17 +48,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 if (jwtService.isTokenValid(jwt, userEmail)) {
                     String rol = jwtService.extractClaim(jwt, claims -> claims.get("rol", String.class));
+                    Long userId = jwtService.extractClaim(jwt, claims -> claims.get("userId", Long.class));
+                    Long perfilId = jwtService.extractClaim(jwt, claims -> claims.get("perfilId", Long.class));
 
                     if (rol != null && !rol.isEmpty()) {
+                        CurrentUser currentUser = CurrentUser.builder()
+                                .userId(userId)
+                                .perfilId(perfilId)
+                                .email(userEmail)
+                                .rol(rol)
+                                .build();
+
                         List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + rol));
                         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                                userEmail,
+                                currentUser,
                                 jwt,
                                 authorities
                         );
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
-                        log.debug("[JWT] Autenticado: {} rol={}", userEmail, rol);
+                        log.debug("[JWT] Autenticado: {} rol={} userId={} perfilId={}", userEmail, rol, userId, perfilId);
                     } else {
                         log.warn("[JWT] Token sin claim de rol para: {}", userEmail);
                     }

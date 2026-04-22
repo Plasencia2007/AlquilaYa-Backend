@@ -1,8 +1,15 @@
 package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.dto.ActualizarUsuarioRequest;
+import com.alquilaya.serviciousuarios.dto.ArrendadorInfoResponse;
+import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
+import com.alquilaya.serviciousuarios.entities.Arrendador;
+import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
+import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
+import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
+import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +28,8 @@ import java.util.List;
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
+    private final ArrendadorRepository arrendadorRepository;
+    private final EstudianteRepository estudianteRepository;
 
     @GetMapping
     public ResponseEntity<List<Usuario>> listarTodos() {
@@ -48,5 +57,39 @@ public class UsuarioController {
         log.warn("Eliminando usuario ID: {}", id);
         usuarioService.eliminarUsuario(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/arrendador/{perfilId}/info")
+    public ResponseEntity<ArrendadorInfoResponse> obtenerInfoArrendador(@PathVariable Long perfilId) {
+        Arrendador a = arrendadorRepository.findById(perfilId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el arrendador con ID " + perfilId));
+        Usuario u = a.getUsuario();
+        return ResponseEntity.ok(ArrendadorInfoResponse.builder()
+                .id(a.getId())
+                .usuarioId(u.getId())
+                .nombre(u.getNombre())
+                .apellido(u.getApellido())
+                .correo(u.getCorreo())
+                .telefono(a.getTelefono() != null ? a.getTelefono() : u.getTelefono())
+                .nombreComercial(a.getNombreComercial())
+                .calificacion(a.getCalificacion())
+                .build());
+    }
+
+    @GetMapping("/estudiante/{perfilId}/info")
+    public ResponseEntity<EstudianteInfoResponse> obtenerInfoEstudiante(@PathVariable Long perfilId) {
+        Estudiante e = estudianteRepository.findById(perfilId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el estudiante con ID " + perfilId));
+        Usuario u = e.getUsuario();
+        return ResponseEntity.ok(EstudianteInfoResponse.builder()
+                .id(e.getId())
+                .usuarioId(u.getId())
+                .nombre(u.getNombre())
+                .apellido(u.getApellido())
+                .correo(u.getCorreo())
+                .telefono(u.getTelefono())
+                .universidad(e.getUniversidad())
+                .carrera(e.getCarrera())
+                .build());
     }
 }
