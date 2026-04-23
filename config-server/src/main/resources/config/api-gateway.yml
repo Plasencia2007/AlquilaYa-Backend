@@ -16,6 +16,18 @@ spring:
               - Path=/api/v1/propiedades/**, /api/v1/admin/propiedades/**, /api/v1/reservas/**, /api/v1/favoritos/**, /api/v1/resenas/**
             filters:
               - StripPrefix=0
+          - id: servicio-catalogos
+            uri: lb://servicio-catalogos
+            predicates:
+              - Path=/api/v1/catalogos/**
+            filters:
+              - StripPrefix=0
+          - id: servicio-pagos
+            uri: lb://servicio-pagos
+            predicates:
+              - Path=/api/v1/pagos/**
+            filters:
+              - StripPrefix=0
         cors-configurations:
           '[/**]':
             allowed-origin-patterns: "http://localhost:*"

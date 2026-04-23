@@ -27,8 +27,9 @@ public class ReservaController {
     @PostMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('RESERVAR')")
     public ResponseEntity<ReservaResponseDTO> crear(@Valid @RequestBody CrearReservaRequest req) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(
-                reservaService.crearSolicitud(req, CurrentUserProvider.get())));
+        Reserva r = reservaService.crearSolicitud(req, CurrentUserProvider.get());
+        String titulo = reservaService.obtenerTituloPropiedad(r.getPropiedadId());
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, titulo, "", ""));
     }
 
     @GetMapping("/mis")
@@ -36,7 +37,7 @@ public class ReservaController {
     public ResponseEntity<List<ReservaResponseDTO>> misReservas() {
         Long estudianteId = CurrentUserProvider.requirePerfilId();
         return ResponseEntity.ok(reservaService.listarDelEstudiante(estudianteId)
-                .stream().map(ReservaResponseDTO::from).toList());
+                .stream().map(r -> ReservaResponseDTO.from(r, reservaService.obtenerTituloPropiedad(r.getPropiedadId()))).toList());
     }
 
     @GetMapping("/arrendador")
@@ -44,7 +45,7 @@ public class ReservaController {
     public ResponseEntity<List<ReservaResponseDTO>> misReservasComoArrendador() {
         Long arrendadorId = CurrentUserProvider.requirePerfilId();
         return ResponseEntity.ok(reservaService.listarDelArrendador(arrendadorId)
-                .stream().map(ReservaResponseDTO::from).toList());
+                .stream().map(r -> ReservaResponseDTO.from(r, reservaService.obtenerTituloPropiedad(r.getPropiedadId()))).toList());
     }
 
     @GetMapping("/arrendador/estado/{estado}")
@@ -52,19 +53,31 @@ public class ReservaController {
     public ResponseEntity<List<ReservaResponseDTO>> porEstado(@PathVariable EstadoReserva estado) {
         Long arrendadorId = CurrentUserProvider.requirePerfilId();
         return ResponseEntity.ok(reservaService.listarDelArrendadorPorEstado(arrendadorId, estado)
-                .stream().map(ReservaResponseDTO::from).toList());
+                .stream().map(r -> ReservaResponseDTO.from(r, reservaService.obtenerTituloPropiedad(r.getPropiedadId()), "", "")).toList());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ReservaResponseDTO> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(reservaService.obtenerPorId(id)));
+        Reserva r = reservaService.obtenerPorId(id);
+        String titulo = reservaService.obtenerTituloPropiedad(r.getPropiedadId());
+        String estNombre = "Estudiante";
+        String estCorreo = "";
+        try {
+            var est = reservaService.obtenerInfoEstudiante(r.getEstudianteId());
+            if (est != null) {
+                estNombre = est.getNombre() + " " + (est.getApellido() != null ? est.getApellido() : "");
+                estCorreo = est.getCorreo();
+            }
+        } catch (Exception e) {}
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, titulo, estNombre, estCorreo));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<ReservaResponseDTO> actualizar(@PathVariable Long id, @RequestBody Reserva updates) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(reservaService.actualizarReserva(id, updates)));
+        Reserva r = reservaService.actualizarReserva(id, updates);
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, "", "", ""));
     }
 
     @DeleteMapping("/{id}")
@@ -77,30 +90,31 @@ public class ReservaController {
     @PatchMapping("/{id}/aprobar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<ReservaResponseDTO> aprobar(@PathVariable Long id) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(
-                reservaService.aprobar(id, CurrentUserProvider.get())));
+        Reserva r = reservaService.aprobar(id, CurrentUserProvider.get());
+        String titulo = reservaService.obtenerTituloPropiedad(r.getPropiedadId());
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, titulo, "", ""));
     }
 
     @PatchMapping("/{id}/rechazar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<ReservaResponseDTO> rechazar(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String motivo = body != null ? body.getOrDefault("motivo", "") : "";
-        return ResponseEntity.ok(ReservaResponseDTO.from(
-                reservaService.rechazar(id, motivo, CurrentUserProvider.get())));
+        Reserva r = reservaService.rechazar(id, motivo, CurrentUserProvider.get());
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, "", "", ""));
     }
 
     @PatchMapping("/{id}/cancelar")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ReservaResponseDTO> cancelar(@PathVariable Long id) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(
-                reservaService.cancelar(id, CurrentUserProvider.get())));
+        Reserva r = reservaService.cancelar(id, CurrentUserProvider.get());
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, "", "", ""));
     }
 
     @PatchMapping("/{id}/finalizar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<ReservaResponseDTO> finalizar(@PathVariable Long id) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(
-                reservaService.finalizar(id, CurrentUserProvider.get())));
+        Reserva r = reservaService.finalizar(id, CurrentUserProvider.get());
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, "", "", ""));
     }
 
     /**
@@ -110,6 +124,7 @@ public class ReservaController {
     @PatchMapping("/{id}/pagar")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ReservaResponseDTO> marcarPagada(@PathVariable Long id) {
-        return ResponseEntity.ok(ReservaResponseDTO.from(reservaService.marcarPagada(id)));
+        Reserva r = reservaService.marcarPagada(id);
+        return ResponseEntity.ok(ReservaResponseDTO.from(r, "", "", ""));
     }
 }

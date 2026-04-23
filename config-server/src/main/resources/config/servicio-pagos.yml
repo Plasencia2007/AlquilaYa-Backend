@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/alquilaya_pagos
+    username: postgres
+    password: oracle123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+mercadopago:
+  access-token: APP_USR-7136516795802077-042223-488b9c01408d8fa97435b78322f9b606-3353029523
+  public-key: APP_USR-685a7b24-b7fd-4f99-b76a-278df847f1d2
+  back-urls:
+    success: http://localhost:3000/pago/exito
+    failure: http://localhost:3000/pago/fallo
+    pending: http://localhost:3000/pago/pendiente
+
+server:
+  port: 8084

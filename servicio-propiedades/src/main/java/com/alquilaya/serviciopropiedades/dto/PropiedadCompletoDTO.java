@@ -1,8 +1,6 @@
 package com.alquilaya.serviciopropiedades.dto;
 
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
-import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
 import lombok.Builder;
 import lombok.Data;
 
@@ -18,8 +16,8 @@ public class PropiedadCompletoDTO {
     private String descripcion;
     private BigDecimal precio;
     private String direccion;
-    private TipoPropiedad tipoPropiedad;
-    private PeriodoAlquiler periodoAlquiler;
+    private String tipoPropiedad;
+    private String periodoAlquiler;
     private Double area;
     private Integer nroPiso;
     private Boolean estaDisponible;

@@ -8,7 +8,6 @@ import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
 import com.alquilaya.serviciopropiedades.kafka.ReservaEventProducer;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
@@ -175,6 +174,16 @@ public class ReservaService {
                 .orElseThrow(() -> new IllegalArgumentException("No existe la reserva " + id));
     }
 
+    public String obtenerTituloPropiedad(Long propiedadId) {
+        return propiedadRepository.findById(propiedadId)
+                .map(Propiedad::getTitulo)
+                .orElse("Propiedad");
+    }
+
+    public EstudianteInfoDTO obtenerInfoEstudiante(Long estudianteId) {
+        return usuariosClient.obtenerEstudiante(estudianteId);
+    }
+
     @Transactional
     public Reserva actualizarReserva(Long id, Reserva updates) {
         Reserva r = obtenerPorId(id);
@@ -211,16 +220,18 @@ public class ReservaService {
         long dias = ChronoUnit.DAYS.between(req.getFechaInicio(), req.getFechaFin()) + 1;
         if (dias <= 0) dias = 1;
         BigDecimal precio = p.getPrecio();
-        PeriodoAlquiler periodo = p.getPeriodoAlquiler() != null ? p.getPeriodoAlquiler() : PeriodoAlquiler.MENSUAL;
+        String periodo = p.getPeriodoAlquiler() != null ? p.getPeriodoAlquiler().toUpperCase() : "MENSUAL";
 
         return switch (periodo) {
-            case DIARIO -> precio.multiply(BigDecimal.valueOf(dias));
-            case MENSUAL -> precio.multiply(BigDecimal.valueOf(dias))
+            case "DIARIO" -> precio.multiply(BigDecimal.valueOf(dias));
+            case "MENSUAL" -> precio.multiply(BigDecimal.valueOf(dias))
                     .divide(BigDecimal.valueOf(30), 2, RoundingMode.HALF_UP);
-            case SEMESTRAL -> precio.multiply(BigDecimal.valueOf(dias))
+            case "SEMESTRAL" -> precio.multiply(BigDecimal.valueOf(dias))
                     .divide(BigDecimal.valueOf(180), 2, RoundingMode.HALF_UP);
-            case ANUAL -> precio.multiply(BigDecimal.valueOf(dias))
+            case "ANUAL" -> precio.multiply(BigDecimal.valueOf(dias))
                     .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
+            default -> precio.multiply(BigDecimal.valueOf(dias))
+                    .divide(BigDecimal.valueOf(30), 2, RoundingMode.HALF_UP); // Default a mensual
         };
     }
 

@@ -6,8 +6,6 @@ import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.PropiedadImagen;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
-import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +24,8 @@ public class PropiedadService {
     private final DistanciaService distanciaService;
     private final UsuariosClient usuariosClient;
 
-    public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, TipoPropiedad tipo,
-                                   PeriodoAlquiler periodo, Boolean disponible, Integer distanciaMax,
+    public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, String tipo,
+                                   String periodo, Boolean disponible, Integer distanciaMax,
                                    List<String> servicios) {
         List<String> filtroServicios = (servicios == null || servicios.isEmpty()) ? null : servicios;
         return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, filtroServicios);

@@ -4,8 +4,6 @@ import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.PropiedadImagen;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
-import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadImagenRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.services.CloudinaryService;
@@ -140,8 +138,8 @@ public class PropiedadController {
     public ResponseEntity<List<PropiedadPublicoDTO>> buscar(
             @RequestParam(required = false) BigDecimal precioMin,
             @RequestParam(required = false) BigDecimal precioMax,
-            @RequestParam(required = false) TipoPropiedad tipo,
-            @RequestParam(required = false) PeriodoAlquiler periodo,
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String periodo,
             @RequestParam(required = false) Boolean disponible,
             @RequestParam(required = false) Integer distanciaMax,
             @RequestParam(required = false) List<String> servicios

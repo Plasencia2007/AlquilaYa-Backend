@@ -128,6 +128,18 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Verify OTP (WhatsApp)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"telefono\": \"+51999999999\",\n  \"codigo\": \"123456\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/usuarios/auth/verify-otp"
+					}
 				}
 			]
 		},
@@ -137,6 +149,10 @@
 				{
 					"name": "Listar Todos",
 					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios" }
+				},
+				{
+					"name": "Listar por Rol",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/rol/ARRENDADOR" }
 				},
 				{
 					"name": "Obtener por ID",
@@ -193,8 +209,31 @@
 					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades" }
 				},
 				{
+					"name": "Crear Propiedad (Multipart)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "propiedad",
+									"value": "{\n  \"titulo\": \"Cuarto cerca a la UPeU\",\n  \"descripcion\": \"Lindo cuarto con baño propio\",\n  \"precio\": 450.00,\n  \"direccion\": \"Jr. Los Angeles 123\",\n  \"arrendadorId\": 1,\n  \"tipoPropiedad\": \"INDIVIDUAL\",\n  \"periodoAlquiler\": \"MENSUAL\",\n  \"serviciosIncluidos\": [\"WIFI\", \"LUZ\"],\n  \"reglas\": [\"SOLO_ESTUDIANTES\"],\n  \"latitud\": -12.0431,\n  \"longitud\": -77.0282\n}",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": "{{base_url}}/api/v1/propiedades"
+					}
+				},
+				{
 					"name": "Buscar con Filtros",
-					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/buscar?precioMax=1000&tipo=HABITACION" }
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/buscar?precioMax=1000&tipo=MINI_DEPTO" }
 				},
 				{
 					"name": "Actualizar (Editar Todo)",
@@ -202,7 +241,7 @@
 						"method": "PUT",
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"titulo\": \"Habitación Suite Ejecutiva\",\n  \"descripcion\": \"Habitación de lujo con todos los servicios\",\n  \"precio\": 1200.00,\n  \"direccion\": \"Av. Universitaria 456\",\n  \"area\": 25.5,\n  \"nroPiso\": 3,\n  \"estaDisponible\": true,\n  \"detallesPerfil\": \"...\",\n  \"serviciosIncluidos\": [\"WIFI\", \"AGUA\", \"LUZ\", \"LIMPIEZA\"],\n  \"reglas\": [\"NO_MASCOTAS\", \"NO_FUMAR\"],\n  \"latitud\": -12.0431,\n  \"longitud\": -77.0282\n}",
+							"raw": "{\n  \"titulo\": \"Habitación Suite Ejecutiva\",\n  \"descripcion\": \"Habitación de lujo con todos los servicios\",\n  \"precio\": 1200.00,\n  \"direccion\": \"Av. Universitaria 456\",\n  \"area\": 25.5,\n  \"nroPiso\": 3,\n  \"estaDisponible\": true,\n  \"tipoPropiedad\": \"MINI_DEPTO\",\n  \"periodoAlquiler\": \"MENSUAL\",\n  \"serviciosIncluidos\": [\"WIFI\", \"AGUA_CALIENTE\", \"LUZ\"],\n  \"reglas\": [\"NO_MASCOTAS\", \"NO_FUMAR\"],\n  \"latitud\": -12.0431,\n  \"longitud\": -77.0282\n}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": "{{base_url}}/api/v1/propiedades/1"
@@ -366,6 +405,77 @@
 				{
 					"name": "Eliminar Reseña (Moderador)",
 					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/resenas/1?tipo=ARRENDADOR" }
+				}
+			]
+		},
+		{
+			"name": "07. TABLA CATALOGOS",
+			"item": [
+				{
+					"name": "Listar Filtros Activos (Público)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/catalogos/filtros/activos" }
+				},
+				{
+					"name": "Listar por Tipo (Público)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/catalogos/filtros/tipo/SERVICIO" }
+				},
+				{
+					"name": "Listar Todo (Admin)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/catalogos/admin/filtros" }
+				},
+				{
+					"name": "Crear Item (Admin)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Piscina\",\n  \"valor\": \"PISCINA\",\n  \"tipo\": \"SERVICIO\",\n  \"icono\": \"fa-swimming-pool\",\n  \"activo\": true\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/catalogos/admin/filtros"
+					}
+				},
+				{
+					"name": "Actualizar Item (Admin)",
+					"request": {
+						"method": "PUT",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Piscina Temperada\",\n  \"activo\": true\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/catalogos/admin/filtros/1"
+					}
+				},
+				{
+					"name": "Eliminar Item (Admin)",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/catalogos/admin/filtros/1" }
+				}
+			]
+		},
+		{
+			"name": "08. PAGOS",
+			"item": [
+				{
+					"name": "Generar Link de Pago (Preferencia)",
+					"request": {
+						"method": "POST",
+						"url": "{{base_url}}/api/v1/pagos/preferencia/1",
+						"description": "Genera el InitPoint (URL) de Mercado Pago para una reserva aprobada."
+					}
+				},
+				{
+					"name": "Simular Webhook (Notificación)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"payment\",\n  \"data\": {\n    \"id\": \"1234567890\"\n  }\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/pagos/webhook",
+						"description": "Simula la llamada que hace Mercado Pago al confirmar un pago."
+					}
 				}
 			]
 		}

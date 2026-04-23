@@ -1,8 +1,6 @@
 package com.alquilaya.serviciopropiedades.repositories;
 
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
-import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -30,8 +28,8 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> buscar(
             @Param("precioMin") BigDecimal precioMin,
             @Param("precioMax") BigDecimal precioMax,
-            @Param("tipo") TipoPropiedad tipo,
-            @Param("periodo") PeriodoAlquiler periodo,
+            @Param("tipo") String tipo,
+            @Param("periodo") String periodo,
             @Param("disponible") Boolean disponible,
             @Param("distanciaMax") Integer distanciaMax,
             @Param("servicios") List<String> servicios

@@ -1,8 +1,6 @@
 package com.alquilaya.serviciopropiedades.entities;
 
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
-import com.alquilaya.serviciopropiedades.enums.PeriodoAlquiler;
-import com.alquilaya.serviciopropiedades.enums.TipoPropiedad;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CercaDeUpeu;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLatitud;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLongitud;
@@ -61,11 +59,9 @@ public class Propiedad {
     @Column(nullable = false)
     private Long arrendadorId;
 
-    @Enumerated(EnumType.STRING)
-    private TipoPropiedad tipoPropiedad;
+    private String tipoPropiedad;
 
-    @Enumerated(EnumType.STRING)
-    private PeriodoAlquiler periodoAlquiler;
+    private String periodoAlquiler;
 
     private Double area;
 
