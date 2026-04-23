@@ -24,4 +24,10 @@ public class PagoController {
         pagoService.procesarWebhook(payload);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/simular-exito/{reservaId}")
+    public ResponseEntity<String> simularExito(@PathVariable Long reservaId) {
+        pagoService.simularPagoExitoso(reservaId);
+        return ResponseEntity.ok("Simulación de pago exitoso enviada a Kafka para reserva: " + reservaId);
+    }
 }

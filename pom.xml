@@ -15,6 +15,9 @@
 		<module>api-gateway</module>
 		<module>servicio-usuarios</module>
 		<module>servicio-propiedades</module>
+		<module>servicio-pagos</module>
+		<module>servicio-catalogos</module>
+		<module>servicio-mensajeria</module>
 	</modules>
 
 	<properties>

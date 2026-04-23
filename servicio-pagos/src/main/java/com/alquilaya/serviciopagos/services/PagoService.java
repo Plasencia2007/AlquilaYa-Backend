@@ -44,11 +44,18 @@ public class PagoService {
 
     public String crearPreferencia(Long reservaId) {
         try {
+            log.info("Iniciando creación de preferencia para Reserva ID: {}", reservaId);
             ReservaDetalleDTO reserva = reservasClient.obtenerReserva(reservaId);
             
+            // Validar campos críticos para Mercado Pago
+            String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty()) 
+                    ? reserva.getEstudianteNombre() : "Estudiante AlquilaYa";
+            String emailPagador = (reserva.getEstudianteCorreo() != null && !reserva.getEstudianteCorreo().isEmpty()) 
+                    ? reserva.getEstudianteCorreo() : "estudiante@test.com";
+
             PreferenceItemRequest itemRequest = PreferenceItemRequest.builder()
                     .id(reserva.getId().toString())
-                    .title("Reserva AlquilaYa: " + reserva.getPropiedadTitulo())
+                    .title("Reserva AlquilaYa: " + (reserva.getPropiedadTitulo() != null ? reserva.getPropiedadTitulo() : "Habitación"))
                     .quantity(1)
                     .unitPrice(reserva.getMontoTotal())
                     .currencyId("PEN")
@@ -63,17 +70,16 @@ public class PagoService {
                     .pending(urlPending)
                     .build();
 
-            // Configurar el pagador (Payer) con datos del estudiante
+            // Configurar el pagador (Payer) con datos validados
             com.mercadopago.client.preference.PreferencePayerRequest payer = com.mercadopago.client.preference.PreferencePayerRequest.builder()
-                    .name(reserva.getEstudianteNombre())
-                    .email(reserva.getEstudianteCorreo())
+                    .name(nombrePagador)
+                    .email(emailPagador)
                     .build();
 
             PreferenceRequest preferenceRequest = PreferenceRequest.builder()
                     .items(items)
                     .payer(payer)
                     .backUrls(backUrls)
-                    // URL de notificación (Webhook) - En producción debe ser una URL real
                     .notificationUrl("https://webhook.site/tu-id-temporal/api/v1/pagos/webhook") 
                     .externalReference(reserva.getId().toString())
                     .expires(true)
@@ -91,11 +97,12 @@ public class PagoService {
                     .build();
             pagoRepository.save(pago);
 
+            log.info("✅ Preferencia creada exitosamente: {}", preference.getId());
             return preference.getInitPoint();
 
         } catch (Exception e) {
-            log.error("Error creando preferencia de Mercado Pago: {}", e.getMessage());
-            throw new RuntimeException("No se pudo generar el link de pago");
+            log.error("❌ Error FATAL creando preferencia de Mercado Pago: {}", e.getMessage(), e);
+            throw new RuntimeException("No se pudo generar el link de pago: " + e.getMessage());
         }
     }
 
@@ -126,5 +133,20 @@ public class PagoService {
         } catch (Exception e) {
             log.error("Error procesando Webhook de Mercado Pago: {}", e.getMessage());
         }
+    }
+
+    public void simularPagoExitoso(Long reservaId) {
+        log.info("🧪 SIMULACIÓN: Disparando pago exitoso para Reserva ID: {}", reservaId);
+        
+        pagoRepository.findByReservaId(reservaId).ifPresent(p -> {
+            p.setEstado("PAGADO");
+            p.setPaymentId("SIM-123456");
+            p.setFechaPago(LocalDateTime.now());
+            pagoRepository.save(p);
+        });
+        
+        // Enviar a Kafka
+        kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaId);
+        log.info("✅ Evento PAGO_EXITOSO enviado a Kafka para Reserva ID: {}", reservaId);
     }
 }
