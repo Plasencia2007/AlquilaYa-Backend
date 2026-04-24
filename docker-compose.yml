@@ -1,18 +1,37 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
     container_name: alquilaya-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: oracle123
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD no configurado en .env}
       POSTGRES_DB: postgres
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: alquilaya-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD no configurado en .env}
+      MYSQL_DATABASE: alquilaya_catalogos
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -41,8 +60,19 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: alquilaya-ngrok
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?NGROK_AUTHTOKEN no configurado en .env}
+    command: http host.docker.internal:8080 --url=${NGROK_DOMAIN}
+    ports:
+      - "4040:4040"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  mysql_data:
 
 networks:
   default:

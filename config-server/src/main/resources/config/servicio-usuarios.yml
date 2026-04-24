@@ -4,8 +4,8 @@ spring:
     name: servicio-usuarios
   datasource:
     url: jdbc:postgresql://localhost:5433/postgres
-    username: postgres
-    password: oracle123
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -19,8 +19,8 @@ server:
   port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
 
 jwt:
-  secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u
-  expiration: 86400000 # 24 horas
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 notification:
   service:

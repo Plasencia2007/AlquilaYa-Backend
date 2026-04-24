@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: jdbc:mysql://localhost:3307/alquilaya_catalogos
-    username: root
-    password: mysql123
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -16,5 +16,5 @@ server:
   port: 8085
 
 jwt:
-  secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u
-  expiration: 86400000
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  expiration: ${JWT_EXPIRATION:86400000}

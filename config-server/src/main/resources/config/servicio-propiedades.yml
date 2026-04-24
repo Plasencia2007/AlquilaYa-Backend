@@ -4,8 +4,8 @@ spring:
     name: servicio-propiedades
   datasource:
     url: jdbc:postgresql://localhost:5433/alquilaya_propiedades
-    username: postgres
-    password: oracle123
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -27,9 +27,9 @@ server:
 
 # Configuración de Cloudinary (Fase 3 - Real)
 cloudinary:
-  cloud-name: ddiyaoxkt
-  api-key: 387589685746197
-  api-secret: ccDoynk9aR2ibapCNqo6LWxyZao
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
+  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
+  api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 feign:
   circuitbreaker:
@@ -37,5 +37,5 @@ feign:
 
 # Sincronización de Seguridad con Usuarios
 jwt:
-  secret: amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u
-  expiration: 86400000 # 24 horas
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  expiration: ${JWT_EXPIRATION:86400000}

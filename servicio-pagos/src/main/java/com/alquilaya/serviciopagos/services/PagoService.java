@@ -42,9 +42,18 @@ public class PagoService {
     @Value("${mercadopago.back-urls.pending}")
     private String urlPending;
 
+    @Value("${mercadopago.notification-url}")
+    private String notificationUrl;
+
     public String crearPreferencia(Long reservaId) {
         try {
             log.info("Iniciando creación de preferencia para Reserva ID: {}", reservaId);
+
+            var pagoExistente = pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PAGADO");
+            if (pagoExistente.isPresent()) {
+                throw new RuntimeException("La reserva " + reservaId + " ya fue pagada");
+            }
+
             ReservaDetalleDTO reserva = reservasClient.obtenerReserva(reservaId);
             
             // Validar campos críticos para Mercado Pago
@@ -80,7 +89,7 @@ public class PagoService {
                     .items(items)
                     .payer(payer)
                     .backUrls(backUrls)
-                    .notificationUrl("https://webhook.site/tu-id-temporal/api/v1/pagos/webhook") 
+                    .notificationUrl(notificationUrl)
                     .externalReference(reserva.getId().toString())
                     .expires(true)
                     .expirationDateTo(OffsetDateTime.now().plusDays(2))
@@ -118,15 +127,21 @@ public class PagoService {
                 
                 if ("approved".equals(payment.getStatus())) {
                     String reservaIdStr = payment.getExternalReference();
+                    Long reservaId = Long.parseLong(reservaIdStr);
                     log.info("💰 Pago APROBADO para Reserva ID: {}. PaymentId: {}", reservaIdStr, paymentId);
-                    
-                    pagoRepository.findByReservaId(Long.parseLong(reservaIdStr)).ifPresent(p -> {
-                        p.setEstado("PAGADO");
-                        p.setPaymentId(paymentId.toString());
-                        p.setFechaPago(LocalDateTime.now());
-                        pagoRepository.save(p);
-                    });
-                    
+
+                    var pagoPendiente = pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE");
+                    if (pagoPendiente.isEmpty()) {
+                        log.info("↩️ Webhook ignorado: la reserva {} no tiene pago PENDIENTE (ya procesado o duplicado)", reservaId);
+                        return;
+                    }
+
+                    Pago p = pagoPendiente.get();
+                    p.setEstado("PAGADO");
+                    p.setPaymentId(paymentId.toString());
+                    p.setFechaPago(LocalDateTime.now());
+                    pagoRepository.save(p);
+
                     kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaIdStr);
                 }
             }
@@ -137,15 +152,14 @@ public class PagoService {
 
     public void simularPagoExitoso(Long reservaId) {
         log.info("🧪 SIMULACIÓN: Disparando pago exitoso para Reserva ID: {}", reservaId);
-        
-        pagoRepository.findByReservaId(reservaId).ifPresent(p -> {
+
+        pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE").ifPresent(p -> {
             p.setEstado("PAGADO");
             p.setPaymentId("SIM-123456");
             p.setFechaPago(LocalDateTime.now());
             pagoRepository.save(p);
         });
-        
-        // Enviar a Kafka
+
         kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaId);
         log.info("✅ Evento PAGO_EXITOSO enviado a Kafka para Reserva ID: {}", reservaId);
     }
