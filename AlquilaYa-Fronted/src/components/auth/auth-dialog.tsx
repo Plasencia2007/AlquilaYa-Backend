@@ -84,7 +84,9 @@ export function AuthDialog() {
             isRegister ? 'order-2' : 'order-1',
           )}
         >
+          <div className="my-auto">
             {isRegister ? <RegisterForm /> : <LoginForm />}
+          </div>
         </section>
       </DialogContent>
     </Dialog>

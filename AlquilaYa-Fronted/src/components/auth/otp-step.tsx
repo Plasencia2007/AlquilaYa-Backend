@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Smartphone } from 'lucide-react';
@@ -19,6 +20,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v
 export function OtpStep() {
   const { personal, setStep } = useAuthModal();
   const { inicializar } = useAuth();
+  
+  const [cooldown, setCooldown] = useState(60);
+  const [reenviando, setReenviando] = useState(false);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const form = useForm<OtpFormData>({
     resolver: zodResolver(otpSchema),
@@ -45,6 +56,32 @@ export function OtpStep() {
       setStep('result');
     } catch (err) {
       notify.error(err, 'Error de conexión con el servidor');
+    }
+  };
+
+  const handleReenviar = async () => {
+    if (cooldown > 0 || reenviando) return;
+    setReenviando(true);
+    
+    try {
+      const response = await fetch(`${API_BASE}/usuarios/auth/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefono: personal?.telefono ?? '' }),
+      });
+
+      if (!response.ok) {
+        const msg = await parseFetchError(response, 'No se pudo reenviar el código.');
+        notify.error(null, msg);
+        return;
+      }
+
+      notify.success(null, 'Te hemos enviado un nuevo código por WhatsApp.');
+      setCooldown(60);
+    } catch (err) {
+      notify.error(err, 'Error de conexión con el servidor al reenviar OTP');
+    } finally {
+      setReenviando(false);
     }
   };
 
@@ -98,8 +135,13 @@ export function OtpStep() {
 
           <p className="text-[11px] text-muted-foreground">
             ¿No recibiste el mensaje?{' '}
-            <button type="button" className="font-bold text-primary transition-colors hover:text-primary/80">
-              Reenviar código
+            <button 
+              type="button" 
+              onClick={handleReenviar}
+              disabled={cooldown > 0 || reenviando}
+              className="font-bold text-primary transition-colors hover:text-primary/80 disabled:opacity-50 disabled:hover:text-primary"
+            >
+              {reenviando ? 'Reenviando...' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar código'}
             </button>
           </p>
         </form>

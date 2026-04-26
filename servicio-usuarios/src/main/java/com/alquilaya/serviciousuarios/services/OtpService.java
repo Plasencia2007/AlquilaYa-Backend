@@ -58,21 +58,25 @@ public class OtpService {
             headers.set("x-api-key", notificationApiKey);
         }
 
+        // Delegar envío HTTP a un hilo separado
+        enviarHttpAsync(body, headers);
+    }
+
+    @org.springframework.scheduling.annotation.Async
+    public void enviarHttpAsync(Map<String, String> body, HttpHeaders headers) {
         try {
-            log.debug("Intentando enviar OTP");
+            log.debug("Intentando enviar OTP de forma asíncrona");
             restTemplate.exchange(
                     notificationServiceUrl + "/api/v1/notifications/whatsapp/send-otp",
                     HttpMethod.POST,
                     new HttpEntity<>(body, headers),
                     String.class);
-            log.info("OTP enviado exitosamente");
+            log.info("OTP enviado exitosamente en segundo plano");
         } catch (Exception e) {
-            // Romper la transacción: si no se puede notificar, el registro debe revertirse
-            // para no dejar usuarios creados pero inaccesibles (no pueden verificar el teléfono).
             log.error("Fallo enviando OTP vía WhatsApp: {}", e.getMessage());
-            throw new EnvioOtpFallidoException(
-                    "No pudimos enviar el código de verificación por WhatsApp. Intenta nuevamente en unos minutos.",
-                    e);
+            // Como es asíncrono, no podemos romper la transacción principal de registro,
+            // lo cual es deseable, ya que si falla el envío, el usuario igual se registra
+            // y puede solicitar el reenvío del código más adelante.
         }
     }
 
