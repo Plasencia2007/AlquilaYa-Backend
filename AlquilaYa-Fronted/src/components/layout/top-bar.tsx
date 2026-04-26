@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -24,15 +25,36 @@ export function TopBar() {
   const { usuario, estaAutenticado, cargando } = useAuth();
   const { open: openAuthModal } = useAuthModal();
 
+  const [isScrolled, setIsScrolled] = useState(false);
+  const isHome = pathname === '/';
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const isTransparent = isHome && !isScrolled;
+
   return (
-    <nav className="editorial-shadow fixed top-0 z-50 flex w-full items-center justify-between border-b border-primary/10 bg-background/80 px-6 py-3.5 backdrop-blur-xl transition-all duration-300 sm:px-12">
+    <nav
+      className={cn(
+        "fixed top-0 z-50 flex w-full items-center justify-between transition-all duration-300 sm:px-12",
+        isTransparent
+          ? "bg-transparent py-6 border-transparent"
+          : "editorial-shadow border-b border-primary/10 bg-background/80 px-6 py-3.5 backdrop-blur-xl"
+      )}
+    >
       <div className="flex items-center gap-12">
         <Link
           href="/"
           className="flex items-center gap-2 transition-transform active:scale-95"
         >
-          <span className="text-xl font-black tracking-tighter text-primary">
-            Alquila<span className="text-secondary">Ya</span>
+          <span className={cn("text-xl font-black tracking-tighter", isTransparent ? "text-white" : "text-primary")}>
+            Alquila<span className={isTransparent ? "text-white" : "text-primary"}>Ya</span>
           </span>
         </Link>
 
@@ -45,7 +67,9 @@ export function TopBar() {
                 href={link.href}
                 className={cn(
                   "font-headline text-xs font-black uppercase tracking-[0.2em] transition-colors",
-                  active ? 'text-primary' : 'text-foreground hover:text-primary',
+                  active
+                    ? (isTransparent ? 'text-white' : 'text-primary')
+                    : (isTransparent ? 'text-white/80 hover:text-white' : 'text-foreground hover:text-primary'),
                 )}
               >
                 {link.label}
@@ -56,7 +80,9 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
-        <ThemeToggle />
+        <div className={cn("transition-colors", isTransparent ? "[&_button]:text-white [&_button:hover]:bg-white/20" : "")}>
+          <ThemeToggle />
+        </div>
 
         {cargando ? (
           <Skeleton className="h-8 w-24 rounded-full" />
@@ -67,14 +93,22 @@ export function TopBar() {
             <button
               type="button"
               onClick={() => openAuthModal('register', 'ARRENDADOR')}
-              className="hidden text-xs font-black uppercase tracking-[0.2em] text-foreground transition-colors hover:text-primary sm:inline-block"
+              className={cn(
+                "hidden text-xs font-black uppercase tracking-[0.2em] transition-colors sm:inline-block",
+                isTransparent ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"
+              )}
             >
               Publicar
             </button>
 
             <Button
               size="sm"
-              className="hidden h-9 px-5 text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20 md:inline-flex"
+              className={cn(
+                "hidden h-9 px-5 text-xs font-black uppercase tracking-[0.2em] shadow-lg md:inline-flex",
+                isTransparent
+                  ? "bg-white text-primary hover:bg-white/90"
+                  : "shadow-primary/20"
+              )}
               onClick={() => openAuthModal('login')}
             >
               Ingresar

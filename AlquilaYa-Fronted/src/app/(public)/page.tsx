@@ -83,7 +83,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       {/* ── Hero ── */}
-      <section className="relative flex min-h-screen items-center overflow-hidden px-6 sm:px-12">
+      <section className="relative flex min-h-screen items-center overflow-hidden rounded-b-[2rem] px-6 sm:px-12 md:rounded-b-[3rem]">
         <div className="absolute inset-0">
           <Image
             fill
@@ -93,14 +93,13 @@ export default function Home() {
             src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2070&auto=format&fit=crop"
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/55 to-black/15" />
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background to-transparent" />
+          <div className="absolute inset-0 bg-black/40" />
         </div>
 
         <div className="relative z-10 max-w-3xl py-24 text-white">
           <div className="mb-6 flex items-center gap-3">
-            <span className="h-px w-10 bg-secondary" aria-hidden />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.32em] text-secondary">
+            <span className="h-px w-10 bg-primary" aria-hidden />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.32em] text-primary">
               Residencias universitarias · Lima
             </span>
           </div>
@@ -108,7 +107,7 @@ export default function Home() {
           <h1 className="font-headline text-5xl font-extrabold leading-[0.95] tracking-[-0.04em] text-white sm:text-6xl md:text-[5.5rem]">
             El cuarto perfecto,
             <br />
-            <span className="text-secondary">cerca de la UPeU.</span>
+            <span className="text-primary">cerca de la UPeU.</span>
           </h1>
 
           <p className="mt-8 max-w-xl text-base leading-relaxed text-white/75 sm:text-lg">
@@ -118,28 +117,28 @@ export default function Home() {
 
           <form
             onSubmit={handleBuscar}
-            className="mt-10 flex max-w-3xl flex-col gap-0 rounded-2xl border border-white/10 bg-white/5 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-2xl md:flex-row md:rounded-full"
+            className="mt-10 flex max-w-3xl flex-col gap-0 rounded-2xl bg-background p-1.5 shadow-2xl md:flex-row md:rounded-full"
           >
-            <div className="flex flex-1 items-center gap-3 border-b border-white/10 px-6 py-4 md:border-b-0 md:border-r">
-              <MapPin className="size-5 text-secondary" aria-hidden />
+            <div className="flex flex-1 items-center gap-3 border-b border-primary/10 px-6 py-4 md:border-b-0 md:border-r">
+              <MapPin className="size-5 text-primary" aria-hidden />
               <input
                 type="text"
                 value={zonaInput}
                 onChange={(e) => setZonaInput(e.target.value)}
                 placeholder="¿En qué zona buscas?"
                 aria-label="Zona"
-                className="w-full border-none bg-transparent text-sm font-medium text-white placeholder:text-white/40 focus:outline-none"
+                className="w-full border-none bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
             </div>
             <div className="flex flex-1 items-center gap-3 px-6 py-4">
-              <HomeIcon className="size-5 text-secondary" aria-hidden />
+              <HomeIcon className="size-5 text-primary" aria-hidden />
               <Select
                 value={tipoInput}
                 onValueChange={(v) => setTipoInput(v as TipoPropiedadFiltro)}
               >
                 <SelectTrigger
                   aria-label="Tipo de cuarto"
-                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-white shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left"
+                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left"
                 >
                   <SelectValue placeholder="Tipo de cuarto" />
                 </SelectTrigger>

@@ -80,11 +80,11 @@ export function AuthDialog() {
 
         <section
           className={cn(
-            'flex flex-col justify-center bg-card px-8 py-10 sm:px-10 md:px-12',
+            'flex flex-col overflow-y-auto bg-card px-8 py-10 sm:px-10 md:px-12',
             isRegister ? 'order-2' : 'order-1',
           )}
         >
-          {isRegister ? <RegisterForm /> : <LoginForm />}
+            {isRegister ? <RegisterForm /> : <LoginForm />}
         </section>
       </DialogContent>
     </Dialog>
