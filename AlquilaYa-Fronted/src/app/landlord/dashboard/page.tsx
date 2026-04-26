@@ -1,12 +1,12 @@
 'use client';
 
-import { StatCard } from '@/features/landlord/components/StatCard';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { useAuth } from '@/features/auth/useAuth';
-import { cn } from '@/utils/cn';
-import VerificationPanel from '@/features/auth/VerificationPanel';
+import { StatCard } from '@/components/landlord/stat-card';
+import { Card } from '@/components/ui/legacy-card';
+import { Button } from '@/components/ui/legacy-button';
+import { Badge } from '@/components/ui/legacy-badge';
+import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/cn';
+import VerificationPanel from '@/components/auth/verification-panel';
 
 export default function LandlordDashboardPage() {
   const { usuario } = useAuth();

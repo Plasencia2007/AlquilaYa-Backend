@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/features/auth/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export default function AdminMasterLayout({

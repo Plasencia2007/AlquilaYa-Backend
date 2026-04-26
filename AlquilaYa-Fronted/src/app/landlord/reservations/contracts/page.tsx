@@ -1,8 +1,8 @@
 'use client';
 
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/legacy-card';
+import { Button } from '@/components/ui/legacy-button';
+import { Badge } from '@/components/ui/legacy-badge';
 import { LANDLORD_CONTRACTS } from '@/mocks/landlord';
 
 export default function LandlordContractsPage() {

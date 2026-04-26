@@ -1,26 +1,81 @@
-# Documentación de Proyecto AlquilaYa
+# AlquilaYa — Documentación Técnica
 
-Bienvenido a la documentación oficial del sistema AlquilaYa. Aquí encontrarás los detalles técnicos y flujos de trabajo de los módulos implementados.
+Plataforma de alquiler de cuartos para estudiantes de la **Universidad Peruana Unión (UPeU) — Lima**. Arquitectura de microservicios con Spring Cloud + Node.js para mensajería WhatsApp.
 
-## 📌 Guía de Documentos
+## Índice
 
-1.  [**Arquitectura del Sistema**](./SYSTEM_OVERVIEW.md): Visión general de microservicios y diagrama de comunicación.
-2.  [**Verificación de Identidad**](./IDENTITY_VERIFICATION.md): Flujo de subida y aprobación de documentos oficiales.
-3.  [**Servicio de Notificaciones**](./NOTIFICATION_SERVICE.md): Configuración de WhatsApp Web y envío de mensajes/OTP.
-4.  [**Capa de Validaciones**](./VALIDATION_PATTERNS.md): Implementación de Zod (Frontend) y Spring Validation (Backend).
+| Documento | Contenido |
+|-----------|-----------|
+| [arquitectura.md](arquitectura.md) | Diagrama del sistema, componentes, comunicación entre servicios |
+| [microservicios.md](microservicios.md) | Detalle por cada microservicio: puerto, dependencias, responsabilidades |
+| [api-endpoints.md](api-endpoints.md) | Referencia completa de endpoints REST |
+| [base-de-datos.md](base-de-datos.md) | Modelo de datos: entidades, enums, relaciones |
+| [flujos-de-negocio.md](flujos-de-negocio.md) | Registro, reserva, pago, notificaciones paso a paso |
+| [configuracion-y-despliegue.md](configuracion-y-despliegue.md) | Variables de entorno, Docker, orden de arranque |
+| [flyway.md](flyway.md) | Activación de migraciones Flyway antes de producción |
+| [whatsapp-session.md](whatsapp-session.md) | Persistencia de la sesión WhatsApp para prod (LocalAuth → RemoteAuth) |
 
----
-## 🚀 Inicio Rápido
+## Resumen ejecutivo
 
-Para ejecutar el proyecto localmente, asegúrate de tener instalados:
--   Java 21 (JDK)
-    -   Docker (para PostgreSQL) o una base de datos local llamada `alquilaya_db`.
-    -   Node.js (v18+)
+**Qué resuelve:** estudiantes UPeU perdían tiempo visitando cuartos al inicio del ciclo. AlquilaYa digitaliza la búsqueda, permite reservar en línea, pagar con Mercado Pago y notifica por WhatsApp a ambas partes.
 
-### Pasos:
-1.  **Backend**: `cd servicio-usuarios && mvn spring-boot:run`
-2.  **Notificaciones**: `cd servicio-notificaciones && node index.js` (Escanear QR cuando aparezca).
-3.  **Frontend**: `cd AlquilaYa-Fronted && npm run dev`
+**Roles:**
+- `ESTUDIANTE` — busca, reserva, paga, deja reseñas
+- `ARRENDADOR` — publica propiedades, aprueba/rechaza reservas
+- `ADMIN` — aprueba documentos y propiedades, gestiona catálogos
 
----
-*Última actualización: Abril 2026*
+**Stack:**
+- Backend: Java 21, Spring Boot 3.5.13, Spring Cloud 2025.0.2
+- Mensajería WhatsApp: Node.js + Express 5 + whatsapp-web.js + kafkajs
+- Frontend: Next.js 16, React 19, TypeScript 5, Tailwind CSS 4, Zustand
+- Datos: PostgreSQL 15, MySQL 8, Apache Kafka 7.4.0
+- Infra: Docker Compose, Eureka, Spring Cloud Config (nativo), ngrok
+
+## Servicios en un vistazo
+
+| Servicio | Puerto | Rol | Tecnología |
+|----------|--------|-----|------------|
+| [discovery-server](../discovery-server/) | 8761 | Registro Eureka | Spring Cloud Netflix |
+| [config-server](../config-server/) | 8888 | Configuración centralizada | Spring Cloud Config |
+| [api-gateway](../api-gateway/) | 8080 | Entrada única + routing | Spring Cloud Gateway MVC |
+| [servicio-usuarios](../servicio-usuarios/) | random | Auth, OTP, documentos, permisos | Spring Boot + JWT |
+| [servicio-propiedades](../servicio-propiedades/) | 8082 | Propiedades, reservas, favoritos, reseñas | Spring Boot + Cloudinary + Feign |
+| [servicio-pagos](../servicio-pagos/) | 8084 | Mercado Pago Checkout Pro + webhook | Spring Boot + Kafka producer |
+| [servicio-catalogos](../servicio-catalogos/) | 8085 | Tipos, servicios, reglas, zonas | Spring Boot + MySQL |
+| [servicio-notificaciones](../servicio-notificaciones/) | 8081 | WhatsApp + OTP + eventos | Node.js + whatsapp-web.js |
+| [servicio-mensajeria](../servicio-mensajeria/) | 8086 | Chat in-app (REST + WebSocket STOMP) + moderación | Spring Boot + STOMP |
+
+> **Nota WebSocket:** el frontend se conecta directo a `:8086/ws-mensajeria` (el gateway MVC no soporta proxy WS). REST del chat sí pasa por el gateway.
+
+## Infraestructura local (Docker)
+
+| Contenedor | Puerto host | Propósito |
+|------------|-------------|-----------|
+| `alquilaya-postgres` | 5433 | BD de usuarios, propiedades, pagos, mensajería |
+| `alquilaya-mysql` | 3307 | BD de catálogos |
+| `alquilaya-zookeeper` | 2181 | Dependencia de Kafka |
+| `alquilaya-kafka` | 9092 / 29092 | Event streaming |
+| `alquilaya-ngrok` | 4040 | Túnel HTTPS para webhooks de Mercado Pago |
+
+## Cómo arrancar el sistema
+
+**Rápido (Windows):**
+
+```powershell
+.\scripts\start-all.ps1            # levanta infra + Java + Node + frontend
+.\scripts\start-all.ps1 -Minimal   # solo servicios Java
+.\scripts\stop-all.ps1             # apaga todo
+```
+
+Ver [scripts/README.md](../scripts/README.md) y [configuracion-y-despliegue.md](configuracion-y-despliegue.md) para flags y despliegue manual paso a paso.
+
+Orden mínimo si lo hacés a mano:
+
+1. `docker compose up -d` (Postgres, MySQL, Kafka, ngrok)
+2. `discovery-server` → `config-server` → resto de servicios Java
+3. `servicio-notificaciones` (Node.js) — escanear QR la primera vez
+4. Frontend: `cd AlquilaYa-Fronted && npm run dev`
+
+## Cobertura geográfica
+
+Las propiedades se validan contra **UPeU Lima** (lat `-11.9878`, lon `-76.8980`). Radio máximo: **15 km**. Fuera de ese radio, el servicio-propiedades rechaza el registro/edición.

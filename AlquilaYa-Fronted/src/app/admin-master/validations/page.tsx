@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { ShieldAlert, CheckCircle, XCircle, ExternalLink, MessageSquare, Search } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/legacy-card';
+import { Button } from '@/components/ui/legacy-button';
+import { parseFetchError } from '@/lib/api-errors';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+const UPLOADS_BASE = process.env.NEXT_PUBLIC_UPLOADS_URL || 'http://localhost:8080/uploads';
 
 interface Documento {
   id: number;
@@ -31,7 +35,7 @@ export default function AdminValidationsPage() {
 
   const cargarPendientes = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/usuarios/documentos/admin/pending');
+      const response = await fetch(`${API_BASE}/usuarios/documentos/admin/pending`);
       if (response.ok) {
         const data = await response.json();
         setDocumentos(data);
@@ -46,7 +50,7 @@ export default function AdminValidationsPage() {
   const handleVerify = async (id: number, estado: 'APROBADO' | 'RECHAZADO', comentario?: string) => {
     setVerificandoId(id);
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/usuarios/documentos/admin/verify/${id}`, {
+      const response = await fetch(`${API_BASE}/usuarios/documentos/admin/verify/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado, comentario })
@@ -55,10 +59,10 @@ export default function AdminValidationsPage() {
       if (response.ok) {
         setDocumentos(docList => docList.filter(d => d.id !== id));
       } else {
-        alert("Error al procesar la verificación");
+        alert(await parseFetchError(response, 'Error al procesar la verificación'));
       }
     } catch (error) {
-      alert("Error de conexión");
+      alert(error instanceof Error ? error.message : 'Error de conexión');
     } finally {
       setVerificandoId(null);
     }
@@ -120,7 +124,7 @@ export default function AdminValidationsPage() {
 
               <div className="mt-6 flex flex-col gap-2">
                 <a 
-                  href={`http://localhost:8080/uploads/documents/${doc.archivoUrl}`} 
+                  href={`${UPLOADS_BASE}/documents/${doc.archivoUrl}`}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 py-3 bg-[#281721] text-white text-[11px] font-bold rounded-xl hover:bg-black transition-all mb-2 shadow-lg shadow-black/10"

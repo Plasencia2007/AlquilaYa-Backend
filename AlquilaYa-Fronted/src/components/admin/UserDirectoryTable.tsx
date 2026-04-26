@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { usuarioMasterService, UsuarioMaster } from '@/features/admin/services/usuarioMasterService';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { usuarioMasterService, UsuarioMaster } from '@/services/admin-user-service';
+import { Badge } from '@/components/ui/legacy-badge';
+import { Button } from '@/components/ui/legacy-button';
+import { Card } from '@/components/ui/legacy-card';
+import { Input } from '@/components/ui/legacy-input';
 
 interface UserDirectoryTableProps {
   rol: 'ESTUDIANTE' | 'ARRENDADOR' | 'ADMIN';

@@ -3,25 +3,75 @@ spring:
   application:
     name: servicio-usuarios
   datasource:
-    url: jdbc:postgresql://localhost:5433/postgres
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_USUARIOS:postgres}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
 server:
   port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
 
 jwt:
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
-  expiration: ${JWT_EXPIRATION:86400000}
+  expiration: ${JWT_EXPIRATION:7200000}   # 2h por default; bajar a 3600000 (1h) + refresh tokens en prod
 
 notification:
   service:
-    url: http://localhost:8081
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8081}
+    api-key: ${INTERNAL_API_KEY:}
+
+# Gmail SMTP para forgot-password (sin restricción de destinatarios, sin dominio propio)
+# Requiere: 2FA habilitado en la cuenta + App Password de 16 chars (Google Account → Security → App passwords)
+spring.mail:
+  host: ${SMTP_HOST:smtp.gmail.com}
+  port: ${SMTP_PORT:587}
+  username: ${SMTP_USERNAME:}
+  password: ${SMTP_PASSWORD:}
+  properties:
+    mail:
+      smtp:
+        auth: true
+        starttls:
+          enable: true
+          required: true
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+
+# OAuth Google (Identity Services)
+google:
+  oauth:
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+
+# Cloudflare Turnstile (captcha invisible en /register)
+turnstile:
+  site-key: ${TURNSTILE_SITE_KEY:}
+  secret-key: ${TURNSTILE_SECRET_KEY:}
+  enabled: ${CAPTCHA_ENABLED:false}
+
+# URL pública del frontend para construir links (reset password, etc.)
+app:
+  base-url: ${APP_BASE_URL:http://localhost:3000}
+
+# Token JWT corto para reset password (15 min)
+password-reset:
+  token-expiration-ms: 900000

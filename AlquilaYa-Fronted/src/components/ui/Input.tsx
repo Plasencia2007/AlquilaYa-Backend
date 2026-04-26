@@ -1,45 +1,22 @@
-import * as React from 'react';
-import { cn } from '@/utils/cn';
+import * as React from "react"
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  icon?: string;
-  error?: string;
-  wrapperClassName?: string;
-}
+import { cn } from "@/lib/utils"
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, icon, error, wrapperClassName, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
     return (
-      <div className={cn('space-y-2 w-full', wrapperClassName)}>
-        <div className="relative group">
-          {icon && (
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors duration-300">
-              {icon}
-            </span>
-          )}
-          <input
-            type={type}
-            className={cn(
-              'w-full bg-surface-container-low border border-outline-variant/20 rounded-2xl text-on-surface placeholder:text-outline/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium py-4 px-4',
-              icon && 'pl-12',
-              error && 'border-error focus:ring-error/20 focus:border-error',
-              className
-            )}
-            ref={ref}
-            {...props}
-          />
-        </div>
-        {error && (
-          <p className="text-error text-[10px] font-bold px-2 flex items-center gap-1 animate-in fade-in slide-in-from-top-1">
-            <span className="material-symbols-outlined text-[14px]">error</span>
-            {error}
-          </p>
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
         )}
-      </div>
-    );
+        ref={ref}
+        {...props}
+      />
+    )
   }
-);
+)
+Input.displayName = "Input"
 
-Input.displayName = 'Input';
-
-export { Input };
+export { Input }

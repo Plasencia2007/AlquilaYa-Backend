@@ -62,3 +62,12 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# Uploads de usuarios (no deben ir al repo)
+uploads/
+
+# Sesión persistente de whatsapp-web.js (contiene tokens de autenticación)
+.wwebjs_auth/
+.wwebjs_cache/
+servicio-notificaciones/.wwebjs_auth/
+servicio-notificaciones/.wwebjs_cache/

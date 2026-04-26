@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/features/auth/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import { METRICAS_LATERALES } from '@/mocks/admin';
-import { cn } from '@/utils/cn';
+import { cn } from '@/lib/cn';
 
 interface NavSubItem {
   label: string;

@@ -1,9 +1,9 @@
 'use client';
 
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/legacy-card';
+import { Button } from '@/components/ui/legacy-button';
 import { LANDLORD_REVIEWS } from '@/mocks/landlord';
-import { cn } from '@/utils/cn';
+import { cn } from '@/lib/cn';
 
 export default function LandlordReviewsPage() {
   return (

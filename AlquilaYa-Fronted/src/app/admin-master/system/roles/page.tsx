@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { permisoService, Permiso } from '@/features/admin/services/permisoService';
-import { useAuthStore } from '@/features/auth/useAuthStore';
+import { permisoService, Permiso } from '@/services/admin-permission-service';
+import { useAuthStore } from '@/stores/auth-store';
 
 export default function RolesPermissionsPage() {
   const [permisos, setPermisos] = useState<Permiso[]>([]);

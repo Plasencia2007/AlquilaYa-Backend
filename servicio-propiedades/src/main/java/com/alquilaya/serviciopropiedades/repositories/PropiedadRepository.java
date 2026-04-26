@@ -1,17 +1,25 @@
 package com.alquilaya.serviciopropiedades.repositories;
 
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> findByArrendadorId(Long arrendadorId);
+
+    // Lock pesimista para serializar creaciones de reserva concurrentes sobre la misma propiedad.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Propiedad p WHERE p.id = :id")
+    Optional<Propiedad> findByIdForUpdate(@Param("id") Long id);
 
     @Query("""
             SELECT DISTINCT p FROM Propiedad p

@@ -1,5 +1,7 @@
 package com.alquilaya.serviciopropiedades.controllers;
 
+import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
+import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
@@ -12,6 +14,9 @@ import com.alquilaya.serviciopropiedades.services.PropiedadService;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.ArchivoImagenValido;
 import com.alquilaya.serviciopropiedades.validaciones.validators.ArchivoImagenValidoValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +31,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @RestController
@@ -39,6 +45,8 @@ public class PropiedadController {
     private final KafkaProducerService kafkaProducerService;
     private final CloudinaryService cloudinaryService;
     private final PropiedadService propiedadService;
+    private final UsuariosClient usuariosClient;
+    private final Validator validator;
 
     // ===== Creación / listado básico =====
 
@@ -52,24 +60,58 @@ public class PropiedadController {
         mapper.findAndRegisterModules();
         Propiedad propiedad = mapper.readValue(propiedadJson, Propiedad.class);
 
-        if (file != null && !file.isEmpty()) {
-            log.info("[POST] Archivo: {} ({} bytes)", file.getOriginalFilename(), file.getSize());
-            String urlFoto = cloudinaryService.uploadFile(file);
-            propiedad.setImagenUrl(urlFoto);
-            PropiedadImagen img = PropiedadImagen.builder()
-                    .propiedad(propiedad)
-                    .url(urlFoto)
-                    .orden(0)
-                    .build();
-            propiedad.getImagenes().add(img);
+        // Jackson deserializa el JSON crudo; disparamos bean validation manualmente
+        // porque no pasa por @RequestBody.
+        Set<ConstraintViolation<Propiedad>> violations = validator.validate(propiedad);
+        if (!violations.isEmpty()) {
+            throw new ConstraintViolationException(violations);
         }
 
         propiedadService.calcularYSetearDistancia(propiedad);
 
+        // Persistimos primero (sin imagen) para tener el ID de la propiedad. Lo
+        // usamos en el path de Cloudinary: alquilaya/arrendadores/{aId}-{slug}/cuarto-{pId}/img-0
         Propiedad nueva = propiedadRepository.save(propiedad);
+
+        if (file != null && !file.isEmpty()) {
+            log.info("[POST] Archivo: {} ({} bytes)", file.getOriginalFilename(), file.getSize());
+            String nombreArrendador = resolverNombreArrendador(nueva.getArrendadorId());
+            String urlFoto = cloudinaryService.uploadImagenCuarto(
+                    file, nueva.getArrendadorId(), nombreArrendador, nueva.getId(), 0);
+
+            nueva.setImagenUrl(urlFoto);
+            PropiedadImagen img = PropiedadImagen.builder()
+                    .propiedad(nueva)
+                    .url(urlFoto)
+                    .orden(0)
+                    .build();
+            nueva.getImagenes().add(img);
+            nueva = propiedadRepository.save(nueva);
+        }
+
         kafkaProducerService.enviarEventoPropiedad("Nueva propiedad creada: " + nueva.getTitulo() + " (ID: " + nueva.getId() + ")");
         log.info("[POST] Propiedad creada con ID: {}", nueva.getId());
         return ResponseEntity.ok(nueva);
+    }
+
+    /**
+     * Best-effort: resuelve el nombre del arrendador vía Feign para usarlo en
+     * el path de Cloudinary. Si servicio-usuarios no responde, devuelve null y
+     * la carpeta queda solo con el ID — la subida no falla.
+     */
+    private String resolverNombreArrendador(Long arrendadorId) {
+        if (arrendadorId == null) return null;
+        try {
+            ArrendadorInfoDTO info = usuariosClient.obtenerArrendador(arrendadorId);
+            if (info == null) return null;
+            String n = info.getNombre() == null ? "" : info.getNombre();
+            String a = info.getApellido() == null ? "" : info.getApellido();
+            String completo = (n + " " + a).trim();
+            return completo.isEmpty() ? null : completo;
+        } catch (Exception e) {
+            log.warn("No pude resolver nombre arrendador {} para Cloudinary: {}", arrendadorId, e.getMessage());
+            return null;
+        }
     }
 
     @GetMapping
@@ -176,6 +218,8 @@ public class PropiedadController {
                 .orElseThrow(() -> new IllegalArgumentException("No existe propiedad con ID " + id));
 
         int base = propiedadImagenRepository.findByPropiedadIdOrderByOrdenAsc(id).size();
+        String nombreArrendador = resolverNombreArrendador(propiedad.getArrendadorId());
+
         List<PropiedadImagen> creadas = new ArrayList<>();
         for (int i = 0; i < files.size(); i++) {
             MultipartFile f = files.get(i);
@@ -184,11 +228,13 @@ public class PropiedadController {
             if (errorValidacion != null) {
                 throw new IllegalArgumentException("Archivo " + f.getOriginalFilename() + ": " + errorValidacion);
             }
-            String url = cloudinaryService.uploadFile(f);
+            int indice = base + i;
+            String url = cloudinaryService.uploadImagenCuarto(
+                    f, propiedad.getArrendadorId(), nombreArrendador, propiedad.getId(), indice);
             PropiedadImagen img = PropiedadImagen.builder()
                     .propiedad(propiedad)
                     .url(url)
-                    .orden(base + i)
+                    .orden(indice)
                     .build();
             creadas.add(propiedadImagenRepository.save(img));
         }
@@ -198,7 +244,11 @@ public class PropiedadController {
     @DeleteMapping("/{id}/imagenes/{imagenId}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
     public ResponseEntity<Void> eliminarImagen(@PathVariable Long id, @PathVariable Long imagenId) {
-        propiedadImagenRepository.deleteById(imagenId);
+        propiedadImagenRepository.findById(imagenId).ifPresent(img -> {
+            // Borra del Cloudinary best-effort y luego de la BD.
+            cloudinaryService.eliminarPorUrl(img.getUrl());
+            propiedadImagenRepository.delete(img);
+        });
         return ResponseEntity.noContent().build();
     }
 

@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: servicio-mensajeria
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_MENSAJERIA:alquilaya_mensajeria}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+  jpa:
+    hibernate:
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+  kafka:
+    template:
+      default-topic: mensajeria-topic
+
+server:
+  port: 8086
+
+feign:
+  circuitbreaker:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+        loggerLevel: basic
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      servicio-usuarios:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+      servicio-propiedades:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+  timelimiter:
+    instances:
+      servicio-usuarios:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+      servicio-propiedades:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+
+jwt:
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  expiration: ${JWT_EXPIRATION:7200000}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+
+mensajeria:
+  websocket:
+    # Orígenes permitidos para el handshake WebSocket. Misma lista que CORS en prod.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+    endpoint: /ws-mensajeria

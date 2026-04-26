@@ -1,13 +1,66 @@
+// Carga variables desde el .env de la raíz del repo (un nivel arriba).
+// En Docker/prod el archivo no existe y dotenv simplemente no hace nada — las vars
+// se inyectan vía `-e` o env_file del orquestador.
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const KafkaConsumer = require('./KafkaConsumer');
+
 const app = express();
-const port = 8081;
+const port = process.env.PORT ? Number(process.env.PORT) : 8081;
 
-app.use(express.json());
+// Secret compartido con los servicios Java. En prod debe estar seteado;
+// si falta, el servicio arranca pero rechaza todo request autenticado.
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+if (!INTERNAL_API_KEY) {
+    console.warn('⚠️  INTERNAL_API_KEY no configurado. Los endpoints de envío rechazarán todas las llamadas.');
+}
 
-// Initialize WhatsApp Client
+// Formato E.164 Perú: +51 + 9 dígitos.
+const PHONE_REGEX = /^\+?51\d{9}$/;
+const OTP_REGEX = /^\d{4,6}$/;
+
+app.disable('x-powered-by');
+app.use(helmet());
+app.use(express.json({ limit: '16kb' }));
+
+// Rate-limit global (defensa básica).
+const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// Rate-limit estricto para endpoints de envío (anti-spam / anti-abuso).
+const sendLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 20,
+    keyGenerator: (req) => `${req.ip}:${req.body && req.body.telefono ? req.body.telefono : ''}`,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes; espera un minuto.' },
+});
+
+function requireApiKey(req, res, next) {
+    const key = req.get('x-api-key');
+    if (!INTERNAL_API_KEY || !key || key !== INTERNAL_API_KEY) {
+        return res.status(401).json({ error: 'No autorizado' });
+    }
+    next();
+}
+
+function normalizarTelefono(raw) {
+    return String(raw).replace(/\s+/g, '').replace(/^\+/, '');
+}
+
+// WhatsApp Client
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -18,7 +71,6 @@ const client = new Client({
 
 let isReady = false;
 
-// QR Code Generation
 client.on('qr', (qr) => {
     console.log('\n==================================================================');
     console.log('ESCANEAME PARA VINCULAR ALQUILAYA WHATSAPP:');
@@ -27,7 +79,6 @@ client.on('qr', (qr) => {
     console.log('\n==================================================================\n');
 });
 
-// Client Ready
 client.on('ready', async () => {
     console.log('WhatsApp Client is READY!');
     isReady = true;
@@ -52,72 +103,77 @@ client.on('auth_failure', (msg) => {
 client.on('disconnected', (reason) => {
     console.log('WhatsApp Client was logged out', reason);
     isReady = false;
-    client.initialize(); // Retry
+    client.initialize();
 });
 
-// Start Client
 client.initialize();
 
-// API Endpoint to send OTP
-app.post('/api/v1/notifications/whatsapp/send-otp', async (req, res) => {
-    const { telefono, codigo } = req.body;
+// --- API ---
 
-    if (!isReady) {
-        return res.status(503).json({ error: 'WhatsApp service is not ready yet. Please wait for QR scan.' });
-    }
-
-    if (!telefono || !codigo) {
-        return res.status(400).json({ error: 'Telefono and codigo are required' });
-    }
-
-    try {
-        // Format phone number (ensure it has @c.us suffix)
-        // react-phone-number-input usually gives +51999888777
-        let number = telefono.replace('+', '').replace(' ', '');
-        if (!number.endsWith('@c.us')) {
-            number = `${number}@c.us`;
-        }
-
-        const message = `*AlquilaYa* 🏠\n\nTu código de verificación es: *${codigo}*\n\nNo compartas este código con nadie. Expira en 5 minutos.`;
-        
-        await client.sendMessage(number, message);
-        console.log(`OTP sent to ${telefono}: ${codigo}`);
-        
-        res.json({ success: true, message: 'OTP sent successfully' });
-    } catch (error) {
-        console.error('Error sending WhatsApp message:', error);
-        res.status(500).json({ error: 'Failed to send WhatsApp message' });
-    }
-});
-
-// API Endpoint to send generic message
-app.post('/api/v1/notifications/whatsapp/send-message', async (req, res) => {
-    const { telefono, mensaje } = req.body;
+app.post('/api/v1/notifications/whatsapp/send-otp', sendLimiter, requireApiKey, async (req, res) => {
+    const { telefono, codigo } = req.body || {};
 
     if (!isReady) {
         return res.status(503).json({ error: 'WhatsApp service is not ready yet.' });
     }
-
-    if (!telefono || !mensaje) {
-        return res.status(400).json({ error: 'Telefono and mensaje are required' });
+    if (!telefono || !PHONE_REGEX.test(String(telefono))) {
+        return res.status(400).json({ error: 'Teléfono inválido (formato esperado +51XXXXXXXXX)' });
+    }
+    if (!codigo || !OTP_REGEX.test(String(codigo))) {
+        return res.status(400).json({ error: 'Código inválido (4 a 6 dígitos)' });
     }
 
     try {
-        let number = telefono.replace('+', '').replace(' ', '');
-        if (!number.endsWith('@c.us')) {
-            number = `${number}@c.us`;
+        const numeroLimpio = normalizarTelefono(telefono);
+        // Verificar que el numero tenga WhatsApp ANTES de intentar enviar.
+        // getNumberId devuelve null si no esta registrado en WhatsApp.
+        const numberId = await client.getNumberId(numeroLimpio);
+        if (!numberId) {
+            console.warn(`Numero sin WhatsApp: ${numeroLimpio}`);
+            return res.status(400).json({
+                error: 'Este número no tiene WhatsApp activo. Verifica el número o usa otro con WhatsApp.'
+            });
         }
 
-        await client.sendMessage(number, mensaje);
-        console.log(`Message sent to ${telefono}`);
-        
-        res.json({ success: true, message: 'Message sent successfully' });
+        const message = `*AlquilaYa* 🏠\n\nTu código de verificación es: *${codigo}*\n\nNo compartas este código con nadie. Expira en 5 minutos.`;
+        await client.sendMessage(numberId._serialized, message);
+        console.log('OTP enviado');
+        res.json({ success: true });
     } catch (error) {
-        console.error('Error sending WhatsApp message:', error);
+        console.error('Error sending WhatsApp OTP:', error && error.message);
         res.status(500).json({ error: 'Failed to send WhatsApp message' });
     }
 });
 
+app.post('/api/v1/notifications/whatsapp/send-message', sendLimiter, requireApiKey, async (req, res) => {
+    const { telefono, mensaje } = req.body || {};
+
+    if (!isReady) {
+        return res.status(503).json({ error: 'WhatsApp service is not ready yet.' });
+    }
+    if (!telefono || !PHONE_REGEX.test(String(telefono))) {
+        return res.status(400).json({ error: 'Teléfono inválido' });
+    }
+    if (typeof mensaje !== 'string' || mensaje.length === 0 || mensaje.length > 4096) {
+        return res.status(400).json({ error: 'Mensaje inválido (1–4096 caracteres)' });
+    }
+
+    try {
+        const numeroLimpio = normalizarTelefono(telefono);
+        const numberId = await client.getNumberId(numeroLimpio);
+        if (!numberId) {
+            console.warn(`Numero sin WhatsApp: ${numeroLimpio}`);
+            return res.status(400).json({ error: 'El número destino no tiene WhatsApp activo' });
+        }
+        await client.sendMessage(numberId._serialized, mensaje);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error sending WhatsApp message:', error && error.message);
+        res.status(500).json({ error: 'Failed to send WhatsApp message' });
+    }
+});
+
+// Status: público (usado como healthcheck por otros servicios).
 app.get('/api/v1/notifications/status', (req, res) => {
     res.json({ ready: isReady });
 });

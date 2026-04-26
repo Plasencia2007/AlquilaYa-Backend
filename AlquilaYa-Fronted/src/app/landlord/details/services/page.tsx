@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/legacy-badge';
+import { Button } from '@/components/ui/legacy-button';
 import Link from 'next/link';
 
 export default function WIPPage() {

@@ -61,7 +61,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
   ngrok:
-    image: ngrok/ngrok:latest
+    image: ngrok/ngrok:3
     container_name: alquilaya-ngrok
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?NGROK_AUTHTOKEN no configurado en .env}

@@ -16,7 +16,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"correo\": \"admin@alquilaya.com\",\n  \"password\": \"password123\"\n}",
+							"raw": "{\n  \"correo\": \"admin@alquilaya.com\",\n  \"password\": \"{{admin_password}}\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -46,7 +46,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Admin\",\n  \"apellido\": \"General\",\n  \"dni\": \"11111111\",\n  \"correo\": \"admin_nuevo@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"987654321\",\n  \"rol\": \"ADMIN\"\n}",
+							"raw": "{\n  \"nombre\": \"Admin\",\n  \"apellido\": \"General\",\n  \"dni\": \"11111111\",\n  \"correo\": \"admin_nuevo@mail.com\",\n  \"password\": \"{{admin_password}}\",\n  \"telefono\": \"987654321\",\n  \"rol\": \"ADMIN\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -76,7 +76,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Estudiante\",\n  \"dni\": \"22222222\",\n  \"correo\": \"juan@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"988888888\",\n  \"rol\": \"ESTUDIANTE\",\n  \"detallesEstudiante\": {\n    \"universidad\": \"UPeU\",\n    \"codigoEstudiante\": \"202312345\",\n    \"carrera\": \"Ingeniería de Sistemas\",\n    \"ciclo\": 5\n  }\n}",
+							"raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Estudiante\",\n  \"dni\": \"22222222\",\n  \"correo\": \"juan@mail.com\",\n  \"password\": \"{{admin_password}}\",\n  \"telefono\": \"988888888\",\n  \"rol\": \"ESTUDIANTE\",\n  \"detallesEstudiante\": {\n    \"universidad\": \"UPeU\",\n    \"codigoEstudiante\": \"202312345\",\n    \"carrera\": \"Ingeniería de Sistemas\",\n    \"ciclo\": 5\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -106,7 +106,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Carlos\",\n  \"apellido\": \"Duenos\",\n  \"dni\": \"33333333\",\n  \"correo\": \"carlos@mail.com\",\n  \"password\": \"password123\",\n  \"telefono\": \"999999999\",\n  \"rol\": \"ARRENDADOR\",\n  \"detallesArrendador\": {\n    \"telefono\": \"999999999\",\n    \"ruc\": \"10333333331\",\n    \"nombreComercial\": \"Habitaciones Carlos\",\n    \"direccionCuartos\": \"Jr. Los Pinos 123\",\n    \"latitud\": -12.0431,\n    \"longitud\": -77.0282,\n    \"esEmpresa\": false\n  }\n}",
+							"raw": "{\n  \"nombre\": \"Carlos\",\n  \"apellido\": \"Duenos\",\n  \"dni\": \"33333333\",\n  \"correo\": \"carlos@mail.com\",\n  \"password\": \"{{admin_password}}\",\n  \"telefono\": \"999999999\",\n  \"rol\": \"ARRENDADOR\",\n  \"detallesArrendador\": {\n    \"telefono\": \"999999999\",\n    \"ruc\": \"10333333331\",\n    \"nombreComercial\": \"Habitaciones Carlos\",\n    \"direccionCuartos\": \"Jr. Los Pinos 123\",\n    \"latitud\": -12.0431,\n    \"longitud\": -77.0282,\n    \"esEmpresa\": false\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -492,6 +492,7 @@
 	},
 	"variable": [
 		{ "key": "base_url", "value": "http://localhost:8080" },
-		{ "key": "token", "value": "PEGA_AQUÍ_TU_TOKEN" }
+		{ "key": "token", "value": "PEGA_AQUÍ_TU_TOKEN" },
+		{ "key": "admin_password", "value": "PEGA_AQUÍ_TU_PASSWORD_LOCAL" }
 	]
 }

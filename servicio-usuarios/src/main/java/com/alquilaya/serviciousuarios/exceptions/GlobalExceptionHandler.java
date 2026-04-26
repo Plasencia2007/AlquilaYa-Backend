@@ -90,6 +90,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, null);
     }
 
+    @ExceptionHandler(CuentaBloqueadaException.class)
+    public ResponseEntity<ErrorResponse> handleLocked(
+            CuentaBloqueadaException ex, HttpServletRequest req) {
+        return build(HttpStatus.LOCKED, ex.getMessage(), req, null);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(
             DataIntegrityViolationException ex, HttpServletRequest req) {
@@ -104,6 +110,13 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException ex, HttpServletRequest req) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE,
                 "El archivo excede el tamaño máximo permitido de 5 MB.", req, null);
+    }
+
+    @ExceptionHandler(EnvioOtpFallidoException.class)
+    public ResponseEntity<ErrorResponse> handleOtpFallido(
+            EnvioOtpFallidoException ex, HttpServletRequest req) {
+        log.warn("No se pudo enviar OTP: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), req, null);
     }
 
     @ExceptionHandler(Exception.class)

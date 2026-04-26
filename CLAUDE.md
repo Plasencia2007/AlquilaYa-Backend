@@ -2,70 +2,99 @@
 
 ## Qué es este sistema
 
-Plataforma de alquiler de cuartos para estudiantes de la **Universidad Peruana Unión de Lima (UPeU)**. Los arrendadores son personas cercanas a la universidad que alquilan cuartos. Los estudiantes buscan cuartos desde la app sin tener que ir físicamente a buscarlos.
+Plataforma de alquiler de cuartos para estudiantes de la **Universidad Peruana Unión de Lima (UPeU)**. Los arrendadores son personas cercanas a la universidad que alquilan cuartos; los estudiantes buscan, reservan y pagan desde la app sin tener que ir físicamente a ver cada cuarto.
 
-**Problema que resuelve:** Estudiantes perdían tiempo viajando cuarto por cuarto al inicio de clases para ver disponibilidad. AlquilaYa digitaliza esa búsqueda.
+**Problema que resuelve:** los estudiantes perdían tiempo viajando cuarto por cuarto al inicio de clases. AlquilaYa digitaliza esa búsqueda y la reserva.
+
+**Documentación extendida:** [docs/README.md](docs/README.md) (arquitectura, endpoints, modelo de datos, flujos, despliegue).
 
 ---
 
 ## Arquitectura actual
 
 ```
-discovery-server     :8761   (Eureka)
-config-server        :8888   (Configuración centralizada)
-api-gateway          :8080   (Entrada única)
-servicio-usuarios    :random (Auth, OTP WhatsApp, documentos, permisos)
-servicio-propiedades :8082   (CRUD cuartos + Cloudinary + Reservas)
-servicio-pagos       :8084   (Mercado Pago Checkout Pro + Kafka producer)
-servicio-catalogos   :8085   (Gestión de filtros, servicios y reglas)
-servicio-notificaciones :8081 (Node.js + whatsapp-web.js + Kafka consumer)
-PostgreSQL           :5433   (docker - propiedades, pagos, usuarios)
-MySQL                :3307   (docker - catalogos)
-Kafka                :9092   (docker - eventos de pago y notificaciones)
+discovery-server        :8761    Eureka
+config-server           :8888    Configuración centralizada (perfil nativo)
+api-gateway             :8080    Entrada única (CORS + lb://)
+servicio-usuarios       :random  Auth JWT, OTP WhatsApp, documentos, permisos
+servicio-propiedades    :8082    CRUD cuartos + Cloudinary + reservas + reseñas
+servicio-pagos          :8084    Mercado Pago Checkout Pro + webhook + Kafka producer
+servicio-catalogos      :8085    Tipos, servicios, reglas, zonas (MySQL)
+servicio-notificaciones :8081    Node.js + whatsapp-web.js + Kafka consumer
+servicio-mensajeria     :8086    Chat in-app (REST + WebSocket/STOMP)
+
+PostgreSQL  :5433   docker — usuarios / propiedades / pagos / mensajeria (esquemas separados)
+MySQL       :3307   docker — catálogos
+Kafka       :9092   docker — eventos de aprobación, reserva y pago
+ngrok       :4040   docker — túnel HTTPS para webhook Mercado Pago
 ```
+
+---
+
+## Tópicos Kafka
+
+| Tópico | Productor | Consumidor |
+|--------|-----------|------------|
+| `user-approval-events` | servicio-usuarios | servicio-notificaciones |
+| `reserva-events` | servicio-propiedades | servicio-notificaciones |
+| `pagos-topic` | servicio-pagos | servicio-propiedades (marca reserva como `PAGADA`) |
+| `propiedades-topic` | servicio-propiedades | (declarado, sin consumidor aún) |
 
 ---
 
 ## Logros Recientes y Bugs Corregidos (No tocar)
 
-- **Migración a MySQL:** `servicio-catalogos` migrado de Postgres a MySQL 8 para arquitectura híbrida.
-- **Integración Mercado Pago:** Generación de preferencias (links de pago) dinámica basada en reservas.
-- **Propagación de JWT (Feign):** Implementado `FeignClientConfig` con interceptor para pasar el token Bearer en llamadas inter-servicios (solucionado 403 Forbidden).
-- **Validación Geo-Distancia:** Implementada validación en `servicio-propiedades` que impide registrar/editar cuartos a más de 15km de la UPeU.
-- **Flujo de Reservas:** Implementado estado de reserva `PAGADA` que se activa automáticamente vía Kafka cuando el servicio de pagos confirma una transacción.
-- **Robustez de Checkout:** Manejo de datos de pagador por defecto en Mercado Pago para evitar fallos por emails/nombres vacíos.
-- Login sin validación de password → corregido en `AuthController.java`
-- KafkaConsumer.js desconectado → integrado en `index.js` del servicio-notificaciones
-- URLs hardcodeadas localhost:8081 → usan `@Value` desde config-server
+- **Migración a MySQL:** `servicio-catalogos` migrado de Postgres a MySQL 8 (arquitectura híbrida intencional).
+- **Integración Mercado Pago:** generación de preferencias dinámica basada en datos de la reserva.
+- **Propagación de JWT (Feign):** `FeignClientConfig` inyecta `Authorization: Bearer <token>` en llamadas inter-servicios (corrigió 403 entre servicios).
+- **Validación geo-distancia:** `servicio-propiedades` rechaza propiedades a más de 15 km de UPeU.
+- **Flujo de reservas:** estado `PAGADA` se activa automáticamente vía Kafka cuando el servicio de pagos confirma el pago.
+- **Robustez de Checkout:** defaults en email/nombre del `payer` para evitar fallos en Mercado Pago.
+- **Login sin validación de password** → corregido en `AuthController.java`.
+- **KafkaConsumer.js desconectado** → ahora se arranca desde `index.js` en servicio-notificaciones.
+- **URLs hardcodeadas `localhost:8081`** → leídas con `@Value` desde config-server.
 
 ---
 
 ## Estado de Próximos Pasos
 
-### ✅ COMPLETADOS (P1, P2, P4)
-- **Servicio-Propiedades:** Campos avanzados, múltiples imágenes y lógica de reservas terminada.
-- **Servicio-Catalogos:** MySQL configurado y carga de datos inicial funcionando.
-- **Servicio-Pagos:** Integración con Mercado Pago y Webhook simulado terminada.
+### Completados
+- **servicio-propiedades** — campos avanzados, múltiples imágenes y reservas terminados.
+- **servicio-catalogos** — MySQL configurado, seed inicial funcionando.
+- **servicio-pagos** — integración Mercado Pago + webhook listos.
+- **servicio-notificaciones** — consume `user-approval-events` y `reserva-events`, envía WhatsApp formateado.
 
-### ⏳ PENDIENTES (Prioridad Media/Baja)
-- **P3 — Refactor de Servicio-Reservas:** Actualmente la lógica de reservas vive dentro de `servicio-propiedades`. Se podría extraer a un microservicio independiente si el volumen crece.
-- **P5 — Notificaciones WhatsApp Reales:** Conectar el tópico `pagos-topic` de Kafka con el `servicio-notificaciones` de Node.js para avisar al arrendador por WhatsApp.
-- **Seguridad Webhook:** Implementar validación de firmas `X-Signature` de Mercado Pago para producción.
+### Pendientes
+- **Refactor de servicio-reservas:** la lógica vive dentro de servicio-propiedades. Extraer a microservicio propio solo si el volumen crece.
+- **WebSocket vía gateway:** el `api-gateway` es webmvc (no soporta proxy WS). El frontend conecta directo a `:8086/ws-mensajeria`. Migrar a gateway reactivo o a Nginx para prod (ver [docs/arquitectura.md](docs/arquitectura.md)).
+- **Seguridad webhook:** validar firma `X-Signature` de Mercado Pago antes de producción.
+- **Sesión WhatsApp persistente:** hoy `LocalAuth` guarda en disco local; migrar a storage externo para desplegar.
+
+### Completado en esta iteración (mensajería)
+- **servicio-mensajeria :8086** — chat in-app completo:
+  - REST: `/api/v1/mensajeria/conversaciones` (crear/listar/detalle), `/.../mensajes` (enviar/listar/marcar-leida), `/api/v1/admin/mensajeria/**` (moderación).
+  - WebSocket STOMP: `ws://host:8086/ws-mensajeria`. Cliente envía a `/app/chat.enviar/{id}`, recibe en `/user/queue/conversacion.{id}`.
+  - Autorización: `ConversacionService.verificarAcceso` — admin pasa, participantes pasan, terceros reciben 403. Destinos `/user/*` aíslan mensajes por Principal.
+  - Moderación: admin puede BLOQUEAR mensajes (ocultos a participantes, visibles a admin) y SUSPENDER conversaciones (bloquea envíos); cada acción queda en `moderacion_log`.
+  - BD: `alquilaya_mensajeria` (Postgres). 3 tablas: `conversaciones` (UNIQUE estudiante+arrendador+propiedad), `mensajes`, `moderacion_log`.
 
 ---
 
 ## Coordenadas UPeU Lima
+
 ```
-Latitud:  -11.9878 (Referencia Arrendador)
-Longitud: -76.8980 (Referencia Arrendador)
-Radio máximo: 15.0 KM
+Latitud:      -11.9878
+Longitud:     -76.8980
+Radio máximo:  15.0 km
 ```
+
+Validación en servicio-propiedades con anotaciones `@CoordenadaLatitud` / `@CoordenadaLongitud` + cálculo haversine.
 
 ---
 
 ## Stack tecnológico
 
-**Backend:** Java 21, Spring Boot 3.5.13, Spring Cloud 2025.0.2, PostgreSQL, MySQL 8, Kafka, JWT (jjwt 0.11.5), Cloudinary, OpenFeign
-**Notificaciones:** Node.js + Express 5 + whatsapp-web.js + kafkajs
-**Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Zustand, Axios
-**Infraestructura:** Docker (Postgres 16, MySQL 8, Kafka), Eureka, Config Server nativo
+**Backend:** Java 21, Spring Boot 3.5.13, Spring Cloud 2025.0.2, PostgreSQL 15, MySQL 8, Kafka 7.4.0, JWT (jjwt 0.11.5), Cloudinary, OpenFeign + Resilience4j.
+**Notificaciones:** Node.js + Express 5 + whatsapp-web.js 1.34 + kafkajs 2.2.
+**Frontend:** Next.js 16, React 19, TypeScript 5, Tailwind CSS 4, Zustand, Axios, React Hook Form + Zod, Leaflet.
+**Infraestructura:** Docker Compose (Postgres 15, MySQL 8, Zookeeper, Kafka 7.4.0, ngrok), Eureka, Spring Cloud Config nativo.

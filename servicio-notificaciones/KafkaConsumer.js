@@ -6,9 +6,14 @@ const { Kafka } = require('kafkajs');
 class KafkaConsumer {
     constructor(whatsappClient) {
         this.client = whatsappClient;
+        // Soporta lista separada por comas (p.ej. "kafka-1:9092,kafka-2:9092").
+        const brokers = (process.env.KAFKA_BOOTSTRAP_SERVERS || 'localhost:9092')
+            .split(',')
+            .map((b) => b.trim())
+            .filter(Boolean);
         this.kafka = new Kafka({
             clientId: 'notification-service',
-            brokers: ['localhost:9092']
+            brokers,
         });
 
         this.consumer = this.kafka.consumer({ groupId: 'alquilaya-group' });
@@ -21,23 +26,51 @@ class KafkaConsumer {
         await this.consumer.subscribe({ topic: 'user-approval-events', fromBeginning: false });
         await this.consumer.subscribe({ topic: 'reserva-events', fromBeginning: false });
 
+        // autoCommit: false + commit explícito por mensaje = al-menos-una-vez.
+        // Los handlers deben tolerar re-entrega (idempotencia) si hay reinicios a mitad de proceso.
         await this.consumer.run({
+            autoCommit: false,
             eachMessage: async ({ topic, partition, message }) => {
-                const rawValue = message.value.toString();
-                console.log(`📥 Received Kafka Event [${topic}]:`, rawValue);
+                const rawValue = message.value ? message.value.toString() : '';
+                console.log(`📥 Kafka [${topic}:${partition}@${message.offset}]`);
+
+                let event = null;
+                try {
+                    event = JSON.parse(rawValue);
+                } catch (err) {
+                    console.error(`❌ Mensaje mal formado en ${topic}, se descarta. offset=${message.offset}`,
+                        err && err.message);
+                    // Commit para no quedarse atorado en un payload inválido (no hay DLQ todavía).
+                    await this._commit(topic, partition, message.offset);
+                    return;
+                }
 
                 try {
-                    const event = JSON.parse(rawValue);
                     if (topic === 'user-approval-events') {
                         await this.handleUserApprovalEvent(event);
                     } else if (topic === 'reserva-events') {
                         await this.handleReservaEvent(event);
                     }
-                } catch (error) {
-                    console.error('❌ Error parsing Kafka message:', error);
+                    await this._commit(topic, partition, message.offset);
+                } catch (err) {
+                    // Fallo en el handler: NO commiteamos para que Kafka re-entregue el mensaje.
+                    console.error(`❌ Error procesando ${topic} offset=${message.offset}:`, err && err.message);
+                    // Pequeño backoff para evitar ciclo de reintento muy agresivo.
+                    await new Promise((r) => setTimeout(r, 2000));
+                    throw err;
                 }
             },
         });
+    }
+
+    async _commit(topic, partition, offset) {
+        try {
+            await this.consumer.commitOffsets([
+                { topic, partition, offset: (BigInt(offset) + 1n).toString() },
+            ]);
+        } catch (err) {
+            console.error('⚠️  No se pudo commitear offset:', err && err.message);
+        }
     }
 
     async handleUserApprovalEvent(event) {
@@ -62,7 +95,7 @@ class KafkaConsumer {
         const {
             tipo, reservaId, propiedadId, montoTotal, motivo,
             estudianteNombre, estudianteTelefono,
-            arrendadorNombre, arrendadorTelefono
+            arrendadorTelefono
         } = event;
 
         let destino = null;
@@ -121,15 +154,27 @@ class KafkaConsumer {
     }
 
     async _sendWhatsApp(telefono, mensaje, ctx) {
-        let number = telefono.replace('+', '').replace(' ', '');
-        if (!number.endsWith('@c.us')) {
-            number = `${number}@c.us`;
-        }
+        const numeroLimpio = telefono.replace(/\s+/g, '').replace(/^\+/, '');
+        const maskedPhone = telefono.replace(/\d(?=\d{4})/g, '*');
+        const timeoutMs = 15000;
         try {
-            await this.client.sendMessage(number, mensaje);
-            console.log(`✅ WhatsApp sent (${ctx}) to ${telefono}`);
+            // Verifica que el numero tenga WhatsApp activo. Si no, descartamos sin reintentar.
+            const numberId = await this.client.getNumberId(numeroLimpio);
+            if (!numberId) {
+                console.warn(`⚠️  WhatsApp (${ctx}): destinatario ${maskedPhone} sin WhatsApp activo, evento descartado`);
+                return; // no relanzar: el commit se hara y no hay forma de recuperar
+            }
+            await Promise.race([
+                this.client.sendMessage(numberId._serialized, mensaje),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error(`sendMessage timeout ${timeoutMs}ms`)), timeoutMs)
+                ),
+            ]);
+            console.log(`✅ WhatsApp sent (${ctx}) to ${maskedPhone}`);
         } catch (error) {
             console.error(`❌ Failed to send WhatsApp (${ctx}):`, error.message);
+            // Propagamos para que el consumer no commitee el offset y reintente.
+            throw error;
         }
     }
 }

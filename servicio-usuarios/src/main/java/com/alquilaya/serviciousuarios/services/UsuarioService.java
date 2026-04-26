@@ -11,6 +11,7 @@ import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.exceptions.CorreoYaRegistradoException;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
+import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,7 +48,7 @@ public class UsuarioService {
                 .telefonoVerificado(true)
                 .build();
 
-        log.info("Registrando nuevo administrador: {}", request.getCorreo());
+        log.info("Registrando nuevo administrador: {}", LogMask.email(request.getCorreo()));
         return usuarioRepository.save(admin);
     }
 
@@ -109,7 +110,7 @@ public class UsuarioService {
         }
 
         if (usuario.getTelefono() != null && rol != Rol.ADMIN) {
-            log.debug("Enviando OTP a {}", usuario.getTelefono());
+            log.debug("Enviando OTP a {}", LogMask.phone(usuario.getTelefono()));
             otpService.generarYEnviarOtp(usuario.getTelefono());
         }
 

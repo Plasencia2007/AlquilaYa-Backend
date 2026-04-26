@@ -1,64 +1,122 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Tokens públicos (Tailwind v4) — apuntan a CSS vars que cambian por tema.
+   ───────────────────────────────────────────────────────────────────────── */
 @theme inline {
-  /* ── Nueva Paleta de Colores AlquilaYa ── */
-  --color-primary: #bb0506;
-  /* Color principal de acción (Rojo vibrante) */
-  --color-primary-container: #900304;
-  /* Color primario oscuro (Rojo profundo) */
-  --color-on-primary: #ffffff;
-  /* Texto sobre color primario */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  --color-secondary: #c0494b;
-  /* Color secundario/acento (Rojo coral) */
-  --color-secondary-container: #d29c9a;
-  /* Color secundario suave (Rosa pálido) */
-  --color-on-secondary: #ffffff;
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-  --color-tertiary: #d29c9a;
-  /* Color terciario de apoyo (Rosa pálido) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-  --color-background: #29131b;
-  /* Color de fondo principal (Borgoña oscuro) */
-  --color-on-background: rgba(226, 225, 223, 1.000);
-  /* Color de texto principal (Gris claro/Hueso) */
-
-  --color-surface: #29131b;
-  /* Color de superficies (Fondo oscuro) */
-  --color-on-surface: rgba(226, 225, 223, 1.000);
-  /* Texto sobre superficies */
-  --color-surface-variant: #373a52;
-  /* Color para superficies secundarias (Azul grisáceo) */
-  --color-on-surface-variant: rgba(226, 225, 223, 0.8);
-
-  --color-surface-container-lowest: #29131b;
-  --color-surface-container-low: #2d1620;
-  --color-surface-container: #373a52;
-  --color-surface-container-high: #3f425e;
-  --color-surface-container-highest: #4b4e6b;
-
-  --color-outline: #7d7f8e;
-  /* Color de bordes y separadores (Gris neutro) */
-  --color-outline-variant: #373a52;
-
-  --color-error: #ffb4ab;
-  --color-error-container: #93000a;
-
-  /* ── Tipografía ── */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-headline: 'Manrope', sans-serif;
   --font-display: 'Manrope', sans-serif;
-
-  /* ── Variables Core para Tailwind ── */
-  --background: var(--color-background);
-  --foreground: var(--color-on-background);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Tema light "UPeU" — borgoña / crema. Default.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --background: #f2ede9;          /* crema */
+  --foreground: #1d1b19;
+  --card: #ffffff;
+  --card-foreground: #1d1b19;
+  --popover: #ffffff;
+  --popover-foreground: #1d1b19;
+  --primary: #8f0304;             /* borgoña UPeU */
+  --primary-foreground: #f2ede9;
+  --secondary: #c0494b;
+  --secondary-foreground: #ffffff;
+  --muted: #e8e0d9;
+  --muted-foreground: #6b5f57;
+  --accent: #d29c9a;
+  --accent-foreground: #29131b;
+  --destructive: #b3261e;
+  --destructive-foreground: #ffffff;
+  --border: #d6cdc4;
+  --input: #ece4dd;
+  --ring: #8f0304;
+  --radius: 0.75rem;
+
+  /* Sidebar tokens (admin/landlord/student dashboards) */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1d1b19;
+  --sidebar-accent: #f2ede9;
+  --sidebar-accent-foreground: #8f0304;
+  --sidebar-border: #d6cdc4;
+  --sidebar-ring: #8f0304;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tema dark "slate" — toggle por atributo data-theme="dark".
+   ───────────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --background: #0f172a;          /* slate-900 */
+  --foreground: #e2e8f0;
+  --card: #1e293b;                /* slate-800 */
+  --card-foreground: #e2e8f0;
+  --popover: #1e293b;
+  --popover-foreground: #e2e8f0;
+  --primary: #ef4444;             /* rojo claro para contraste WCAG */
+  --primary-foreground: #0f172a;
+  --secondary: #334155;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+  --destructive: #f87171;
+  --destructive-foreground: #0f172a;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #ef4444;
+
+  --sidebar: #1e293b;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #f87171;
+  --sidebar-border: #334155;
+  --sidebar-ring: #ef4444;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────────────────────────────────── */
 @layer base {
   * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    border-color: var(--border);
   }
 
   body {
@@ -70,19 +128,17 @@
     min-height: 100vh;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  .brand-logo {
+  h1, h2, h3, h4, .brand-logo {
     font-family: var(--font-headline);
   }
 }
 
-/* ── Capa de Utilidades Custom ── */
+/* ─────────────────────────────────────────────────────────────────────────
+   Utilidades custom (las que ya estaban en uso por componentes existentes).
+   ───────────────────────────────────────────────────────────────────────── */
 @layer utilities {
   .editorial-shadow {
-    box-shadow: 0 20px 40px rgba(30, 78, 216, 0.06);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
   }
 
   .glass-nav {
@@ -93,107 +149,65 @@
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
 
-  /* Scrollbar sutil */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  /* Scrollbar sutil tematizada */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-gray-300);
+    background: var(--border);
     border-radius: 3px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-gray-400);
+    background: var(--muted-foreground);
   }
 
-  /* Animaciones */
+  /* Animaciones legacy (se mantienen por compatibilidad con componentes
+     existentes que aún las usan; gradualmente se migrarán a tailwindcss-animate). */
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-
   @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-
   @keyframes slideLeft {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
   }
-
   @keyframes scaleIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
   }
+  .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+  .animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
+  .animate-slide-left { animation: slideLeft 0.3s ease-out forwards; }
+  .animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
 
-  .animate-fade-in {
-    animation: fadeIn 0.4s ease-out forwards;
-  }
-
-  .animate-slide-down {
-    animation: slideDown 0.3s ease-out forwards;
-  }
-
-  .animate-slide-left {
-    animation: slideLeft 0.3s ease-out forwards;
-  }
-
-  .animate-scale-in {
-    animation: scaleIn 0.2s ease-out forwards;
-  }
-
-  /* ── Estilos para react-phone-number-input ── */
+  /* react-phone-number-input — estilos del campo telefónico */
   .alquilaya-phone-input {
     display: flex;
     align-items: center;
-    background: #f2ede9; /* Mismo que los otros inputs */
-    border-radius: 0.75rem;
+    background: var(--input);
+    border-radius: var(--radius);
     padding: 0 1rem;
     height: 52px;
     border: 1px solid transparent;
     transition: all 0.3s ease;
   }
-
   .alquilaya-phone-input:focus-within {
-    border-color: #8f0304;
-    background: white;
+    border-color: var(--ring);
+    background: var(--card);
   }
-
   .alquilaya-phone-input .PhoneInputInput {
     border: none;
     background: transparent;
     outline: none;
     padding-left: 0.75rem;
     font-size: 0.875rem;
-    color: #1d1b19;
+    color: var(--foreground);
     height: 100%;
     width: 100%;
   }
-
   .alquilaya-phone-input .PhoneInputCountry {
     margin-right: 0.5rem;
   }

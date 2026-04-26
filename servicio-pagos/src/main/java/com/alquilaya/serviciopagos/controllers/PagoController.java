@@ -20,14 +20,12 @@ public class PagoController {
     }
 
     @PostMapping("/webhook")
-    public ResponseEntity<Void> recibirNotificacion(@RequestBody Map<String, Object> payload) {
-        pagoService.procesarWebhook(payload);
+    public ResponseEntity<Void> recibirNotificacion(
+            @RequestHeader(value = "x-signature", required = false) String xSignature,
+            @RequestHeader(value = "x-request-id", required = false) String xRequestId,
+            @RequestParam(value = "data.id", required = false) String dataIdQuery,
+            @RequestBody Map<String, Object> payload) {
+        pagoService.procesarWebhook(xSignature, xRequestId, dataIdQuery, payload);
         return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/simular-exito/{reservaId}")
-    public ResponseEntity<String> simularExito(@PathVariable Long reservaId) {
-        pagoService.simularPagoExitoso(reservaId);
-        return ResponseEntity.ok("Simulación de pago exitoso enviada a Kafka para reserva: " + reservaId);
     }
 }

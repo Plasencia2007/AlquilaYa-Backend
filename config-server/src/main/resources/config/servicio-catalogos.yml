@@ -1,20 +1,34 @@
 spring:
+  application:
+    name: servicio-catalogos
   datasource:
-    url: jdbc:mysql://localhost:3307/alquilaya_catalogos
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DB_CATALOGOS:alquilaya_catalogos}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
 server:
   port: 8085
 
 jwt:
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
-  expiration: ${JWT_EXPIRATION:86400000}
+  expiration: ${JWT_EXPIRATION:7200000}

@@ -6,7 +6,8 @@ import { NextResponse } from 'next/server';
  */
 export async function GET() {
   try {
-    const backendUrl = 'http://localhost:8080/actuator/health';
+    const backend = process.env.BACKEND_INTERNAL_URL || 'http://localhost:8080';
+    const backendUrl = `${backend}/actuator/health`;
     
     const response = await fetch(backendUrl, {
       method: 'GET',

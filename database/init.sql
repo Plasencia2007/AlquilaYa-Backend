@@ -6,3 +6,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alquilaya_propiedades
 
 SELECT 'CREATE DATABASE alquilaya_pagos'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alquilaya_pagos')\gexec
+
+SELECT 'CREATE DATABASE alquilaya_mensajeria'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alquilaya_mensajeria')\gexec

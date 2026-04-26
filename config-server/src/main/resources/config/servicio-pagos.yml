@@ -1,25 +1,67 @@
 spring:
+  application:
+    name: servicio-pagos
   datasource:
-    url: jdbc:postgresql://localhost:5433/alquilaya_pagos
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_PAGOS:alquilaya_pagos}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
 mercadopago:
   access-token: ${MP_ACCESS_TOKEN:PLACEHOLDER_SET_ENV_VAR}
   public-key: ${MP_PUBLIC_KEY:PLACEHOLDER_SET_ENV_VAR}
+  webhook-secret: ${MP_WEBHOOK_SECRET:}
   back-urls:
-    success: http://localhost:3000/pago/exito
-    failure: http://localhost:3000/pago/fallo
-    pending: http://localhost:3000/pago/pendiente
+    success: ${MP_BACK_URL_SUCCESS:http://localhost:3000/pago/exito}
+    failure: ${MP_BACK_URL_FAILURE:http://localhost:3000/pago/fallo}
+    pending: ${MP_BACK_URL_PENDING:http://localhost:3000/pago/pendiente}
   notification-url: ${MP_NOTIFICATION_URL:PLACEHOLDER_SET_ENV_VAR}
 
 server:
   port: 8084
+
+feign:
+  circuitbreaker:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+        loggerLevel: basic
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      servicio-propiedades:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+  timelimiter:
+    instances:
+      servicio-propiedades:
+        timeoutDuration: 10s
+        cancelRunningFuture: true

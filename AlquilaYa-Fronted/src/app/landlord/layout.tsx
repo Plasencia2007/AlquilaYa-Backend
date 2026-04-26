@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/features/auth/useAuth';
-import LandlordSidebar from '@/features/landlord/components/LandlordSidebar';
+import { useAuth } from '@/hooks/use-auth';
+import LandlordSidebar from '@/components/landlord/landlord-sidebar';
 
 export default function LandlordLayout({
   children,

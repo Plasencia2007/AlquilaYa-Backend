@@ -3,8 +3,10 @@ package com.plasencia.servicio_catalogos.controllers;
 import com.plasencia.servicio_catalogos.entities.ItemCatalogo;
 import com.plasencia.servicio_catalogos.enums.TipoItem;
 import com.plasencia.servicio_catalogos.services.ItemCatalogoService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,21 +29,25 @@ public class ItemCatalogoController {
         return ResponseEntity.ok(service.listarPorTipo(tipo));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/admin/filtros")
     public ResponseEntity<List<ItemCatalogo>> listarTodo() {
         return ResponseEntity.ok(service.listarTodo());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/filtros")
-    public ResponseEntity<ItemCatalogo> crear(@RequestBody ItemCatalogo item) {
+    public ResponseEntity<ItemCatalogo> crear(@Valid @RequestBody ItemCatalogo item) {
         return ResponseEntity.ok(service.guardar(item));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/admin/filtros/{id}")
-    public ResponseEntity<ItemCatalogo> actualizar(@PathVariable Long id, @RequestBody ItemCatalogo item) {
+    public ResponseEntity<ItemCatalogo> actualizar(@PathVariable Long id, @Valid @RequestBody ItemCatalogo item) {
         return ResponseEntity.ok(service.actualizar(id, item));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/admin/filtros/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         service.eliminar(id);

@@ -45,11 +45,14 @@ public class ReservaService {
         if (!"ESTUDIANTE".equalsIgnoreCase(current.getRol())) {
             throw new IllegalStateException("Solo un estudiante puede crear una reserva");
         }
-        if (req.getFechaFin().isBefore(req.getFechaInicio())) {
-            throw new IllegalArgumentException("La fecha de fin no puede ser anterior a la de inicio");
+        if (!req.getFechaFin().isAfter(req.getFechaInicio())) {
+            throw new IllegalArgumentException(
+                    "La fecha de fin debe ser al menos un día después de la fecha de inicio");
         }
 
-        Propiedad propiedad = propiedadRepository.findById(req.getPropiedadId())
+        // Lock pesimista: serializa creaciones concurrentes sobre la misma propiedad
+        // para que la verificación de solapamiento de fechas no sufra race conditions.
+        Propiedad propiedad = propiedadRepository.findByIdForUpdate(req.getPropiedadId())
                 .orElseThrow(() -> new IllegalArgumentException("No existe la propiedad " + req.getPropiedadId()));
 
         if (propiedad.getAprobadoPorAdmin() == null || !propiedad.getAprobadoPorAdmin()) {
@@ -184,17 +187,28 @@ public class ReservaService {
         return usuariosClient.obtenerEstudiante(estudianteId);
     }
 
+    /**
+     * Actualización restringida: solo permite cambiar estado (respetando la máquina de estados)
+     * y motivoRechazo. Propiedad/estudiante/arrendador/fechas/monto se fijan en la creación
+     * y NO deben mutarse — cada flujo de negocio tiene su endpoint propio (aprobar, rechazar,
+     * cancelar, finalizar) para transiciones específicas.
+     */
     @Transactional
     public Reserva actualizarReserva(Long id, Reserva updates) {
         Reserva r = obtenerPorId(id);
-        if (updates.getPropiedadId() != null) r.setPropiedadId(updates.getPropiedadId());
-        if (updates.getEstudianteId() != null) r.setEstudianteId(updates.getEstudianteId());
-        if (updates.getArrendadorId() != null) r.setArrendadorId(updates.getArrendadorId());
-        if (updates.getFechaInicio() != null) r.setFechaInicio(updates.getFechaInicio());
-        if (updates.getFechaFin() != null) r.setFechaFin(updates.getFechaFin());
-        if (updates.getEstado() != null) r.setEstado(updates.getEstado());
-        if (updates.getMontoTotal() != null) r.setMontoTotal(updates.getMontoTotal());
-        if (updates.getMotivoRechazo() != null) r.setMotivoRechazo(updates.getMotivoRechazo());
+
+        if (updates.getEstado() != null && updates.getEstado() != r.getEstado()) {
+            if (!r.getEstado().puedeTransicionarA(updates.getEstado())) {
+                throw new IllegalStateException(
+                        "Transición no permitida: " + r.getEstado() + " → " + updates.getEstado());
+            }
+            r.setEstado(updates.getEstado());
+        }
+
+        if (updates.getMotivoRechazo() != null) {
+            r.setMotivoRechazo(updates.getMotivoRechazo());
+        }
+
         return reservaRepository.save(r);
     }
 

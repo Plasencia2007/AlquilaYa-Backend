@@ -5,8 +5,9 @@ import { NextResponse } from 'next/server';
  */
 export async function GET() {
   try {
-    // Apuntamos al logfile del Gateway
-    const logUrl = 'http://localhost:8080/actuator/logfile';
+    // Apuntamos al logfile del Gateway (URL server-side, no expuesta al browser)
+    const backend = process.env.BACKEND_INTERNAL_URL || 'http://localhost:8080';
+    const logUrl = `${backend}/actuator/logfile`;
     
     const response = await fetch(logUrl, {
       method: 'GET',

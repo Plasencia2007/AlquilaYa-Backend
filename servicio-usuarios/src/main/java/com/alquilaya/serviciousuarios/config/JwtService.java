@@ -24,6 +24,9 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
+    @Value("${password-reset.token-expiration-ms:900000}")
+    private long resetExpiration;
+
     public String generateToken(Usuario usuario, Long perfilId) {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", usuario.getId());
@@ -42,6 +45,39 @@ public class JwtService {
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    /**
+     * Token corto (15min default) firmado para reset de password.
+     * Incluye claim {@code type=password_reset} para validar el propósito y
+     * evitar reutilizar tokens de auth en este flow.
+     */
+    public String generatePasswordResetToken(String correo) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("type", "password_reset");
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(correo)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + resetExpiration))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /**
+     * Valida un token de reset y devuelve el correo (subject) si es válido.
+     * Lanza si el token expiró, está malformado o no tiene type=password_reset.
+     */
+    public String validatePasswordResetToken(String token) {
+        Claims claims = extractAllClaims(token);
+        Object type = claims.get("type");
+        if (!"password_reset".equals(type)) {
+            throw new IllegalArgumentException("Tipo de token inválido");
+        }
+        if (claims.getExpiration().before(new Date())) {
+            throw new IllegalArgumentException("El enlace ha expirado");
+        }
+        return claims.getSubject();
     }
 
     public boolean isTokenValid(String token, String correo) {

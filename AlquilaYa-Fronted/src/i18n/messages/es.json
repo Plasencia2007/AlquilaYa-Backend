@@ -1,0 +1,100 @@
+{
+  "common": {
+    "loading": "Cargando…",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "search": "Buscar",
+    "retry": "Reintentar",
+    "tryAgain": "Inténtalo de nuevo"
+  },
+  "navbar": {
+    "home": "Inicio",
+    "search": "Buscar",
+    "login": "Iniciar sesión",
+    "register": "Crear cuenta",
+    "logout": "Cerrar sesión",
+    "myAccount": "Mi cuenta",
+    "myProperties": "Mis propiedades",
+    "myReservations": "Mis reservas"
+  },
+  "auth": {
+    "login": {
+      "title": "Iniciar sesión",
+      "subtitle": "Bienvenido de nuevo a AlquilaYa",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "forgotPassword": "¿Olvidaste tu contraseña?",
+      "submit": "Entrar",
+      "noAccount": "¿No tienes cuenta?",
+      "createAccount": "Crear una"
+    },
+    "register": {
+      "title": "Crear cuenta",
+      "subtitle": "Únete a AlquilaYa en segundos",
+      "rolePicker": {
+        "title": "¿Cómo te quieres registrar?",
+        "student": "Estudiante",
+        "studentDescription": "Busco un cuarto cerca de la UPeU",
+        "landlord": "Arrendador",
+        "landlordDescription": "Quiero alquilar mis cuartos"
+      },
+      "personal": {
+        "title": "Datos personales",
+        "name": "Nombre",
+        "lastName": "Apellido",
+        "dni": "DNI",
+        "phone": "Teléfono",
+        "email": "Correo electrónico",
+        "password": "Contraseña"
+      },
+      "studentDetails": {
+        "title": "Casi terminamos",
+        "subtitle": "Necesitamos estos datos para verificar tu perfil",
+        "university": "Universidad",
+        "studentCode": "Código de estudiante",
+        "career": "Carrera",
+        "cycle": "Ciclo"
+      },
+      "landlordDetails": {
+        "title": "Datos del arrendador",
+        "subtitle": "Donde están tus cuartos",
+        "ruc": "RUC (opcional)",
+        "address": "Dirección de tus cuartos",
+        "isCompany": "Soy una empresa"
+      },
+      "submit": "Finalizar registro",
+      "alreadyMember": "¿Ya eres miembro?",
+      "loginInstead": "Inicia sesión"
+    },
+    "otp": {
+      "title": "Verifica tu WhatsApp",
+      "subtitle": "Hemos enviado un código de 6 dígitos al número {phone}",
+      "code": "Código",
+      "submit": "Confirmar código",
+      "resend": "Reenviar código",
+      "didntReceive": "¿No recibiste el mensaje?"
+    },
+    "result": {
+      "successTitle": "¡Bienvenido a AlquilaYa!",
+      "successMessage": "Tu cuenta se creó correctamente."
+    }
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo nuevamente.",
+    "network": "No pudimos contactar al servidor. Revisa tu conexión.",
+    "notFound": {
+      "title": "Página no encontrada",
+      "description": "La dirección a la que intentas ir no existe o se movió.",
+      "cta": "Volver al inicio"
+    },
+    "boundary": {
+      "title": "Algo salió mal",
+      "description": "Ocurrió un error inesperado al cargar esta sección.",
+      "retry": "Reintentar"
+    }
+  }
+}

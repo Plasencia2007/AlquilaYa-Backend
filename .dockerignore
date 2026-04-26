@@ -1,0 +1,47 @@
+# Build artifacts
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# IDEs
+**/.idea/
+**/.vscode/
+**/*.iml
+**/.settings/
+**/.classpath
+**/.project
+
+# Node
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+
+# Env files (nunca copiar al contexto de la imagen)
+.env
+.env.*
+!.env.example
+
+# Secretos/sesión local
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads locales
+uploads/
+
+# Docs / postman
+docs/
+postman/
+*.md
+!README.md
+
+# Tests
+**/src/test/

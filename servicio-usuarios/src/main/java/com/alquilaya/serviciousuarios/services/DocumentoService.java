@@ -7,6 +7,7 @@ import com.alquilaya.serviciousuarios.enums.TipoDocumento;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.repositories.DocumentoVerificacionRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
+import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -97,7 +98,7 @@ public class DocumentoService {
             doc.getEstadoVerificacion() == EstadoVerificacion.RECHAZADO ? "\nMotivo: " + doc.getComentarioRechazo() : "\n¡Felicidades! Ya estás un paso más cerca de ser un usuario verificado."
         );
 
-        log.debug("Enviando notificación de documento {} a {}", doc.getEstadoVerificacion(), telefono);
+        log.debug("Enviando notificación de documento {} a {}", doc.getEstadoVerificacion(), LogMask.phone(telefono));
         notificationService.enviarMensajeWhatsApp(telefono, mensaje);
     }
 }

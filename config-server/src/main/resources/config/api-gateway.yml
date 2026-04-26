@@ -28,10 +28,23 @@ spring:
               - Path=/api/v1/pagos/**
             filters:
               - StripPrefix=0
+          - id: servicio-mensajeria
+            uri: lb://servicio-mensajeria
+            predicates:
+              - Path=/api/v1/mensajeria/**, /api/v1/admin/mensajeria/**, /api/v1/notificaciones/**
+            filters:
+              - StripPrefix=0
+          # NOTA: WebSocket /ws-mensajeria NO se rutea por este gateway (Spring Cloud Gateway MVC
+          # no soporta proxy WS). El frontend conecta directo al servicio en :8086.
         cors-configurations:
           '[/**]':
-            allowed-origin-patterns: "http://localhost:*"
-            allowed-methods: "*"
-            allowed-headers: "*"
+            # El bean CorsConfig también aplica CORS a nivel WebMVC; esta config es fallback
+            # para rutas que solo pasan por el gateway. Lista separada por comas.
+            allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+            allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            allowed-headers: "Authorization,Content-Type,Accept,x-api-key"
             allow-credentials: true
             max-age: 3600
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}

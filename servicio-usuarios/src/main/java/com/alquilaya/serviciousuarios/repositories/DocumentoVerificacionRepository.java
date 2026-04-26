@@ -7,13 +7,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DocumentoVerificacionRepository extends JpaRepository<DocumentoVerificacion, Long> {
-    
+
     List<DocumentoVerificacion> findByUsuario(Usuario usuario);
-    
+
     List<DocumentoVerificacion> findByEstadoVerificacion(EstadoVerificacion estado);
-    
+
     long countByUsuarioAndEstadoVerificacion(Usuario usuario, EstadoVerificacion estado);
+
+    Optional<DocumentoVerificacion> findByArchivoUrl(String archivoUrl);
 }

@@ -3,6 +3,7 @@ package com.alquilaya.serviciopagos.services;
 import com.alquilaya.serviciopagos.clients.ReservasClient;
 import com.alquilaya.serviciopagos.dto.ReservaDetalleDTO;
 import com.alquilaya.serviciopagos.entities.Pago;
+import com.alquilaya.serviciopagos.exceptions.WebhookInvalidoException;
 import com.alquilaya.serviciopagos.repositories.PagoRepository;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.client.preference.PreferenceBackUrlsRequest;
@@ -17,10 +18,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +50,9 @@ public class PagoService {
 
     @Value("${mercadopago.notification-url}")
     private String notificationUrl;
+
+    @Value("${mercadopago.webhook-secret:}")
+    private String webhookSecret;
 
     public String crearPreferencia(Long reservaId) {
         try {
@@ -115,39 +124,128 @@ public class PagoService {
         }
     }
 
-    public void procesarWebhook(Map<String, Object> notification) {
-        try {
-            String type = (String) notification.get("type");
-            if ("payment".equals(type)) {
-                Map<String, Object> data = (Map<String, Object>) notification.get("data");
-                Long paymentId = Long.parseLong(data.get("id").toString());
-                
-                PaymentClient client = new PaymentClient();
-                Payment payment = client.get(paymentId);
-                
-                if ("approved".equals(payment.getStatus())) {
-                    String reservaIdStr = payment.getExternalReference();
-                    Long reservaId = Long.parseLong(reservaIdStr);
-                    log.info("💰 Pago APROBADO para Reserva ID: {}. PaymentId: {}", reservaIdStr, paymentId);
-
-                    var pagoPendiente = pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE");
-                    if (pagoPendiente.isEmpty()) {
-                        log.info("↩️ Webhook ignorado: la reserva {} no tiene pago PENDIENTE (ya procesado o duplicado)", reservaId);
-                        return;
-                    }
-
-                    Pago p = pagoPendiente.get();
-                    p.setEstado("PAGADO");
-                    p.setPaymentId(paymentId.toString());
-                    p.setFechaPago(LocalDateTime.now());
-                    pagoRepository.save(p);
-
-                    kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaIdStr);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error procesando Webhook de Mercado Pago: {}", e.getMessage());
+    public void procesarWebhook(String xSignature, String xRequestId, String dataIdQuery,
+                                Map<String, Object> notification) {
+        String type = (String) notification.get("type");
+        if (!"payment".equals(type)) {
+            log.debug("Webhook ignorado: type={}", type);
+            return;
         }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) notification.get("data");
+        if (data == null || data.get("id") == null) {
+            throw new WebhookInvalidoException("Payload sin data.id");
+        }
+        String paymentIdStr = data.get("id").toString();
+
+        // 1. Validar firma HMAC (si hay secret configurado)
+        verificarFirma(xSignature, xRequestId, dataIdQuery != null ? dataIdQuery : paymentIdStr);
+
+        // 2. Idempotencia: si ya procesamos este paymentId, salir silenciosamente.
+        if (pagoRepository.findByPaymentId(paymentIdStr).isPresent()) {
+            log.info("↩️ Webhook duplicado ignorado. paymentId={}", paymentIdStr);
+            return;
+        }
+
+        // 3. Consultar el pago real contra la API de Mercado Pago (source of truth).
+        Payment payment;
+        try {
+            payment = new PaymentClient().get(Long.parseLong(paymentIdStr));
+        } catch (Exception e) {
+            log.error("No se pudo consultar el Payment {} en Mercado Pago: {}", paymentIdStr, e.getMessage());
+            throw new WebhookInvalidoException("No se pudo verificar el pago con Mercado Pago");
+        }
+
+        if (!"approved".equals(payment.getStatus())) {
+            log.info("Pago no aprobado (status={}), se ignora. paymentId={}", payment.getStatus(), paymentIdStr);
+            return;
+        }
+
+        String reservaIdStr = payment.getExternalReference();
+        if (reservaIdStr == null) {
+            throw new WebhookInvalidoException("Payment sin externalReference");
+        }
+        Long reservaId = Long.parseLong(reservaIdStr);
+
+        Pago pagoPendiente = pagoRepository
+                .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
+                .orElseThrow(() -> new WebhookInvalidoException(
+                        "No existe pago PENDIENTE para la reserva " + reservaId));
+
+        // 4. Validar que el monto pagado coincide con el esperado (tolerancia de 0.01 PEN por redondeo).
+        BigDecimal montoEsperado = pagoPendiente.getMonto();
+        BigDecimal montoReal = payment.getTransactionAmount() != null
+                ? BigDecimal.valueOf(payment.getTransactionAmount().doubleValue())
+                : BigDecimal.ZERO;
+        if (montoEsperado.setScale(2, RoundingMode.HALF_UP)
+                .subtract(montoReal.setScale(2, RoundingMode.HALF_UP))
+                .abs()
+                .compareTo(new BigDecimal("0.01")) > 0) {
+            log.error("Monto pagado ({}) no coincide con el esperado ({}) para reserva {}. PaymentId={}",
+                    montoReal, montoEsperado, reservaId, paymentIdStr);
+            throw new WebhookInvalidoException("Monto pagado no coincide con el esperado");
+        }
+
+        pagoPendiente.setEstado("PAGADO");
+        pagoPendiente.setPaymentId(paymentIdStr);
+        pagoPendiente.setFechaPago(LocalDateTime.now());
+        pagoRepository.save(pagoPendiente);
+
+        log.info("💰 Pago confirmado. reservaId={} paymentId={} monto={}",
+                reservaId, paymentIdStr, montoReal);
+        kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaIdStr);
+    }
+
+    /**
+     * Verifica la firma HMAC-SHA256 del webhook según el formato de Mercado Pago.
+     * Header "x-signature" tiene forma "ts=<epoch>,v1=<sha256hex>". El manifest es:
+     *   id:{data.id};request-id:{x-request-id};ts:{ts};
+     * Si no hay secret configurado, se omite la validación (solo para desarrollo).
+     */
+    private void verificarFirma(String xSignature, String xRequestId, String dataId) {
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            log.warn("⚠️ MP_WEBHOOK_SECRET vacío: firma del webhook NO validada (OK en dev, NO en prod)");
+            return;
+        }
+        if (xSignature == null || xSignature.isBlank()) {
+            throw new WebhookInvalidoException("Falta header x-signature");
+        }
+
+        String ts = null, v1 = null;
+        for (String part : xSignature.split(",")) {
+            String[] kv = part.trim().split("=", 2);
+            if (kv.length != 2) continue;
+            if ("ts".equals(kv[0])) ts = kv[1];
+            else if ("v1".equals(kv[0])) v1 = kv[1];
+        }
+        if (ts == null || v1 == null) {
+            throw new WebhookInvalidoException("x-signature mal formado");
+        }
+
+        String manifest = "id:" + dataId + ";request-id:" + xRequestId + ";ts:" + ts + ";";
+        String esperado;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            esperado = HexFormat.of().formatHex(mac.doFinal(manifest.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new WebhookInvalidoException("Error calculando firma: " + e.getMessage());
+        }
+
+        if (!constantTimeEquals(esperado, v1)) {
+            log.warn("Firma de webhook inválida. esperado={} recibido={}", esperado, v1);
+            throw new WebhookInvalidoException("Firma de webhook inválida");
+        }
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null || a.length() != b.length()) return false;
+        int result = 0;
+        for (int i = 0; i < a.length(); i++) {
+            result |= a.charAt(i) ^ b.charAt(i);
+        }
+        return result == 0;
     }
 
     public void simularPagoExitoso(Long reservaId) {

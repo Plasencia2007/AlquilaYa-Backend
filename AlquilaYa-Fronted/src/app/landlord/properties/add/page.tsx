@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
-import { propiedadService } from '@/features/landlord/services/propiedadService';
-import { useAuthStore } from '@/features/auth/useAuthStore';
+import { Badge } from '@/components/ui/legacy-badge';
+import { Button } from '@/components/ui/legacy-button';
+import { Input } from '@/components/ui/legacy-input';
+import { Card } from '@/components/ui/legacy-card';
+import { propiedadService } from '@/services/landlord-property-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 

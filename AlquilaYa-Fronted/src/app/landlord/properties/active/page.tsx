@@ -2,11 +2,11 @@
 // Fuerza re-compilación para la nueva arquitectura de Perfil (Arrendador Id)
 
 import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { PropertyCard } from '@/features/landlord/components/PropertyCard';
-import { propiedadService } from '@/features/landlord/services/propiedadService';
-import { useAuthStore } from '@/features/auth/useAuthStore';
+import { Badge } from '@/components/ui/legacy-badge';
+import { Button } from '@/components/ui/legacy-button';
+import { PropertyCard } from '@/components/landlord/property-card';
+import { propiedadService } from '@/services/landlord-property-service';
+import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
 
 export default function ActivePropertiesPage() {

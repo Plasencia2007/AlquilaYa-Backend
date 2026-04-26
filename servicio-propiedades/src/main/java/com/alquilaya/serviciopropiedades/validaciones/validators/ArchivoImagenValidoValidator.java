@@ -38,6 +38,17 @@ public class ArchivoImagenValidoValidator implements ConstraintValidator<Archivo
         if (contentType == null || !MIME_PERMITIDOS.contains(contentType)) {
             return "Solo se permiten imágenes JPG, PNG o WEBP";
         }
+        // Defense-in-depth: además del MIME declarado, verificamos el contenido real.
+        MagicBytes.Kind real = MagicBytes.detect(file);
+        boolean coincide = switch (real) {
+            case JPEG -> "image/jpeg".equals(contentType);
+            case PNG -> "image/png".equals(contentType);
+            case WEBP -> "image/webp".equals(contentType);
+            default -> false;
+        };
+        if (!coincide) {
+            return "El archivo no es realmente una imagen JPG, PNG o WEBP válida";
+        }
         return null;
     }
 

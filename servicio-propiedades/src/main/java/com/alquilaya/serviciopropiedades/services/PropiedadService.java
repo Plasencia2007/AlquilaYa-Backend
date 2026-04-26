@@ -27,6 +27,18 @@ public class PropiedadService {
     public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, String tipo,
                                    String periodo, Boolean disponible, Integer distanciaMax,
                                    List<String> servicios) {
+        if (precioMin != null && precioMin.signum() < 0) {
+            throw new IllegalArgumentException("precioMin no puede ser negativo");
+        }
+        if (precioMax != null && precioMax.signum() < 0) {
+            throw new IllegalArgumentException("precioMax no puede ser negativo");
+        }
+        if (precioMin != null && precioMax != null && precioMin.compareTo(precioMax) > 0) {
+            throw new IllegalArgumentException("precioMin no puede ser mayor que precioMax");
+        }
+        if (distanciaMax != null && distanciaMax < 0) {
+            throw new IllegalArgumentException("distanciaMax no puede ser negativa");
+        }
         List<String> filtroServicios = (servicios == null || servicios.isEmpty()) ? null : servicios;
         return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, filtroServicios);
     }
