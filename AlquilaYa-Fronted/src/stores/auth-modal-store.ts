@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-export type AuthView = 'login' | 'register';
+export type AuthView = 'login' | 'register' | 'forgot-password';
+
 export type AuthRole = 'ESTUDIANTE' | 'ARRENDADOR';
 export type RegisterStep = 'personal' | 'details' | 'otp' | 'result';
 

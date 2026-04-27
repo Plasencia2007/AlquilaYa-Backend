@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff } from 'lucide-react';
 import 'react-phone-number-input/style.css';
 import PhoneInput from 'react-phone-number-input';
+import { PasswordStrength } from './password-strength';
+
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
@@ -168,9 +170,11 @@ export function RegisterForm() {
                     </button>
                   </div>
                 </FormControl>
+                <PasswordStrength password={field.value} />
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
             )}
+
           />
 
           <Button

@@ -102,4 +102,15 @@ export const servicioAuth = {
 
     return { ...usuarioRest, id: id?.toString() } as Usuario;
   },
+
+  solicitarResetPassword: async (correo: string): Promise<string> => {
+    const response = await api.post('usuarios/auth/forgot-password', { correo });
+    return response.data.mensaje;
+  },
+
+  resetearPassword: async (token: string, nuevaPassword: string): Promise<string> => {
+    const response = await api.post('usuarios/auth/reset-password', { token, nuevaPassword });
+    return response.data.mensaje;
+  },
 };
+

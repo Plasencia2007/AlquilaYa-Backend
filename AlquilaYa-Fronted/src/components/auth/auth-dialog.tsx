@@ -8,17 +8,21 @@ import { cn } from '@/lib/cn';
 
 import { LoginForm } from './login-form';
 import { RegisterForm } from './register-form';
+import { ForgotPasswordForm } from './forgot-password-form';
 
 export function AuthDialog() {
   const { isOpen, view, close, targetRole, step } = useAuthModal();
 
   const isRegister = view === 'register';
+  const isForgotPassword = view === 'forgot-password';
   const showLandlordPanel = isRegister && targetRole === 'ARRENDADOR' && step !== 'result';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent className="grid w-full max-w-[900px] gap-0 overflow-hidden border-none bg-card p-0 shadow-2xl md:h-[620px] md:rounded-[2rem] md:grid-cols-2">
-        <DialogTitle className="sr-only">{isRegister ? 'Crear cuenta' : 'Iniciar sesión'}</DialogTitle>
+        <DialogTitle className="sr-only">
+          {isRegister ? 'Crear cuenta' : isForgotPassword ? 'Recuperar contraseña' : 'Iniciar sesión'}
+        </DialogTitle>
 
         <aside
           className={cn(
@@ -85,7 +89,14 @@ export function AuthDialog() {
           )}
         >
           <div className="my-auto">
-            {isRegister ? <RegisterForm /> : <LoginForm />}
+            {isRegister ? (
+              <RegisterForm />
+            ) : isForgotPassword ? (
+              <ForgotPasswordForm />
+            ) : (
+              <LoginForm />
+            )}
+
           </div>
         </section>
       </DialogContent>

@@ -130,10 +130,12 @@ export function LoginForm() {
             </button>
             <button
               type="button"
+              onClick={() => openAuthModal('forgot-password')}
               className="font-semibold text-primary transition-colors hover:text-primary/80"
             >
               ¿Olvidaste tu contraseña?
             </button>
+
           </div>
 
           <Button
