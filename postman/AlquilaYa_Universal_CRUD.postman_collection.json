@@ -177,6 +177,55 @@
 			]
 		},
 		{
+			"name": "01b. GESTIÓN DE DOCUMENTOS",
+			"item": [
+				{
+					"name": "Subir Documento",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "usuarioId", "value": "1", "type": "text" },
+								{ "key": "tipo", "value": "DNI", "type": "text" },
+								{ "key": "archivo", "type": "file", "src": [] }
+							]
+						},
+						"url": "{{base_url}}/api/v1/usuarios/documentos/upload"
+					}
+				},
+				{
+					"name": "Obtener por ID",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/documentos/1" }
+				},
+				{
+					"name": "Listar por Usuario",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/documentos/usuario/1" }
+				},
+				{
+					"name": "Listar Pendientes (Admin)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/usuarios/documentos/admin/pending" }
+				},
+				{
+					"name": "Verificar Documento (Admin)",
+					"request": {
+						"method": "PATCH",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"APROBADO\",\n  \"comentario\": \"Documento válido\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/usuarios/documentos/admin/verify/1"
+					}
+				},
+				{
+					"name": "Eliminar",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/usuarios/documentos/1" }
+				}
+			]
+		},
+		{
 			"name": "02. TABLA PERMISOS",
 			"item": [
 				{
@@ -262,6 +311,44 @@
 				{
 					"name": "Eliminar",
 					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/propiedades/1" }
+				},
+				{
+					"name": "Listar por Arrendador",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/arrendador/1" }
+				},
+				{
+					"name": "Vista Pública",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/1/publico" }
+				},
+				{
+					"name": "Vista Detallada",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/propiedades/1/completo" }
+				},
+				{
+					"name": "Subir Imágenes Adicionales",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "files", "type": "file", "src": [] }
+							]
+						},
+						"url": "{{base_url}}/api/v1/propiedades/1/imagenes"
+					}
+				},
+				{
+					"name": "Eliminar Imagen",
+					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/propiedades/1/imagenes/1" }
+				},
+				{
+					"name": "Aprobar Propiedad (Admin)",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/admin/propiedades/1/aprobar" }
+				},
+				{
+					"name": "Rechazar Propiedad (Admin)",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/admin/propiedades/1/rechazar" }
 				}
 			]
 		},
@@ -335,6 +422,10 @@
 				{
 					"name": "Eliminar",
 					"request": { "method": "DELETE", "url": "{{base_url}}/api/v1/reservas/1" }
+				},
+				{
+					"name": "Marcar como Pagada (Admin)",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/reservas/1/pagar" }
 				}
 			]
 		},
@@ -476,6 +567,115 @@
 						"url": "{{base_url}}/api/v1/pagos/webhook",
 						"description": "Simula la llamada que hace Mercado Pago al confirmar un pago."
 					}
+				},
+				{
+					"name": "Simular Pago Exitoso (Dev)",
+					"request": { "method": "POST", "url": "{{base_url}}/api/v1/pagos/simular-exito/1" }
+				}
+			]
+		},
+		{
+			"name": "09. MENSAJERÍA",
+			"item": [
+				{
+					"name": "Crear/Obtener Conversación",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"contraparteId\": 2,\n  \"propiedadId\": 1\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/mensajeria/conversaciones"
+					}
+				},
+				{
+					"name": "Listar Mis Conversaciones",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/mensajeria/conversaciones" }
+				},
+				{
+					"name": "Obtener Conversación por ID",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/mensajeria/conversaciones/1" }
+				},
+				{
+					"name": "Listar Mensajes",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/mensajeria/conversaciones/1/mensajes?page=0&size=50" }
+				},
+				{
+					"name": "Enviar Mensaje",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"contenido\": \"Hola, me interesa el cuarto.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/mensajeria/conversaciones/1/mensajes"
+					}
+				},
+				{
+					"name": "Marcar como Leída",
+					"request": { "method": "PATCH", "url": "{{base_url}}/api/v1/mensajeria/conversaciones/1/marcar-leida" }
+				},
+				{
+					"name": "Listar Conversaciones (Admin)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/admin/mensajeria/conversaciones" }
+				},
+				{
+					"name": "Listar Mensajes (Admin)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/admin/mensajeria/conversaciones/1/mensajes" }
+				},
+				{
+					"name": "Bloquear Mensaje (Admin)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Lenguaje inapropiado\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/admin/mensajeria/mensajes/1/bloquear"
+					}
+				},
+				{
+					"name": "Desbloquear Mensaje (Admin)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Error de moderación\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/admin/mensajeria/mensajes/1/desbloquear"
+					}
+				},
+				{
+					"name": "Suspender Conversación (Admin)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Fraude detectado\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/admin/mensajeria/conversaciones/1/suspender"
+					}
+				},
+				{
+					"name": "Reactivar Conversación (Admin)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Problema resuelto\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": "{{base_url}}/api/v1/admin/mensajeria/conversaciones/1/reactivar"
+					}
+				},
+				{
+					"name": "Ver Log de Moderación (Admin)",
+					"request": { "method": "GET", "url": "{{base_url}}/api/v1/admin/mensajeria/moderacion-log" }
 				}
 			]
 		}

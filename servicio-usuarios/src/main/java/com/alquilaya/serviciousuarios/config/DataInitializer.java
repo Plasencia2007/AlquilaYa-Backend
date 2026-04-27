@@ -49,7 +49,13 @@ public class DataInitializer implements CommandLineRunner {
                 Map.entry("GESTIONAR_RESERVAS", EnumSet.of(Rol.ARRENDADOR)),
                 Map.entry("AGREGAR_FAVORITOS", EnumSet.of(Rol.ESTUDIANTE)),
                 Map.entry("RESENAR", EnumSet.of(Rol.ESTUDIANTE)),
-                Map.entry("MODERAR_RESENAS", EnumSet.noneOf(Rol.class))
+                Map.entry("MODERAR_RESENAS", EnumSet.noneOf(Rol.class)),
+                // Permisos de gestión de usuarios y sistema (solo ADMIN)
+                Map.entry("VER_USUARIOS", EnumSet.noneOf(Rol.class)),
+                Map.entry("EDITAR_USUARIO", EnumSet.noneOf(Rol.class)),
+                Map.entry("ELIMINAR_USUARIO", EnumSet.noneOf(Rol.class)),
+                Map.entry("GESTIONAR_SISTEMA", EnumSet.noneOf(Rol.class)),
+                Map.entry("GESTIONAR_DOCUMENTOS", EnumSet.noneOf(Rol.class))
         );
 
         int creados = 0;

@@ -9,6 +9,7 @@ import { parseAxiosError } from '@/lib/api-errors';
 interface AccionesAuth {
   iniciarSesion: (correo: string, contrasena: string) => Promise<Usuario | null>;
   registrarse: (nombre: string, apellido: string, dni: string, correo: string, contrasena: string, rol: string, detallesPerfil: any, telefono: string) => Promise<Usuario | null>;
+  loginConGoogle: (idToken: string, rolPreferido?: string) => Promise<Usuario | null>;
   cerrarSesion: () => void;
   inicializar: () => void;
   reiniciar: () => void;
@@ -63,6 +64,22 @@ export const useAuthStore = create<EstadoAuth & AccionesAuth>((set) => ({
     } catch (error) {
       set({ cargando: false });
       throw new Error(parseAxiosError(error, 'No se pudo completar el registro'));
+    }
+  },
+
+  loginConGoogle: async (idToken: string, rolPreferido: string = 'ESTUDIANTE') => {
+    set({ cargando: true });
+    try {
+      const usuario = await servicioAuth.loginConGoogle(idToken, rolPreferido);
+      if (usuario) {
+        set({ usuario, estaAutenticado: true, cargando: false });
+        return usuario;
+      }
+      set({ cargando: false });
+      return null;
+    } catch (error) {
+      set({ cargando: false });
+      throw new Error(parseAxiosError(error, 'Error al iniciar sesión con Google'));
     }
   },
 

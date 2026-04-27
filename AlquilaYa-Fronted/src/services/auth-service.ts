@@ -89,5 +89,17 @@ export const servicioAuth = {
     } catch {
       return null;
     }
-  }
+  },
+
+  loginConGoogle: async (idToken: string, rolPreferido: string = 'ESTUDIANTE'): Promise<Usuario | null> => {
+    const response = await api.post('usuarios/auth/google-login', {
+      idToken,
+      rolPreferido,
+    });
+
+    const { token, id, ...usuarioRest } = response.data;
+    Cookies.set(NOMBRE_COOKIE_AUTH, token, { expires: 1 });
+
+    return { ...usuarioRest, id: id?.toString() } as Usuario;
+  },
 };

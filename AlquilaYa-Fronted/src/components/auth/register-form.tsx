@@ -183,6 +183,21 @@ export function RegisterForm() {
         </form>
       </Form>
 
+      {/* Separador */}
+      <div className="relative flex items-center gap-4">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-medium text-muted-foreground">o regístrate con</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* Botón Google */}
+      <GoogleRegisterButton
+        rolPreferido={targetRole}
+        onSuccess={() => {
+          setStep('result');
+        }}
+      />
+
       <p className="text-center text-xs text-muted-foreground">
         ¿Ya eres miembro?{' '}
         <button
@@ -193,6 +208,73 @@ export function RegisterForm() {
           Inicia sesión
         </button>
       </p>
+    </div>
+  );
+}
+
+/* ─── Botón de Google para Registro ─── */
+import { GoogleLogin } from '@react-oauth/google';
+import { useAuth } from '@/hooks/use-auth';
+import { notify } from '@/lib/notify';
+import { useRouter } from 'next/navigation';
+
+function GoogleRegisterButton({
+  rolPreferido,
+  onSuccess,
+}: {
+  rolPreferido: string;
+  onSuccess: () => void;
+}) {
+  const { loginConGoogle } = useAuth();
+  const { close } = useAuthModal();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="flex h-12 w-full items-center justify-center rounded-full border border-border bg-card text-sm text-muted-foreground">
+        <svg className="mr-2 size-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Conectando con Google…
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-center [&>div]:w-full">
+      <GoogleLogin
+        onSuccess={async (resp) => {
+          if (!resp.credential) return;
+          setLoading(true);
+          try {
+            const usuario = await loginConGoogle(resp.credential, rolPreferido);
+            if (usuario) {
+              close();
+              switch (usuario.rol) {
+                case 'ARRENDADOR':
+                  router.push('/landlord/dashboard');
+                  break;
+                default:
+                  router.push('/');
+              }
+            }
+          } catch (err) {
+            notify.error(err, 'Error al registrarse con Google');
+          } finally {
+            setLoading(false);
+          }
+        }}
+        onError={() => {
+          notify.error('No se pudo conectar con Google', 'Error de Google');
+        }}
+        theme="outline"
+        size="large"
+        shape="pill"
+        width="350"
+        text="signup_with"
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import Footer from '@/components/shared/Footer';
 import { AuthDialog } from '@/components/auth/auth-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/theme-provider';
+import { GoogleAuthProvider } from '@/components/auth/google-auth-provider';
 
 export const metadata: Metadata = {
   title: 'AlquilaYa — Encuentra tu cuarto ideal',
@@ -74,11 +75,13 @@ export default async function RootLayout({
       <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
-            <AuthDialog />
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <Toaster richColors closeButton position="top-right" />
+            <GoogleAuthProvider>
+              <AuthDialog />
+              <Navbar />
+              <main className="flex-1">{children}</main>
+              <Footer />
+              <Toaster richColors closeButton position="top-right" />
+            </GoogleAuthProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>
