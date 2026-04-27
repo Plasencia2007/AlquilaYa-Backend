@@ -33,9 +33,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,flyway
+        include: health,info,prometheus,flyway,circuitbreakers,circuitbreakerevents,retries,retryevents,bulkheads,timelimiters
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
       probes:
         enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true

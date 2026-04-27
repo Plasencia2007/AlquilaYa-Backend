@@ -1,6 +1,8 @@
 package com.alquilaya.serviciousuarios.exceptions;
 
 import com.alquilaya.serviciousuarios.dto.ErrorResponse;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -117,6 +119,27 @@ public class GlobalExceptionHandler {
             EnvioOtpFallidoException ex, HttpServletRequest req) {
         log.warn("No se pudo enviar OTP: {}", ex.getMessage());
         return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ErrorResponse> handleCircuitOpen(CallNotPermittedException ex, HttpServletRequest req) {
+        log.warn("Circuit breaker abierto: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE,
+                "Servicio dependiente temporalmente no disponible. Reintenta en unos segundos.", req, null);
+    }
+
+    @ExceptionHandler(BulkheadFullException.class)
+    public ResponseEntity<ErrorResponse> handleBulkheadFull(BulkheadFullException ex, HttpServletRequest req) {
+        log.warn("Bulkhead lleno: {}", ex.getMessage());
+        return build(HttpStatus.TOO_MANY_REQUESTS,
+                "Demasiadas solicitudes concurrentes hacia el servicio dependiente. Reintenta en breve.", req, null);
+    }
+
+    @ExceptionHandler(java.util.concurrent.TimeoutException.class)
+    public ResponseEntity<ErrorResponse> handleTimeout(java.util.concurrent.TimeoutException ex, HttpServletRequest req) {
+        log.warn("Timeout llamando a servicio dependiente: {}", ex.getMessage());
+        return build(HttpStatus.GATEWAY_TIMEOUT,
+                "El servicio dependiente tardó demasiado en responder.", req, null);
     }
 
     @ExceptionHandler(Exception.class)

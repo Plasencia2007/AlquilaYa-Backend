@@ -39,6 +39,64 @@ notification:
     url: ${NOTIFICATION_SERVICE_URL:http://localhost:8081}
     api-key: ${INTERNAL_API_KEY:8673447309720e49f32ed79859ac8639003ab9bd92ccc72a3241c3dde3e80662}
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      enviarWhatsAppCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      enviarOtpCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      enviarWhatsAppCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+      enviarOtpCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+  timelimiter:
+    instances:
+      enviarWhatsAppCB:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+      enviarOtpCB:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+  bulkhead:
+    instances:
+      enviarWhatsAppCB:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 100ms
+      enviarOtpCB:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 100ms
+
 # Gmail SMTP para forgot-password (sin restricción de destinatarios, sin dominio propio)
 # Requiere: 2FA habilitado en la cuenta + App Password de 16 chars (Google Account → Security → App passwords)
 spring.mail:

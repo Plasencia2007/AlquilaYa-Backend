@@ -1,6 +1,5 @@
 package com.alquilaya.servicio_mensajeria.services;
 
-import com.alquilaya.servicio_mensajeria.clients.UsuariosClient;
 import com.alquilaya.servicio_mensajeria.config.CurrentUser;
 import com.alquilaya.servicio_mensajeria.dto.CrearMensajeRequest;
 import com.alquilaya.servicio_mensajeria.dto.MensajeDTO;
@@ -36,7 +35,6 @@ public class MensajeService {
     private final ConversacionService conversacionService;
     private final WebSocketNotificationService wsNotify;
     private final NotificacionService notificacionService;
-    private final UsuariosClient usuariosClient;
 
     /**
      * Envía un mensaje en nombre del caller. Persiste + emite por WebSocket a los dos
@@ -107,15 +105,15 @@ public class MensajeService {
 
         if (rolEmisor == RolEmisor.ESTUDIANTE) {
             receptorPerfilId = c.getArrendadorId();
-            UsuarioPerfilDTO emisor = usuariosClient.obtenerEstudiante(emisorPerfilId);
-            UsuarioPerfilDTO receptor = usuariosClient.obtenerArrendador(receptorPerfilId);
+            UsuarioPerfilDTO emisor = conversacionService.obtenerEstudianteResiliente(emisorPerfilId).join();
+            UsuarioPerfilDTO receptor = conversacionService.obtenerArrendadorResiliente(receptorPerfilId).join();
             emisorNombre = emisor != null && emisor.getNombre() != null ? emisor.getNombre() : "Un estudiante";
             receptorUserId = receptor != null ? receptor.getUsuarioId() : null;
             url = "/landlord/messages/students";
         } else {
             receptorPerfilId = c.getEstudianteId();
-            UsuarioPerfilDTO emisor = usuariosClient.obtenerArrendador(emisorPerfilId);
-            UsuarioPerfilDTO receptor = usuariosClient.obtenerEstudiante(receptorPerfilId);
+            UsuarioPerfilDTO emisor = conversacionService.obtenerArrendadorResiliente(emisorPerfilId).join();
+            UsuarioPerfilDTO receptor = conversacionService.obtenerEstudianteResiliente(receptorPerfilId).join();
             emisorNombre = emisor != null && emisor.getNombre() != null ? emisor.getNombre() : "El arrendador";
             receptorUserId = receptor != null ? receptor.getUsuarioId() : null;
             url = "/student/messages/" + c.getId();

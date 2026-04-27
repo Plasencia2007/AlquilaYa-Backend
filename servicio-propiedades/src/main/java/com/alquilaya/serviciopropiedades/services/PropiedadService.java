@@ -7,13 +7,19 @@ import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.PropiedadImagen;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -75,10 +81,38 @@ public class PropiedadService {
                 .build();
     }
 
+    @TimeLimiter(name = "obtenerArrendadorCB")
+    @CircuitBreaker(name = "obtenerArrendadorCB", fallbackMethod = "fallbackObtenerArrendador")
+    @Retry(name = "obtenerArrendadorCB")
+    @Bulkhead(name = "obtenerArrendadorCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<ArrendadorInfoDTO> obtenerArrendadorResiliente(Long perfilId) {
+        log.info("[Resilience4j] Llamando a servicio-usuarios para arrendador {}", perfilId);
+        var attrs = RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return usuariosClient.obtenerArrendador(perfilId);
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<ArrendadorInfoDTO> fallbackObtenerArrendador(Long perfilId, Throwable t) {
+        log.error("[FALLBACK] obtenerArrendador({}) — {}: {}",
+                perfilId, t.getClass().getSimpleName(), t.getMessage());
+        ArrendadorInfoDTO defaultInfo = new ArrendadorInfoDTO();
+        defaultInfo.setId(perfilId);
+        defaultInfo.setNombre("Arrendador");
+        defaultInfo.setApellido("(no disponible)");
+        return CompletableFuture.completedFuture(defaultInfo);
+    }
+
     public PropiedadCompletoDTO toCompleto(Propiedad p) {
         ArrendadorInfoDTO info = null;
         try {
-            info = usuariosClient.obtenerArrendador(p.getArrendadorId());
+            info = obtenerArrendadorResiliente(p.getArrendadorId()).join();
         } catch (Exception e) {
             log.warn("No se pudo obtener info del arrendador {}: {}", p.getArrendadorId(), e.getMessage());
         }

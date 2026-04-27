@@ -64,11 +64,91 @@ resilience4j:
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 5
         minimumNumberOfCalls: 10
+      obtenerArrendadorCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      obtenerEstudianteCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      verificarPermisoCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      obtenerArrendadorCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
+      obtenerEstudianteCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
+      verificarPermisoCB:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
   timelimiter:
     instances:
       servicio-usuarios:
         timeoutDuration: 10s
         cancelRunningFuture: true
+      obtenerArrendadorCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+      obtenerEstudianteCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+      verificarPermisoCB:
+        timeoutDuration: 3s
+        cancelRunningFuture: true
+  bulkhead:
+    instances:
+      obtenerArrendadorCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      obtenerEstudianteCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      verificarPermisoCB:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 100ms
 
 # Sincronización de Seguridad con Usuarios
 jwt:

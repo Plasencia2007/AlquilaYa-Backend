@@ -12,6 +12,12 @@ import com.mercadopago.client.preference.PreferenceItemRequest;
 import com.mercadopago.client.preference.PreferenceRequest;
 import com.mercadopago.resources.payment.Payment;
 import com.mercadopago.resources.preference.Preference;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -54,6 +61,31 @@ public class PagoService {
     @Value("${mercadopago.webhook-secret:}")
     private String webhookSecret;
 
+    @TimeLimiter(name = "obtenerReservaCB")
+    @CircuitBreaker(name = "obtenerReservaCB", fallbackMethod = "fallbackObtenerReserva")
+    @Retry(name = "obtenerReservaCB")
+    @Bulkhead(name = "obtenerReservaCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<ReservaDetalleDTO> obtenerReservaResiliente(Long reservaId) {
+        log.info("[Resilience4j] Llamando a servicio-propiedades para reserva {}", reservaId);
+        var attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return reservasClient.obtenerReserva(reservaId);
+            } finally {
+                org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<ReservaDetalleDTO> fallbackObtenerReserva(Long reservaId, Throwable t) {
+        log.error("[FALLBACK] obtenerReserva({}) — {}: {}",
+                reservaId, t.getClass().getSimpleName(), t.getMessage());
+        throw new IllegalStateException(
+                "Servicio de reservas temporalmente no disponible. Causa: " + t.getClass().getSimpleName());
+    }
+
     public String crearPreferencia(Long reservaId) {
         try {
             log.info("Iniciando creación de preferencia para Reserva ID: {}", reservaId);
@@ -63,7 +95,7 @@ public class PagoService {
                 throw new RuntimeException("La reserva " + reservaId + " ya fue pagada");
             }
 
-            ReservaDetalleDTO reserva = reservasClient.obtenerReserva(reservaId);
+            ReservaDetalleDTO reserva = obtenerReservaResiliente(reservaId).join();
             
             // Validar campos críticos para Mercado Pago
             String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty()) 
@@ -118,6 +150,20 @@ public class PagoService {
             log.info("✅ Preferencia creada exitosamente: {}", preference.getId());
             return preference.getInitPoint();
 
+        } catch (IllegalStateException | CallNotPermittedException | BulkheadFullException e) {
+            // Excepciones de Resilience4j: que las maneje GlobalExceptionHandler
+            throw e;
+        } catch (java.util.concurrent.CompletionException e) {
+            // CompletableFuture.join() envuelve excepciones; desempaquetar para que el handler las atrape
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof IllegalStateException ise) throw ise;
+            if (cause instanceof CallNotPermittedException cne) throw cne;
+            if (cause instanceof BulkheadFullException bfe) throw bfe;
+            if (cause instanceof java.util.concurrent.TimeoutException) {
+                throw new RuntimeException("Timeout consultando reserva: " + cause.getMessage());
+            }
+            log.error("❌ Error FATAL creando preferencia de Mercado Pago: {}", cause.getMessage(), cause);
+            throw new RuntimeException("No se pudo generar el link de pago: " + cause.getMessage());
         } catch (Exception e) {
             log.error("❌ Error FATAL creando preferencia de Mercado Pago: {}", e.getMessage(), e);
             throw new RuntimeException("No se pudo generar el link de pago: " + e.getMessage());

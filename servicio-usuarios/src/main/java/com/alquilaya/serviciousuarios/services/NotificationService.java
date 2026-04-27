@@ -1,5 +1,9 @@
 package com.alquilaya.serviciousuarios.services;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -37,16 +42,30 @@ public class NotificationService {
         }
 
         try {
-            restTemplate.exchange(
-                    notificationServiceUrl + "/api/v1/notifications/whatsapp/send-message",
-                    HttpMethod.POST,
-                    new HttpEntity<>(body, headers),
-                    String.class);
+            enviarMensajeWhatsAppResiliente(body, headers).join();
             log.info("Mensaje WhatsApp enviado");
         } catch (Exception e) {
-            // Aquí no rompemos la transacción: es una notificación "best-effort"
-            // (p.ej. resultado de verificación de documentos), no bloquea el flujo.
             log.error("Error enviando mensaje WhatsApp: {}", e.getMessage());
         }
+    }
+
+    @TimeLimiter(name = "enviarWhatsAppCB")
+    @CircuitBreaker(name = "enviarWhatsAppCB", fallbackMethod = "fallbackEnviarMensajeWhatsApp")
+    @Retry(name = "enviarWhatsAppCB")
+    @Bulkhead(name = "enviarWhatsAppCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<Void> enviarMensajeWhatsAppResiliente(Map<String, String> body, HttpHeaders headers) {
+        log.info("[Resilience4j] Enviando mensaje WhatsApp a notificaciones");
+        return CompletableFuture.runAsync(() -> restTemplate.exchange(
+                notificationServiceUrl + "/api/v1/notifications/whatsapp/send-message",
+                HttpMethod.POST,
+                new HttpEntity<>(body, headers),
+                String.class));
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<Void> fallbackEnviarMensajeWhatsApp(Map<String, String> body, HttpHeaders headers, Throwable t) {
+        log.error("[FALLBACK] enviarMensajeWhatsApp — {}: {}. Notificación best-effort, no se rompe el flujo.",
+                t.getClass().getSimpleName(), t.getMessage());
+        return CompletableFuture.completedFuture(null);
     }
 }

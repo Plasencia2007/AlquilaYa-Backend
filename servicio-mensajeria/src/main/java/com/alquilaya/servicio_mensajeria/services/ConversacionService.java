@@ -13,6 +13,10 @@ import com.alquilaya.servicio_mensajeria.enums.EstadoConversacion;
 import com.alquilaya.servicio_mensajeria.enums.EstadoMensaje;
 import com.alquilaya.servicio_mensajeria.repositories.ConversacionRepository;
 import com.alquilaya.servicio_mensajeria.repositories.MensajeRepository;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,10 +24,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Núcleo de autorización del chat: el método {@link #verificarAcceso(Long, CurrentUser)}
@@ -159,10 +165,10 @@ public class ConversacionService {
         Long contraparteId = soyEstudiante ? c.getArrendadorId() : c.getEstudianteId();
         String contraparteRol = soyEstudiante ? "ARRENDADOR" : "ESTUDIANTE";
         UsuarioPerfilDTO contraparte = soyEstudiante
-                ? usuariosClient.obtenerArrendador(contraparteId)
-                : usuariosClient.obtenerEstudiante(contraparteId);
+                ? obtenerArrendadorResiliente(contraparteId).join()
+                : obtenerEstudianteResiliente(contraparteId).join();
 
-        PropiedadResumenDTO prop = propiedadesClient.obtenerPropiedad(c.getPropiedadId());
+        PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
 
         long noLeidos = mensajeRepo.countByConversacionIdAndEmisorPerfilIdNotAndEstado(
                 c.getId(), user.getPerfilId(), EstadoMensaje.ENVIADO);
@@ -182,9 +188,9 @@ public class ConversacionService {
     }
 
     private ConversacionAdminDTO toAdmin(Conversacion c) {
-        UsuarioPerfilDTO est = usuariosClient.obtenerEstudiante(c.getEstudianteId());
-        UsuarioPerfilDTO arr = usuariosClient.obtenerArrendador(c.getArrendadorId());
-        PropiedadResumenDTO prop = propiedadesClient.obtenerPropiedad(c.getPropiedadId());
+        UsuarioPerfilDTO est = obtenerEstudianteResiliente(c.getEstudianteId()).join();
+        UsuarioPerfilDTO arr = obtenerArrendadorResiliente(c.getArrendadorId()).join();
+        PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
         return ConversacionAdminDTO.builder()
                 .id(c.getId())
                 .estudianteId(c.getEstudianteId())
@@ -205,6 +211,91 @@ public class ConversacionService {
         String nombre = u.getNombre() != null ? u.getNombre() : "";
         String apellido = u.getApellido() != null ? u.getApellido() : "";
         return (nombre + " " + apellido).trim();
+    }
+
+    // =========================================================================
+    //  Métodos resilientes (Resilience4j: 5 patrones aplicados)
+    // =========================================================================
+
+    @TimeLimiter(name = "obtenerArrendadorMsgCB")
+    @CircuitBreaker(name = "obtenerArrendadorMsgCB", fallbackMethod = "fallbackObtenerArrendador")
+    @Retry(name = "obtenerArrendadorMsgCB")
+    @Bulkhead(name = "obtenerArrendadorMsgCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<UsuarioPerfilDTO> obtenerArrendadorResiliente(Long perfilId) {
+        log.info("[Resilience4j] Llamando a servicio-usuarios para arrendador {}", perfilId);
+        var attrs = RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return usuariosClient.obtenerArrendador(perfilId);
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<UsuarioPerfilDTO> fallbackObtenerArrendador(Long perfilId, Throwable t) {
+        log.error("[FALLBACK] obtenerArrendador({}) — {}: {}",
+                perfilId, t.getClass().getSimpleName(), t.getMessage());
+        UsuarioPerfilDTO defaultDto = new UsuarioPerfilDTO();
+        defaultDto.setId(perfilId);
+        defaultDto.setNombre("Arrendador");
+        return CompletableFuture.completedFuture(defaultDto);
+    }
+
+    @TimeLimiter(name = "obtenerEstudianteMsgCB")
+    @CircuitBreaker(name = "obtenerEstudianteMsgCB", fallbackMethod = "fallbackObtenerEstudiante")
+    @Retry(name = "obtenerEstudianteMsgCB")
+    @Bulkhead(name = "obtenerEstudianteMsgCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<UsuarioPerfilDTO> obtenerEstudianteResiliente(Long perfilId) {
+        log.info("[Resilience4j] Llamando a servicio-usuarios para estudiante {}", perfilId);
+        var attrs = RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return usuariosClient.obtenerEstudiante(perfilId);
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<UsuarioPerfilDTO> fallbackObtenerEstudiante(Long perfilId, Throwable t) {
+        log.error("[FALLBACK] obtenerEstudiante({}) — {}: {}",
+                perfilId, t.getClass().getSimpleName(), t.getMessage());
+        UsuarioPerfilDTO defaultDto = new UsuarioPerfilDTO();
+        defaultDto.setId(perfilId);
+        defaultDto.setNombre("Estudiante");
+        return CompletableFuture.completedFuture(defaultDto);
+    }
+
+    @TimeLimiter(name = "obtenerPropiedadMsgCB")
+    @CircuitBreaker(name = "obtenerPropiedadMsgCB", fallbackMethod = "fallbackObtenerPropiedad")
+    @Retry(name = "obtenerPropiedadMsgCB")
+    @Bulkhead(name = "obtenerPropiedadMsgCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<PropiedadResumenDTO> obtenerPropiedadResiliente(Long propiedadId) {
+        log.info("[Resilience4j] Llamando a servicio-propiedades para propiedad {}", propiedadId);
+        var attrs = RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return propiedadesClient.obtenerPropiedad(propiedadId);
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<PropiedadResumenDTO> fallbackObtenerPropiedad(Long propiedadId, Throwable t) {
+        log.error("[FALLBACK] obtenerPropiedad({}) — {}: {}",
+                propiedadId, t.getClass().getSimpleName(), t.getMessage());
+        PropiedadResumenDTO defaultDto = new PropiedadResumenDTO();
+        defaultDto.setId(propiedadId);
+        defaultDto.setTitulo("Propiedad #" + propiedadId);
+        return CompletableFuture.completedFuture(defaultDto);
     }
 
     // =========================================================================

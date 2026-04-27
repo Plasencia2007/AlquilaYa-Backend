@@ -1,6 +1,9 @@
 package com.alquilaya.serviciopropiedades.exceptions;
 
 import com.alquilaya.serviciopropiedades.dto.ErrorResponse;
+import feign.FeignException;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +72,38 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMaxSize(MaxUploadSizeExceededException ex, HttpServletRequest req) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE,
                 "El archivo excede el tamaño máximo permitido.", req, null);
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ErrorResponse> handleCircuitOpen(CallNotPermittedException ex, HttpServletRequest req) {
+        log.warn("Circuit breaker abierto: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE,
+                "Servicio dependiente temporalmente no disponible. Reintenta en unos segundos.", req, null);
+    }
+
+    @ExceptionHandler(BulkheadFullException.class)
+    public ResponseEntity<ErrorResponse> handleBulkheadFull(BulkheadFullException ex, HttpServletRequest req) {
+        log.warn("Bulkhead lleno: {}", ex.getMessage());
+        return build(HttpStatus.TOO_MANY_REQUESTS,
+                "Demasiadas solicitudes concurrentes hacia el servicio dependiente. Reintenta en breve.", req, null);
+    }
+
+    @ExceptionHandler(java.util.concurrent.TimeoutException.class)
+    public ResponseEntity<ErrorResponse> handleTimeout(java.util.concurrent.TimeoutException ex, HttpServletRequest req) {
+        log.warn("Timeout llamando a servicio dependiente: {}", ex.getMessage());
+        return build(HttpStatus.GATEWAY_TIMEOUT,
+                "El servicio dependiente tardó demasiado en responder.", req, null);
+    }
+
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ErrorResponse> handleFeign(FeignException ex, HttpServletRequest req) {
+        log.warn("Error Feign: status={} msg={}", ex.status(), ex.getMessage());
+        HttpStatus status = switch (ex.status()) {
+            case 404 -> HttpStatus.NOT_FOUND;
+            case 401, 403 -> HttpStatus.BAD_GATEWAY;
+            default -> HttpStatus.BAD_GATEWAY;
+        };
+        return build(status, "Error comunicándose con servicio dependiente.", req, null);
     }
 
     @ExceptionHandler(Exception.class)

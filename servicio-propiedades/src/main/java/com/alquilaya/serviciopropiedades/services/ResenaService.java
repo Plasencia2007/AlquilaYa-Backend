@@ -15,13 +15,19 @@ import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ResenaArrendadorRepository;
 import com.alquilaya.serviciopropiedades.repositories.ResenaPropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -223,7 +229,7 @@ public class ResenaService {
 
     private String obtenerNombreEstudianteSeguro(Long id) {
         try {
-            EstudianteInfoDTO info = usuariosClient.obtenerEstudiante(id);
+            EstudianteInfoDTO info = obtenerEstudianteResiliente(id).join();
             if (info == null) return "Estudiante";
             String nombre = (info.getNombre() != null ? info.getNombre() : "");
             String apellido = (info.getApellido() != null ? " " + info.getApellido() : "");
@@ -232,5 +238,33 @@ public class ResenaService {
             log.warn("No se pudo obtener nombre del estudiante {}: {}", id, e.getMessage());
             return "Estudiante";
         }
+    }
+
+    @TimeLimiter(name = "obtenerEstudianteCB")
+    @CircuitBreaker(name = "obtenerEstudianteCB", fallbackMethod = "fallbackObtenerEstudiante")
+    @Retry(name = "obtenerEstudianteCB")
+    @Bulkhead(name = "obtenerEstudianteCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<EstudianteInfoDTO> obtenerEstudianteResiliente(Long perfilId) {
+        log.info("[Resilience4j] Llamando a servicio-usuarios para estudiante {}", perfilId);
+        var attrs = RequestContextHolder.getRequestAttributes();
+        return CompletableFuture.supplyAsync(() -> {
+            RequestContextHolder.setRequestAttributes(attrs);
+            try {
+                return usuariosClient.obtenerEstudiante(perfilId);
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<EstudianteInfoDTO> fallbackObtenerEstudiante(Long perfilId, Throwable t) {
+        log.error("[FALLBACK] obtenerEstudiante({}) — {}: {}",
+                perfilId, t.getClass().getSimpleName(), t.getMessage());
+        EstudianteInfoDTO defaultInfo = new EstudianteInfoDTO();
+        defaultInfo.setId(perfilId);
+        defaultInfo.setNombre("Estudiante");
+        defaultInfo.setApellido("");
+        return CompletableFuture.completedFuture(defaultInfo);
     }
 }

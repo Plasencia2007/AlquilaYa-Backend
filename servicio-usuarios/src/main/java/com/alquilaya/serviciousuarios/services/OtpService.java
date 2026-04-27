@@ -4,6 +4,10 @@ import com.alquilaya.serviciousuarios.entities.OtpVerification;
 import com.alquilaya.serviciousuarios.exceptions.EnvioOtpFallidoException;
 import com.alquilaya.serviciousuarios.repositories.OtpVerificationRepository;
 import com.alquilaya.serviciousuarios.util.LogMask;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +21,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -66,18 +71,31 @@ public class OtpService {
     public void enviarHttpAsync(Map<String, String> body, HttpHeaders headers) {
         try {
             log.debug("Intentando enviar OTP de forma asíncrona");
-            restTemplate.exchange(
-                    notificationServiceUrl + "/api/v1/notifications/whatsapp/send-otp",
-                    HttpMethod.POST,
-                    new HttpEntity<>(body, headers),
-                    String.class);
+            enviarOtpResiliente(body, headers).join();
             log.info("OTP enviado exitosamente en segundo plano");
         } catch (Exception e) {
             log.error("Fallo enviando OTP vía WhatsApp: {}", e.getMessage());
-            // Como es asíncrono, no podemos romper la transacción principal de registro,
-            // lo cual es deseable, ya que si falla el envío, el usuario igual se registra
-            // y puede solicitar el reenvío del código más adelante.
         }
+    }
+
+    @TimeLimiter(name = "enviarOtpCB")
+    @CircuitBreaker(name = "enviarOtpCB", fallbackMethod = "fallbackEnviarOtp")
+    @Retry(name = "enviarOtpCB")
+    @Bulkhead(name = "enviarOtpCB", type = Bulkhead.Type.SEMAPHORE)
+    public CompletableFuture<Void> enviarOtpResiliente(Map<String, String> body, HttpHeaders headers) {
+        log.info("[Resilience4j] Enviando OTP a servicio de notificaciones");
+        return CompletableFuture.runAsync(() -> restTemplate.exchange(
+                notificationServiceUrl + "/api/v1/notifications/whatsapp/send-otp",
+                HttpMethod.POST,
+                new HttpEntity<>(body, headers),
+                String.class));
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<Void> fallbackEnviarOtp(Map<String, String> body, HttpHeaders headers, Throwable t) {
+        log.error("[FALLBACK] enviarOtp — {}: {}. El usuario podrá solicitar reenvío manualmente.",
+                t.getClass().getSimpleName(), t.getMessage());
+        return CompletableFuture.completedFuture(null);
     }
 
     /**

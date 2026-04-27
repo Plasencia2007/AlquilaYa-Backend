@@ -60,8 +60,38 @@ resilience4j:
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 5
         minimumNumberOfCalls: 10
+      obtenerReservaCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      obtenerReservaCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
   timelimiter:
     instances:
       servicio-propiedades:
         timeoutDuration: 10s
         cancelRunningFuture: true
+      obtenerReservaCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+  bulkhead:
+    instances:
+      obtenerReservaCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms

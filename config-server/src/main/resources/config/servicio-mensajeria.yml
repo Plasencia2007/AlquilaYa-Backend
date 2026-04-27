@@ -61,6 +61,68 @@ resilience4j:
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 5
         minimumNumberOfCalls: 10
+      obtenerArrendadorMsgCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      obtenerEstudianteMsgCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      obtenerPropiedadMsgCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      obtenerArrendadorMsgCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
+      obtenerEstudianteMsgCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
+      obtenerPropiedadMsgCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - feign.FeignException.NotFound
   timelimiter:
     instances:
       servicio-usuarios:
@@ -69,6 +131,26 @@ resilience4j:
       servicio-propiedades:
         timeoutDuration: 10s
         cancelRunningFuture: true
+      obtenerArrendadorMsgCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+      obtenerEstudianteMsgCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+      obtenerPropiedadMsgCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+  bulkhead:
+    instances:
+      obtenerArrendadorMsgCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      obtenerEstudianteMsgCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      obtenerPropiedadMsgCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
 
 jwt:
   secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
