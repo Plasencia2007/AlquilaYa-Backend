@@ -16,7 +16,7 @@ export function SearchClient() {
     usePropertiesSearch(filtros);
 
   return (
-    <main className="mx-auto max-w-7xl px-6 pb-24 pt-24 sm:px-12 md:pt-28">
+    <main className="mx-auto max-w-7xl px-6 pb-20 pt-20 sm:px-12 md:pt-24">
       <header className="space-y-4">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>

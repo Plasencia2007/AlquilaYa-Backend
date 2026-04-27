@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, Heart, History, LayoutDashboard, LogOut, type LucideIcon, Menu, MessageCircle, User } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, MessageCircle, Heart, History, User, type LucideIcon } from 'lucide-react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -14,21 +14,12 @@ import { useAuthModal } from '@/stores/auth-modal-store';
 const navLinks = [
   { href: '/', label: 'Inicio' },
   { href: '/search', label: 'Explorar' },
-  { href: '#', label: 'Garantía' },
-];
-
-const guestLinks: { icon: LucideIcon; label: string }[] = [
-  { icon: MessageCircle, label: 'Mis contactos' },
-  { icon: Heart, label: 'Favoritos' },
-  { icon: Bell, label: 'Búsquedas y alertas' },
-  { icon: History, label: 'Historial' },
-  { icon: User, label: 'Mi cuenta' },
 ];
 
 const studentLinks: { href: string; icon: LucideIcon; label: string }[] = [
   { href: '/student/messages', icon: MessageCircle, label: 'Mis contactos' },
   { href: '/student/favorites', icon: Heart, label: 'Favoritos' },
-  { href: '/student/alerts', icon: Bell, label: 'Búsquedas y alertas' },
+  { href: '/student/alerts', icon: History, label: 'Búsquedas y alertas' },
   { href: '/student/history', icon: History, label: 'Historial' },
   { href: '/student/profile', icon: User, label: 'Mi cuenta' },
 ];
@@ -89,38 +80,27 @@ export function MobileNav() {
                 </Button>
               </section>
 
-              <nav className="flex flex-col">
-                {guestLinks.map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => handleAuth('login')}
-                    className="group flex items-center gap-4 border-b border-border py-3.5 text-base font-bold text-foreground transition-colors hover:text-primary"
+              <section className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">¿Nuevo en AlquilaYa?</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-12 w-full rounded-xl border-2 border-primary text-xs font-black tracking-wide text-primary hover:bg-primary/5"
+                    onClick={() => handleAuth('register', 'ESTUDIANTE')}
                   >
-                    <item.icon className="size-5 text-muted-foreground transition-colors group-hover:text-primary" />
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-
-              {usuario?.rol === 'ARRENDADOR' ? (
-                <Link
-                  href="/landlord"
-                  onClick={() => setOpen(false)}
-                  className="block w-full rounded-xl border-2 border-primary py-4 text-center text-sm font-black tracking-widest text-primary transition-colors hover:bg-primary/5"
-                >
-                  PANEL ARRENDADOR
-                </Link>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full border-2 border-primary text-sm font-black tracking-widest text-primary hover:bg-primary/5"
-                  onClick={() => handleAuth('register', 'ARRENDADOR')}
-                >
-                  PUBLICAR TU INMUEBLE
-                </Button>
-              )}
+                    Soy estudiante
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-12 w-full rounded-xl border-2 border-secondary text-xs font-black tracking-wide text-secondary hover:bg-secondary/5"
+                    onClick={() => handleAuth('register', 'ARRENDADOR')}
+                  >
+                    Soy arrendador
+                  </Button>
+                </div>
+              </section>
             </>
           )}
 

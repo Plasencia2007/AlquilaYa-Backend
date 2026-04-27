@@ -119,28 +119,28 @@ export default function Home() {
 
           <form
             onSubmit={handleBuscar}
-            className="mt-10 flex max-w-3xl flex-col gap-0 rounded-2xl bg-background p-1.5 shadow-2xl md:flex-row md:rounded-full"
+            className="mt-10 flex max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl bg-white p-1.5 shadow-2xl shadow-black/30 md:flex-row md:rounded-full"
           >
-            <div className="flex flex-1 items-center gap-3 border-b border-primary/10 px-6 py-4 md:border-b-0 md:border-r">
-              <MapPin className="size-5 text-primary" aria-hidden />
+            <div className="flex flex-1 items-center gap-3 border-b border-stone-200 px-6 py-4 md:border-b-0 md:border-r">
+              <MapPin className="size-5 shrink-0 text-red-700" aria-hidden />
               <input
                 type="text"
                 value={zonaInput}
                 onChange={(e) => setZonaInput(e.target.value)}
                 placeholder="¿En qué zona buscas?"
                 aria-label="Zona"
-                className="w-full border-none bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
+                className="w-full border-none bg-transparent text-sm font-medium text-stone-800 placeholder:text-stone-400 focus:outline-none"
               />
             </div>
             <div className="flex flex-1 items-center gap-3 px-6 py-4">
-              <HomeIcon className="size-5 text-primary" aria-hidden />
+              <HomeIcon className="size-5 shrink-0 text-red-700" aria-hidden />
               <Select
                 value={tipoInput}
                 onValueChange={(v) => setTipoInput(v as TipoPropiedadFiltro)}
               >
                 <SelectTrigger
                   aria-label="Tipo de cuarto"
-                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left"
+                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-stone-800 shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left [&>span:empty]:text-stone-400 [&>span:empty]:font-normal"
                 >
                   <SelectValue placeholder="Tipo de cuarto" />
                 </SelectTrigger>
@@ -156,7 +156,7 @@ export default function Home() {
             <Button
               type="submit"
               size="lg"
-              className="h-14 w-full rounded-xl px-12 text-sm font-bold shadow-xl shadow-primary/20 md:w-auto md:rounded-full"
+              className="h-14 w-full rounded-xl bg-red-700 px-12 text-sm font-bold text-white shadow-xl hover:bg-red-800 md:w-auto md:rounded-full"
             >
               <Search className="size-4" aria-hidden /> Buscar
             </Button>
@@ -166,22 +166,22 @@ export default function Home() {
 
       {/* ── Habitaciones destacadas ── */}
       <section className="bg-background px-6 py-16 sm:px-12 md:py-24">
-        <header className="mb-10 flex flex-col items-start justify-between gap-6 md:mb-12 md:flex-row md:items-end">
+        <header className="mb-8 flex flex-col items-start justify-between gap-4 md:mb-10 md:flex-row md:items-end">
           <div>
-            <span className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-primary">
+            <span className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-primary">
               <span className="h-px w-8 bg-primary" aria-hidden />
               Top picks UPeU
             </span>
-            <h2 className="text-3xl font-extrabold tracking-tight text-foreground md:text-5xl">
+            <h2 className="text-2xl font-extrabold tracking-tight text-foreground md:text-4xl">
               Habitaciones destacadas
             </h2>
-            <p className="mt-3 max-w-lg text-base text-muted-foreground md:text-lg">
+            <p className="mt-2 max-w-lg text-sm text-muted-foreground md:text-base">
               Los 4 cuartos mejor valorados y más cercanos a tu facultad.
             </p>
           </div>
           <Link
             href="/search"
-            className="group flex items-center gap-2 self-start text-sm font-bold text-primary transition-all md:self-auto md:text-base"
+            className="group flex items-center gap-2 self-start text-sm font-bold text-primary transition-all md:self-auto"
           >
             Explorar todos
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden />
@@ -192,37 +192,37 @@ export default function Home() {
       </section>
 
       {/* ── Tipos de usuario ── */}
-      <section className="bg-card px-6 py-20 sm:px-12 md:py-32">
-        <header className="mx-auto mb-16 max-w-3xl text-center md:mb-24">
-          <h2 className="mb-6 text-4xl font-extrabold leading-tight tracking-tighter text-foreground md:text-6xl">
+      <section className="bg-card px-6 py-16 sm:px-12 md:py-24">
+        <header className="mx-auto mb-10 max-w-2xl text-center md:mb-14">
+          <h2 className="mb-3 text-3xl font-extrabold leading-tight tracking-tighter text-foreground md:text-5xl">
             Diseñado para cada necesidad
           </h2>
-          <p className="text-base text-muted-foreground md:text-xl">
+          <p className="text-sm text-muted-foreground md:text-base">
             Una plataforma, tres experiencias personalizadas que conectan el futuro.
           </p>
         </header>
 
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
-          <Card className="group flex flex-col items-center p-10 text-center">
-            <div className="mb-10 flex size-20 items-center justify-center rounded-3xl bg-primary/10 text-primary shadow-inner transition-transform group-hover:scale-110">
-              <GraduationCap className="size-9" aria-hidden />
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <Card className="group flex flex-col items-center p-6 text-center md:p-8">
+            <div className="mb-5 flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner transition-transform group-hover:scale-110">
+              <GraduationCap className="size-8" aria-hidden />
             </div>
-            <h3 className="mb-4 text-2xl font-black text-foreground md:text-3xl">Estudiantes</h3>
-            <p className="mb-10 text-sm leading-relaxed text-muted-foreground md:text-lg">
+            <h3 className="mb-2 text-xl font-black text-foreground md:text-2xl">Estudiantes</h3>
+            <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
               Encuentra el cuarto ideal cerca de tu universidad. Filtra por precio y reseñas reales.
             </p>
-            <ul className="mb-10 w-full space-y-4 border-t border-border pt-8 text-left">
-              <li className="flex items-center gap-4 text-xs font-semibold text-foreground/80 md:text-sm">
-                <CheckCircle2 className="size-4 text-primary" aria-hidden /> Búsqueda inteligente
+            <ul className="mb-5 w-full space-y-3 border-t border-border pt-5 text-left">
+              <li className="flex items-center gap-3 text-xs font-semibold text-foreground/80">
+                <CheckCircle2 className="size-4 shrink-0 text-primary" aria-hidden /> Búsqueda inteligente
               </li>
-              <li className="flex items-center gap-4 text-xs font-semibold text-foreground/80 md:text-sm">
-                <CheckCircle2 className="size-4 text-primary" aria-hidden /> Filtros universitarios
+              <li className="flex items-center gap-3 text-xs font-semibold text-foreground/80">
+                <CheckCircle2 className="size-4 shrink-0 text-primary" aria-hidden /> Filtros universitarios
               </li>
             </ul>
             <Button
               variant="outline"
-              size="lg"
-              className="h-14 w-full rounded-xl text-base font-bold"
+              size="sm"
+              className="mt-auto h-11 w-full rounded-xl font-bold"
               onClick={() => {
                 if (!estaAutenticado) openAuthModal('register');
                 else router.push('/search');
@@ -232,26 +232,26 @@ export default function Home() {
             </Button>
           </Card>
 
-          <Card className="group relative flex flex-col items-center overflow-hidden border-none bg-primary p-10 text-center text-primary-foreground shadow-2xl shadow-primary/30">
-            <div className="absolute -right-12 -top-12 size-48 rounded-full bg-white/10 blur-3xl" />
-            <div className="mb-10 flex size-20 items-center justify-center rounded-3xl bg-white/20 text-white shadow-inner backdrop-blur-md transition-transform group-hover:rotate-6">
-              <Building2 className="size-9" aria-hidden />
+          <Card className="group relative flex flex-col items-center overflow-hidden border-none bg-primary p-6 text-center text-primary-foreground shadow-xl shadow-primary/25 md:p-8">
+            <div className="absolute -right-10 -top-10 size-40 rounded-full bg-white/10 blur-3xl" />
+            <div className="mb-5 flex size-16 items-center justify-center rounded-2xl bg-white/20 text-white shadow-inner backdrop-blur-md transition-transform group-hover:rotate-6">
+              <Building2 className="size-8" aria-hidden />
             </div>
-            <h3 className="mb-4 text-2xl font-black md:text-3xl">Proveedores</h3>
-            <p className="mb-10 text-sm leading-relaxed opacity-80 md:text-lg">
+            <h3 className="mb-2 text-xl font-black md:text-2xl">Proveedores</h3>
+            <p className="mb-5 text-sm leading-relaxed opacity-80">
               Monetiza tus espacios vacíos de forma profesional y eficiente desde tu celular.
             </p>
-            <ul className="mb-10 w-full space-y-4 border-t border-white/15 pt-8 text-left">
-              <li className="flex items-center gap-4 text-xs font-semibold md:text-sm">
-                <CheckCircle2 className="size-4 opacity-70" aria-hidden /> Dashboard de gestión
+            <ul className="mb-5 w-full space-y-3 border-t border-white/15 pt-5 text-left">
+              <li className="flex items-center gap-3 text-xs font-semibold">
+                <CheckCircle2 className="size-4 shrink-0 opacity-70" aria-hidden /> Dashboard de gestión
               </li>
-              <li className="flex items-center gap-4 text-xs font-semibold md:text-sm">
-                <CheckCircle2 className="size-4 opacity-70" aria-hidden /> Pagos automatizados
+              <li className="flex items-center gap-3 text-xs font-semibold">
+                <CheckCircle2 className="size-4 shrink-0 opacity-70" aria-hidden /> Pagos automatizados
               </li>
             </ul>
             <Button
-              size="lg"
-              className="h-14 w-full rounded-xl bg-white text-base font-bold text-primary hover:bg-white/90"
+              size="sm"
+              className="mt-auto h-11 w-full rounded-xl bg-white font-bold text-primary hover:bg-white/90"
               onClick={() => {
                 if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
                 else router.push('/landlord/dashboard');
@@ -261,26 +261,26 @@ export default function Home() {
             </Button>
           </Card>
 
-          <Card className="group flex flex-col items-center p-10 text-center">
-            <div className="mb-10 flex size-20 items-center justify-center rounded-3xl bg-secondary/10 text-secondary shadow-inner transition-transform group-hover:scale-110">
-              <ShieldCheck className="size-9" aria-hidden />
+          <Card className="group flex flex-col items-center p-6 text-center md:p-8">
+            <div className="mb-5 flex size-16 items-center justify-center rounded-2xl bg-secondary/10 text-secondary shadow-inner transition-transform group-hover:scale-110">
+              <ShieldCheck className="size-8" aria-hidden />
             </div>
-            <h3 className="mb-4 text-2xl font-black text-foreground md:text-3xl">Administradores</h3>
-            <p className="mb-10 text-sm leading-relaxed text-muted-foreground md:text-lg">
+            <h3 className="mb-2 text-xl font-black text-foreground md:text-2xl">Administradores</h3>
+            <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
               Control total sobre la plataforma. Valida usuarios y analiza métricas en tiempo real.
             </p>
-            <ul className="mb-10 w-full space-y-4 border-t border-border pt-8 text-left">
-              <li className="flex items-center gap-4 text-xs font-semibold text-foreground/80 md:text-sm">
-                <CheckCircle2 className="size-4 text-secondary" aria-hidden /> Moderación avanzada
+            <ul className="mb-5 w-full space-y-3 border-t border-border pt-5 text-left">
+              <li className="flex items-center gap-3 text-xs font-semibold text-foreground/80">
+                <CheckCircle2 className="size-4 shrink-0 text-secondary" aria-hidden /> Moderación avanzada
               </li>
-              <li className="flex items-center gap-4 text-xs font-semibold text-foreground/80 md:text-sm">
-                <CheckCircle2 className="size-4 text-secondary" aria-hidden /> Reportes de IA
+              <li className="flex items-center gap-3 text-xs font-semibold text-foreground/80">
+                <CheckCircle2 className="size-4 shrink-0 text-secondary" aria-hidden /> Reportes de IA
               </li>
             </ul>
             <Button
               variant="outline"
-              size="lg"
-              className="h-14 w-full rounded-xl border-secondary text-base font-bold text-secondary hover:bg-secondary hover:text-secondary-foreground"
+              size="sm"
+              className="mt-auto h-11 w-full rounded-xl border-secondary font-bold text-secondary hover:bg-secondary hover:text-secondary-foreground"
             >
               Gestión central
             </Button>
@@ -289,19 +289,19 @@ export default function Home() {
       </section>
 
       {/* ── CTA banner ── */}
-      <section className="relative overflow-hidden px-6 py-20 sm:px-12 md:py-32">
+      <section className="px-6 py-16 sm:px-12 md:py-24">
         <Card className="flex flex-col items-center overflow-hidden border-none bg-muted p-0 lg:flex-row">
-          <div className="flex-1 p-10 text-center md:p-20 lg:text-left">
-            <h2 className="mb-8 text-4xl font-extrabold leading-[1.1] tracking-tighter text-foreground md:text-[5rem]">
+          <div className="flex-1 p-8 text-center md:p-12 lg:p-14 lg:text-left">
+            <h2 className="mb-4 text-3xl font-extrabold leading-tight tracking-tighter text-foreground md:text-5xl">
               Convierte tu espacio en ingresos.
             </h2>
-            <p className="mx-auto mb-12 max-w-xl text-base italic leading-relaxed text-muted-foreground md:text-2xl lg:mx-0">
+            <p className="mx-auto mb-8 max-w-xl text-sm leading-relaxed text-muted-foreground md:text-lg lg:mx-0">
               Únete a cientos de proveedores que confían en AlquilaYa.
             </p>
-            <div className="flex flex-col justify-center gap-4 sm:flex-row lg:justify-start">
+            <div className="flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
               <Button
                 size="lg"
-                className="h-14 w-full rounded-xl px-10 text-base font-bold sm:w-auto"
+                className="h-12 w-full rounded-xl px-8 font-bold sm:w-auto"
                 onClick={() => {
                   if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
                   else router.push('/landlord/dashboard');
@@ -312,13 +312,13 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="lg"
-                className="h-14 w-full rounded-xl border-border bg-card px-10 text-base font-bold sm:w-auto"
+                className="h-12 w-full rounded-xl border-border bg-card px-8 font-bold sm:w-auto"
               >
                 Guía completa
               </Button>
             </div>
           </div>
-          <div className="relative h-[350px] w-full flex-1 lg:h-full lg:min-h-[600px]">
+          <div className="relative h-[280px] w-full flex-1 lg:h-full lg:min-h-[480px]">
             <Image
               fill
               sizes="(min-width: 1024px) 50vw, 100vw"
@@ -326,7 +326,6 @@ export default function Home() {
               src="https://images.unsplash.com/photo-1557053910-d9eadeed1c58?q=80&w=1974&auto=format&fit=crop"
               className="object-cover brightness-90"
             />
-            {/* Gradiente sobre la imagen para suavizar la transición con el texto en móvil */}
             <div className="absolute inset-0 bg-gradient-to-t from-muted/80 via-transparent to-transparent lg:bg-gradient-to-l" />
           </div>
         </Card>

@@ -76,7 +76,7 @@ export function OtpStep() {
         return;
       }
 
-      notify.success(null, 'Te hemos enviado un nuevo código por WhatsApp.');
+      notify.success('Código reenviado', 'Te hemos enviado un nuevo código por WhatsApp.');
       setCooldown(60);
     } catch (err) {
       notify.error(err, 'Error de conexión con el servidor al reenviar OTP');
@@ -87,7 +87,7 @@ export function OtpStep() {
 
   return (
     <div className="flex flex-col items-center space-y-6 text-center">
-      <div className="flex size-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+      <div className="flex size-20 items-center justify-center rounded-full bg-accent text-primary shadow-inner">
         <Smartphone className="size-10" aria-hidden />
       </div>
 

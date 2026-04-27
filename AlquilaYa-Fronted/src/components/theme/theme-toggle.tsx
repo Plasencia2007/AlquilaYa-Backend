@@ -3,8 +3,9 @@
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useThemeStore } from '@/stores/theme-store';
+import { cn } from '@/lib/cn';
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const resolved = useThemeStore((s) => s.resolved);
   const toggle = useThemeStore((s) => s.toggle);
 
@@ -15,6 +16,7 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={resolved === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
       title={resolved === 'dark' ? 'Tema claro' : 'Tema oscuro'}
+      className={cn(className)}
     >
       {resolved === 'dark' ? (
         <Sun className="size-5" aria-hidden />

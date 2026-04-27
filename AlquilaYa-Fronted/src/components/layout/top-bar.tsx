@@ -17,7 +17,6 @@ import { UserMenu } from './user-menu';
 const navLinks = [
   { href: '/', label: 'Inicio' },
   { href: '/search', label: 'Explorar' },
-  { href: '#', label: 'Garantía' },
 ];
 
 export function TopBar() {
@@ -54,7 +53,7 @@ export function TopBar() {
           className="flex items-center gap-2 transition-transform active:scale-95"
         >
           <span className={cn("text-xl font-black tracking-tighter", isTransparent ? "text-white" : "text-primary")}>
-            Alquila<span className={isTransparent ? "text-white" : "text-primary"}>Ya</span>
+            AlquilaYa
           </span>
         </Link>
 
@@ -80,9 +79,9 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
-        <div className={cn("transition-colors", isTransparent ? "[&_button]:text-white [&_button:hover]:bg-white/20" : "")}>
-          <ThemeToggle />
-        </div>
+        <ThemeToggle
+          className={cn(isTransparent && "text-white hover:bg-white/20 hover:text-white")}
+        />
 
         {cargando ? (
           <Skeleton className="h-8 w-24 rounded-full" />

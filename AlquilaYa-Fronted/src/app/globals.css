@@ -177,6 +177,11 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+  }
+
+  /* Aplica border-color solo a inputs/selects para no interferir con
+     clases como border-primary, border-none, border-white/15, etc. */
+  input, select, textarea, button {
     border-color: var(--border);
   }
 

@@ -92,7 +92,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem asChild>
-          <Link href="/profile" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+          <Link href="/student/profile" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
             <User className="size-4" /> Mi cuenta
           </Link>
         </DropdownMenuItem>
