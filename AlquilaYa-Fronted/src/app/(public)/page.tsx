@@ -91,26 +91,28 @@ export default function Home() {
             sizes="100vw"
             alt="Habitación universitaria amueblada"
             src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2070&auto=format&fit=crop"
-            className="object-cover"
+            className="object-cover brightness-75"
           />
-          <div className="absolute inset-0 bg-black/40" />
+          {/* Gradiente denso hacia abajo + capa oscura para garantizar contraste WCAG AA */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/55 to-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         </div>
 
         <div className="relative z-10 max-w-3xl py-24 text-white">
           <div className="mb-6 flex items-center gap-3">
-            <span className="h-px w-10 bg-primary" aria-hidden />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.32em] text-primary">
+            <span className="h-px w-10 bg-red-400" aria-hidden />
+            <span className="inline-block rounded-full bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-200 backdrop-blur-sm">
               Residencias universitarias · Lima
             </span>
           </div>
 
-          <h1 className="font-headline text-5xl font-extrabold leading-[0.95] tracking-[-0.04em] text-white sm:text-6xl md:text-[5.5rem]">
+          <h1 className="font-headline text-5xl font-extrabold leading-[0.95] tracking-[-0.04em] text-white drop-shadow-lg sm:text-6xl md:text-[5.5rem]">
             El cuarto perfecto,
             <br />
-            <span className="text-primary">cerca de la UPeU.</span>
+            <span className="text-red-300">cerca de la UPeU.</span>
           </h1>
 
-          <p className="mt-8 max-w-xl text-base leading-relaxed text-white/75 sm:text-lg">
+          <p className="mt-8 max-w-xl text-base font-medium leading-relaxed text-white/90 drop-shadow sm:text-lg">
             Cuartos verificados a 15 minutos de tu facultad. Reserva, paga y múdate sin
             perder un solo día de clases.
           </p>
@@ -322,8 +324,10 @@ export default function Home() {
               sizes="(min-width: 1024px) 50vw, 100vw"
               alt="Proveedor satisfecho"
               src="https://images.unsplash.com/photo-1557053910-d9eadeed1c58?q=80&w=1974&auto=format&fit=crop"
-              className="object-cover"
+              className="object-cover brightness-90"
             />
+            {/* Gradiente sobre la imagen para suavizar la transición con el texto en móvil */}
+            <div className="absolute inset-0 bg-gradient-to-t from-muted/80 via-transparent to-transparent lg:bg-gradient-to-l" />
           </div>
         </Card>
       </section>

@@ -98,7 +98,7 @@ export function TopBar() {
                 isTransparent ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"
               )}
             >
-              Publicar
+              Registrarse
             </button>
 
             <Button
@@ -111,7 +111,7 @@ export function TopBar() {
               )}
               onClick={() => openAuthModal('login')}
             >
-              Ingresar
+              Iniciar Sesión
             </Button>
           </div>
         )}

@@ -2,6 +2,14 @@
 @plugin "tailwindcss-animate";
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Dark mode: mapea el prefijo `dark:` de Tailwind al atributo
+   data-theme="dark" que setea el ThemeProvider / script blocking en layout.
+   Esto hace que dark:bg-* dark:text-* etc. funcionen con la paleta borgoña.
+   ───────────────────────────────────────────────────────────────────────── */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+
+/* ─────────────────────────────────────────────────────────────────────────
    Tokens públicos (Tailwind v4) — apuntan a CSS vars que cambian por tema.
    ───────────────────────────────────────────────────────────────────────── */
 @theme inline {
@@ -43,28 +51,64 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Escala de color AlquilaYa — familia RED (borgoña → rosa)
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --red-950: #3d0102;
+  --red-900: #7f0607;
+  --red-800: #8f0304;
+  --red-700: #9d0303;
+  --red-600: #c00507;
+  --red-500: #c14b4c;
+  --red-400: #d07577;
+  --red-200: #c1999b;
+  --red-100: #f0dede;
+  --red-50:  #fdf5f5;
+
+  /* Familia DARK (oscuros borgoña-púrpura) */
+  --dark-950: #0e0b10;
+  --dark-900: #231924;
+  --dark-800: #2e2330;
+  --dark-700: #3d3040;
+  --dark-500: #4c5067;
+  --dark-400: #6b7289;
+  --dark-300: #8e95ae;
+
+  /* Familia LIGHT (cremas) */
+  --light-50:  #ffffff;
+  --light-100: #f8f4f1;
+  --light-200: #f2ede9;
+  --light-300: #e5dfdc;
+  --light-400: #d6cdc4;
+  --light-500: #c4b8ae;
+  --light-600: #9b8c82;
+  --light-700: #6b5f57;
+  --light-900: #1d1b19;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Tema light "UPeU" — borgoña / crema. Default.
    ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --background: #f2ede9;          /* crema */
-  --foreground: #1d1b19;
-  --card: #ffffff;
+  --background: #f2ede9;          /* light-200 — crema UPeU */
+  --foreground: #1d1b19;          /* light-900 */
+  --card: #ffffff;                /* light-50 */
   --card-foreground: #1d1b19;
   --popover: #ffffff;
   --popover-foreground: #1d1b19;
-  --primary: #8f0304;             /* borgoña UPeU */
-  --primary-foreground: #f2ede9;
-  --secondary: #c0494b;
+  --primary: #8f0304;             /* red-800 — borgoña UPeU */
+  --primary-foreground: #f2ede9;  /* light-200 */
+  --secondary: #c14b4c;           /* red-500 */
   --secondary-foreground: #ffffff;
-  --muted: #e8e0d9;
-  --muted-foreground: #6b5f57;
-  --accent: #d29c9a;
-  --accent-foreground: #29131b;
-  --destructive: #b3261e;
+  --muted: #e5dfdc;               /* light-300 */
+  --muted-foreground: #6b5f57;    /* light-700 */
+  --accent: #f0dede;              /* red-100 — tono rosado suave */
+  --accent-foreground: #7f0607;   /* red-900 */
+  --destructive: #c00507;         /* red-600 */
   --destructive-foreground: #ffffff;
-  --border: #d6cdc4;
+  --border: #d6cdc4;              /* light-400 */
   --input: #ece4dd;
-  --ring: #8f0304;
+  --ring: #9d0303;                /* red-700 */
   --radius: 0.75rem;
 
   /* Sidebar tokens (admin/landlord/student dashboards) */
@@ -73,39 +117,56 @@
   --sidebar-accent: #f2ede9;
   --sidebar-accent-foreground: #8f0304;
   --sidebar-border: #d6cdc4;
-  --sidebar-ring: #8f0304;
+  --sidebar-ring: #9d0303;
+
+  /* Colores de estado / semáforo */
+  --color-success:         #16a34a;
+  --color-success-light:   #dcfce7;
+  --color-warning:         #d97706;
+  --color-warning-light:   #fef3c7;
+  --color-info:            #0284c7;
+  --color-info-light:      #e0f2fe;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Tema dark "slate" — toggle por atributo data-theme="dark".
+   Tema dark "borgoña" — oscuro coherente con la marca AlquilaYa.
+   Toggle por atributo data-theme="dark".
    ───────────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --background: #0f172a;          /* slate-900 */
-  --foreground: #e2e8f0;
-  --card: #1e293b;                /* slate-800 */
-  --card-foreground: #e2e8f0;
-  --popover: #1e293b;
-  --popover-foreground: #e2e8f0;
-  --primary: #ef4444;             /* rojo claro para contraste WCAG */
-  --primary-foreground: #0f172a;
-  --secondary: #334155;
-  --secondary-foreground: #e2e8f0;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #334155;
-  --accent-foreground: #f1f5f9;
-  --destructive: #f87171;
-  --destructive-foreground: #0f172a;
-  --border: #334155;
-  --input: #1e293b;
-  --ring: #ef4444;
+  --background: #231924;          /* dark-900 — oscuro borgoña-púrpura */
+  --foreground: #e5dfdc;          /* light-300 — crema suave */
+  --card: #2e2330;                /* dark-800 */
+  --card-foreground: #e5dfdc;
+  --popover: #2e2330;
+  --popover-foreground: #e5dfdc;
+  --primary: #c14b4c;             /* red-500 — contraste WCAG AA en oscuro */
+  --primary-foreground: #231924;  /* dark-900 */
+  --secondary: #3d3040;           /* dark-700 */
+  --secondary-foreground: #e5dfdc;
+  --muted: #2e2330;               /* dark-800 */
+  --muted-foreground: #6b7289;    /* dark-400 */
+  --accent: #3d3040;              /* dark-700 */
+  --accent-foreground: #c1999b;   /* red-200 — rosa pálido */
+  --destructive: #c14b4c;         /* red-500 */
+  --destructive-foreground: #ffffff;
+  --border: #3d3040;              /* dark-700 */
+  --input: #2e2330;               /* dark-800 */
+  --ring: #c14b4c;                /* red-500 */
 
-  --sidebar: #1e293b;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-accent: #334155;
-  --sidebar-accent-foreground: #f87171;
-  --sidebar-border: #334155;
-  --sidebar-ring: #ef4444;
+  --sidebar: #1e1520;
+  --sidebar-foreground: #e5dfdc;
+  --sidebar-accent: #2e2330;
+  --sidebar-accent-foreground: #c14b4c;
+  --sidebar-border: #3d3040;
+  --sidebar-ring: #c14b4c;
+
+  /* Colores de estado en dark mode */
+  --color-success:         #4ade80;
+  --color-success-light:   #14532d;
+  --color-warning:         #fbbf24;
+  --color-warning-light:   #78350f;
+  --color-info:            #38bdf8;
+  --color-info-light:      #0c4a6e;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
