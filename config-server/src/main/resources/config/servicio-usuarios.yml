@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_USUARIOS:postgres}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
+    password: ${POSTGRES_PASSWORD:oracle123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -31,21 +31,21 @@ server:
   port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
 
 jwt:
-  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
   expiration: ${JWT_EXPIRATION:7200000}   # 2h por default; bajar a 3600000 (1h) + refresh tokens en prod
 
 notification:
   service:
     url: ${NOTIFICATION_SERVICE_URL:http://localhost:8081}
-    api-key: ${INTERNAL_API_KEY:}
+    api-key: ${INTERNAL_API_KEY:8673447309720e49f32ed79859ac8639003ab9bd92ccc72a3241c3dde3e80662}
 
 # Gmail SMTP para forgot-password (sin restricción de destinatarios, sin dominio propio)
 # Requiere: 2FA habilitado en la cuenta + App Password de 16 chars (Google Account → Security → App passwords)
 spring.mail:
   host: ${SMTP_HOST:smtp.gmail.com}
   port: ${SMTP_PORT:587}
-  username: ${SMTP_USERNAME:}
-  password: ${SMTP_PASSWORD:}
+  username: ${SMTP_USERNAME:jhonsonsplasencia25@gmail.com}
+  password: ${SMTP_PASSWORD:ngyjauecgcegkmqe}
   properties:
     mail:
       smtp:
@@ -60,7 +60,7 @@ spring.mail:
 # OAuth Google (Identity Services)
 google:
   oauth:
-    client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:918388939289-4nh4mdv7ps1dsde1np523fgrkoo0ht1l.apps.googleusercontent.com}
 
 # Cloudflare Turnstile (captcha invisible en /register)
 turnstile:

@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_MENSAJERIA:alquilaya_mensajeria}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
+    password: ${POSTGRES_PASSWORD:oracle123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -71,7 +71,7 @@ resilience4j:
         cancelRunningFuture: true
 
 jwt:
-  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
   expiration: ${JWT_EXPIRATION:7200000}
 
 cors:

@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_PROPIEDADES:alquilaya_propiedades}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
+    password: ${POSTGRES_PASSWORD:oracle123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -39,9 +39,9 @@ server:
 
 # Configuración de Cloudinary (Fase 3 - Real)
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
-  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
-  api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:ddiyaoxkt}
+  api-key: ${CLOUDINARY_API_KEY:387589685746197}
+  api-secret: ${CLOUDINARY_API_SECRET:ccDoynk9aR2ibapCNqo6LWxyZao}
 
 feign:
   circuitbreaker:
@@ -72,5 +72,5 @@ resilience4j:
 
 # Sincronización de Seguridad con Usuarios
 jwt:
-  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
+  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
   expiration: ${JWT_EXPIRATION:7200000}
