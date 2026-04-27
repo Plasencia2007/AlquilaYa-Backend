@@ -16,7 +16,13 @@ import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  password: z
+    .string()
+    .min(8, 'La contraseña debe tener al menos 8 caracteres')
+    .regex(/[A-Z]/, 'Debe incluir al menos una letra mayúscula')
+    .regex(/[a-z]/, 'Debe incluir al menos una letra minúscula')
+    .regex(/[0-9]/, 'Debe incluir al menos un número')
+    .regex(/[@$!%*?&]/, 'Debe incluir al menos un carácter especial (@$!%*?&)'),
   confirmPassword: z.string().min(1, 'Debes confirmar la contraseña'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Las contraseñas no coinciden',
@@ -94,8 +100,11 @@ function ResetPasswordContent() {
   return (
     <main className="flex min-h-[80vh] items-center justify-center p-4 animate-in fade-in duration-500">
       <div className="w-full max-w-md space-y-6 rounded-3xl bg-card p-6 shadow-2xl border border-border/50 md:p-8">
+        <div className="flex justify-center mb-2">
+          <span className="text-2xl font-black tracking-tighter text-primary">AlquilaYa</span>
+        </div>
         <header className="space-y-1 text-center">
-          <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="font-headline text-2xl font-bold tracking-tight text-foreground">
             Nueva contraseña
           </h1>
           <p className="text-sm text-muted-foreground">

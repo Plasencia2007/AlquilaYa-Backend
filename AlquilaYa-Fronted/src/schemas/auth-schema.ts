@@ -10,7 +10,14 @@ export const registerSchema = z.object({
   apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres').max(50),
   dni: z.string().regex(/^[0-9]{8}$/, 'El DNI debe tener 8 dígitos numéricos'),
   correo: z.string().min(1, 'El correo es obligatorio').email('Email inválido'),
-  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  password: z
+    .string()
+    .min(8, 'La contraseña debe tener al menos 8 caracteres')
+    .regex(/[A-Z]/, 'Debe incluir al menos una letra mayúscula')
+    .regex(/[a-z]/, 'Debe incluir al menos una letra minúscula')
+    .regex(/[0-9]/, 'Debe incluir al menos un número')
+    .regex(/[@$!%*?&]/, 'Debe incluir al menos un carácter especial (@$!%*?&)'),
+
   telefono: z.string().min(1, 'El teléfono es obligatorio'),
   rol: z.enum(['ESTUDIANTE', 'ARRENDADOR'] as const, {
     errorMap: () => ({ message: 'Selecciona un rol válido' }),

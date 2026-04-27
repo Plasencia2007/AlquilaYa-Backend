@@ -143,14 +143,14 @@
   --primary-foreground: #231924;  /* dark-900 */
   --secondary: #3d3040;           /* dark-700 */
   --secondary-foreground: #e5dfdc;
-  --muted: #2e2330;               /* dark-800 */
-  --muted-foreground: #6b7289;    /* dark-400 */
-  --accent: #3d3040;              /* dark-700 */
+  --muted: #3d3040;               /* dark-700 — contraste sobre card */
+  --muted-foreground: #a39aa8;    /* gris cálido más legible */
+  --accent: #4a3c4d;              /* tono medio púrpura */
   --accent-foreground: #c1999b;   /* red-200 — rosa pálido */
   --destructive: #c14b4c;         /* red-500 */
   --destructive-foreground: #ffffff;
-  --border: #3d3040;              /* dark-700 */
-  --input: #2e2330;               /* dark-800 */
+  --border: #4a3c4d;              /* visible sobre card */
+  --input: #3d3040;               /* dark-700 — contraste sobre card */
   --ring: #c14b4c;                /* red-500 */
 
   --sidebar: #1e1520;
@@ -254,11 +254,12 @@
     display: flex;
     align-items: center;
     background: var(--input);
-    border-radius: var(--radius);
-    padding: 0 1rem;
-    height: 52px;
+    border-radius: 0.75rem;
+    padding: 0 0.875rem;
+    height: 2.75rem;
     border: 1px solid transparent;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    min-width: 0;
   }
   .alquilaya-phone-input:focus-within {
     border-color: var(--ring);
@@ -268,13 +269,15 @@
     border: none;
     background: transparent;
     outline: none;
-    padding-left: 0.75rem;
+    padding-left: 0.5rem;
     font-size: 0.875rem;
     color: var(--foreground);
     height: 100%;
     width: 100%;
+    min-width: 0;
   }
   .alquilaya-phone-input .PhoneInputCountry {
-    margin-right: 0.5rem;
+    margin-right: 0.375rem;
+    flex-shrink: 0;
   }
 }

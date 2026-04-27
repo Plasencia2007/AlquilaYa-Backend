@@ -19,43 +19,51 @@ export function AuthDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="grid w-full max-w-[900px] gap-0 overflow-hidden border-none bg-card p-0 shadow-2xl md:h-[620px] md:rounded-[2rem] md:grid-cols-2">
+      <DialogContent className={cn(
+        "grid w-full gap-0 overflow-hidden border-none bg-card p-0 shadow-2xl rounded-2xl max-h-[92dvh] md:max-h-[min(720px,90vh)] md:rounded-[1.5rem]",
+        isForgotPassword
+          ? "max-w-[440px] grid-cols-1"
+          : "max-w-[420px] grid-cols-1 lg:max-w-[820px] lg:grid-cols-[0.85fr_1fr]"
+      )}>
         <DialogTitle className="sr-only">
           {isRegister ? 'Crear cuenta' : isForgotPassword ? 'Recuperar contraseña' : 'Iniciar sesión'}
         </DialogTitle>
 
         <aside
           className={cn(
-            'relative hidden overflow-hidden bg-primary text-primary-foreground md:block',
+            'relative hidden overflow-hidden bg-primary text-primary-foreground lg:block',
             isRegister ? 'order-1' : 'order-2',
+            isForgotPassword && 'lg:hidden'
           )}
         >
           {showLandlordPanel ? (
-            <div className="flex h-full flex-col justify-center p-12">
-              <h3 className="font-headline text-3xl font-black leading-tight">
-                Haz crecer tu negocio con AlquilaYa
-              </h3>
+            <div className="flex h-full flex-col justify-between p-8 xl:p-10">
+              <div>
+                <h3 className="font-headline text-xl xl:text-2xl font-black leading-tight">
+                  Haz crecer tu negocio con AlquilaYa
+                </h3>
 
-              <ul className="mt-10 space-y-6">
-                <li>
-                  <p className="text-sm font-bold">Pagos garantizados</p>
-                  <p className="text-xs opacity-80">Olvídate de las cobranzas manuales.</p>
-                </li>
-                <li>
-                  <p className="text-sm font-bold">Control total</p>
-                  <p className="text-xs opacity-80">Dashboard profesional para gestionar tus cuartos.</p>
-                </li>
-                <li>
-                  <p className="text-sm font-bold">Visibilidad top</p>
-                  <p className="text-xs opacity-80">Llega a miles de estudiantes verificados.</p>
-                </li>
-              </ul>
+                <ul className="mt-6 space-y-4">
+                  <li>
+                    <p className="text-sm font-bold">Pagos garantizados</p>
+                    <p className="text-xs opacity-80">Olvídate de las cobranzas manuales.</p>
+                  </li>
+                  <li>
+                    <p className="text-sm font-bold">Control total</p>
+                    <p className="text-xs opacity-80">Dashboard profesional para tus cuartos.</p>
+                  </li>
+                  <li>
+                    <p className="text-sm font-bold">Visibilidad top</p>
+                    <p className="text-xs opacity-80">Llega a miles de estudiantes verificados.</p>
+                  </li>
+                </ul>
+              </div>
 
-              <blockquote className="mt-12 border-t border-primary-foreground/20 pt-6">
-                <p className="italic opacity-80">
-                  "AlquilaYa cambió la forma en que gestiono mis inmuebles. Todo es más simple."
+              <blockquote className="border-t border-primary-foreground/20 pt-4">
+                <p className="text-xs italic opacity-80">
+                  "AlquilaYa cambió la forma en que gestiono mis inmuebles."
                 </p>
-                <footer className="mt-2 text-xs font-bold">— Carlos P., Arrendador en Lima</footer>
+                <footer className="mt-2 text-[11px] font-bold opacity-90">— Carlos P., Arrendador en Lima</footer>
               </blockquote>
             </div>
           ) : (
@@ -63,19 +71,19 @@ export function AuthDialog() {
               <Image
                 fill
                 priority
-                sizes="(min-width: 768px) 50vw, 100vw"
+                sizes="(min-width: 1024px) 45vw, 100vw"
                 alt="Habitación acogedora"
                 src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2070&auto=format&fit=crop"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 z-10 p-12">
-                <p className="font-headline text-3xl font-bold leading-tight">
+              <div className="absolute inset-x-0 bottom-0 z-10 p-8 xl:p-10">
+                <p className="font-headline text-xl xl:text-2xl font-bold leading-tight">
                   Tu próximo hogar te está esperando
                 </p>
                 <div className="mt-3 flex items-center gap-3">
-                  <span className="h-1.5 w-12 rounded-full bg-primary-foreground" />
-                  <span className="text-sm font-medium opacity-80">Busca, elige, alquila.</span>
+                  <span className="h-1 w-10 rounded-full bg-primary-foreground" />
+                  <span className="text-xs font-medium opacity-80">Busca, elige, alquila.</span>
                 </div>
               </div>
             </>
@@ -84,11 +92,12 @@ export function AuthDialog() {
 
         <section
           className={cn(
-            'flex flex-col overflow-y-auto bg-card px-8 py-10 sm:px-10 md:px-12',
+            'flex flex-col overflow-y-auto bg-card px-6 py-6 sm:px-8 sm:py-8 lg:px-9 xl:px-10',
             isRegister ? 'order-2' : 'order-1',
           )}
         >
-          <div className="my-auto">
+          <div key={view} className="my-auto w-full animate-fade-in">
+
             {isRegister ? (
               <RegisterForm />
             ) : isForgotPassword ? (

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff } from 'lucide-react';
+
 import 'react-phone-number-input/style.css';
 import PhoneInput from 'react-phone-number-input';
 import { PasswordStrength } from './password-strength';
@@ -14,6 +15,8 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Input } from '@/components/ui/input';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { cn } from '@/lib/cn';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { registerSchema, type RegisterFormData } from '@/schemas/auth-schema';
 
 import { LandlordDetailsStep } from './landlord-details-step';
@@ -23,7 +26,8 @@ import { RoleStep } from './role-step';
 import { StudentDetailsStep } from './student-details-step';
 
 export function RegisterForm() {
-  const { step, targetRole, personal, setPersonal, setStep, toggleView } = useAuthModal();
+  const { step, targetRole, personal, setPersonal, setStep, toggleView, setRole } = useAuthModal();
+
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<RegisterFormData>({
@@ -38,6 +42,11 @@ export function RegisterForm() {
       rol: targetRole,
     },
   });
+
+  useEffect(() => {
+    form.setValue('rol', targetRole);
+  }, [targetRole, form]);
+
 
   const onSubmit = (data: RegisterFormData) => {
     setPersonal({
@@ -58,7 +67,7 @@ export function RegisterForm() {
   if (step === 'result') return <ResultStep />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <header className="space-y-1">
         <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
           Crea tu cuenta
@@ -70,17 +79,31 @@ export function RegisterForm() {
         </p>
       </header>
 
-      <RoleStep />
+      <Tabs
+        value={targetRole}
+        onValueChange={(v) => setRole(v as 'ESTUDIANTE' | 'ARRENDADOR')}
+        className="w-full"
+      >
+        <TabsList className="grid w-full grid-cols-2 rounded-xl h-10 bg-muted p-1">
+          <TabsTrigger value="ESTUDIANTE" className="h-full rounded-lg text-sm font-bold tracking-wide">
+            Estudiante
+          </TabsTrigger>
+          <TabsTrigger value="ARRENDADOR" className="h-full rounded-lg text-sm font-bold tracking-wide">
+            Arrendador
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
 
       <Form {...form}>
-        <form className="grid grid-cols-2 gap-3" onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
           <FormField
             control={form.control}
             name="nombre"
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input {...field} placeholder="Nombre" autoComplete="given-name" className="h-12 rounded-xl bg-input text-sm" />
+                  <Input {...field} placeholder="Nombre" autoComplete="given-name" className="h-11 rounded-xl bg-input text-sm" />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
@@ -92,7 +115,7 @@ export function RegisterForm() {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input {...field} placeholder="Apellido" autoComplete="family-name" className="h-12 rounded-xl bg-input text-sm" />
+                  <Input {...field} placeholder="Apellido" autoComplete="family-name" className="h-11 rounded-xl bg-input text-sm" />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
@@ -109,7 +132,7 @@ export function RegisterForm() {
                     inputMode="numeric"
                     maxLength={8}
                     placeholder="DNI"
-                    className="h-12 rounded-xl bg-input text-sm"
+                    className="h-11 rounded-xl bg-input text-sm"
                   />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
@@ -138,9 +161,9 @@ export function RegisterForm() {
             control={form.control}
             name="correo"
             render={({ field }) => (
-              <FormItem className="col-span-2">
+              <FormItem className="sm:col-span-2">
                 <FormControl>
-                  <Input {...field} type="email" autoComplete="email" placeholder="Correo" className="h-12 rounded-xl bg-input text-sm" />
+                  <Input {...field} type="email" autoComplete="email" placeholder="Correo" className="h-11 rounded-xl bg-input text-sm" />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
@@ -150,7 +173,7 @@ export function RegisterForm() {
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem className="col-span-2">
+              <FormItem className="sm:col-span-2">
                 <FormControl>
                   <div className="relative">
                     <Input
@@ -158,7 +181,7 @@ export function RegisterForm() {
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
                       placeholder="Contraseña"
-                      className={cn('h-12 rounded-xl bg-input pr-11 text-sm')}
+                      className={cn('h-11 rounded-xl bg-input pr-11 text-sm')}
                     />
                     <button
                       type="button"
@@ -180,7 +203,7 @@ export function RegisterForm() {
           <Button
             type="submit"
             size="lg"
-            className="col-span-2 mt-2 h-12 rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
+            className="mt-1 h-11 rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20 sm:col-span-2"
           >
             Siguiente paso
           </Button>
@@ -221,6 +244,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '@/hooks/use-auth';
 import { notify } from '@/lib/notify';
 import { useRouter } from 'next/navigation';
+import { useThemeStore } from '@/stores/theme-store';
 
 function GoogleRegisterButton({
   rolPreferido,
@@ -233,10 +257,11 @@ function GoogleRegisterButton({
   const { close } = useAuthModal();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const theme = useThemeStore((s) => s.resolved);
 
   if (loading) {
     return (
-      <div className="flex h-12 w-full items-center justify-center rounded-full border border-border bg-card text-sm text-muted-foreground">
+      <div className="flex h-11 w-full items-center justify-center rounded-full border border-border bg-card text-sm text-muted-foreground">
         <svg className="mr-2 size-4 animate-spin" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -247,7 +272,10 @@ function GoogleRegisterButton({
   }
 
   return (
-    <div className="flex justify-center [&>div]:w-full">
+    <div
+      key={theme}
+      className="flex justify-center overflow-hidden rounded-full [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full"
+    >
       <GoogleLogin
         onSuccess={async (resp) => {
           if (!resp.credential) return;
@@ -273,11 +301,11 @@ function GoogleRegisterButton({
         onError={() => {
           notify.error('No se pudo conectar con Google', 'Error de Google');
         }}
-        theme="outline"
+        theme={theme === 'dark' ? 'filled_black' : 'outline'}
         size="large"
         shape="pill"
-        width="350"
         text="signup_with"
+        width="100%"
       />
     </div>
   );

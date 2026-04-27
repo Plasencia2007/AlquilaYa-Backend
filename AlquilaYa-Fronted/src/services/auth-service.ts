@@ -112,5 +112,16 @@ export const servicioAuth = {
     const response = await api.post('usuarios/auth/reset-password', { token, nuevaPassword });
     return response.data.mensaje;
   },
+
+  verificarOtp: async (telefono: string, codigo: string): Promise<any> => {
+    const response = await api.post('usuarios/auth/verify-otp', { telefono, codigo });
+    return response.data;
+  },
+
+  reenviarOtp: async (telefono: string): Promise<any> => {
+    const response = await api.post('usuarios/auth/resend-otp', { telefono });
+    return response.data;
+  },
 };
+
 

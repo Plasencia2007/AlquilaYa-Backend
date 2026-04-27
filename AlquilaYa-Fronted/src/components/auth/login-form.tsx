@@ -52,16 +52,16 @@ export function LoginForm() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="font-headline text-3xl font-bold tracking-tight text-foreground">Bienvenido</h2>
+        <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">Bienvenido</h2>
         <p className="text-sm text-muted-foreground">
           Ingresa para gestionar tus favoritos y mensajes.
         </p>
       </header>
 
       <Form {...form}>
-        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
           <FormField
             control={form.control}
             name="correo"
@@ -78,7 +78,7 @@ export function LoginForm() {
                       type="email"
                       autoComplete="email"
                       placeholder="Correo electrónico"
-                      className="h-12 rounded-xl bg-input pl-11 text-sm"
+                      className="h-11 rounded-xl bg-input pl-11 text-sm"
                     />
                   </div>
                 </FormControl>
@@ -103,7 +103,7 @@ export function LoginForm() {
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="current-password"
                       placeholder="Contraseña"
-                      className="h-12 rounded-xl bg-input pl-11 pr-11 text-sm"
+                      className="h-11 rounded-xl bg-input pl-11 pr-11 text-sm"
                     />
                     <button
                       type="button"
@@ -120,13 +120,13 @@ export function LoginForm() {
             )}
           />
 
-          <div className="flex items-center justify-between px-1 text-xs">
+          <div className="flex items-center justify-between gap-3 px-1 text-xs">
             <button
               type="button"
               onClick={() => openAuthModal('register', 'ARRENDADOR')}
-              className="font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-primary"
+              className="font-semibold text-muted-foreground transition-colors hover:text-primary"
             >
-              Acceso arrendadores
+              Soy arrendador
             </button>
             <button
               type="button"
@@ -135,13 +135,12 @@ export function LoginForm() {
             >
               ¿Olvidaste tu contraseña?
             </button>
-
           </div>
 
           <Button
             type="submit"
             size="lg"
-            className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
+            className="mt-1 h-11 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
             disabled={form.formState.isSubmitting}
           >
             {form.formState.isSubmitting ? 'Ingresando…' : 'Ingresar'}
@@ -175,7 +174,7 @@ export function LoginForm() {
         loading={googleLoading}
       />
 
-      <p className="pt-2 text-center text-sm text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         ¿No tienes cuenta?{' '}
         <button
           type="button"
@@ -191,6 +190,7 @@ export function LoginForm() {
 
 /* ─── Botón de Google personalizado ─── */
 import { GoogleLogin } from '@react-oauth/google';
+import { useThemeStore } from '@/stores/theme-store';
 
 function GoogleLoginButton({
   onSuccess,
@@ -201,9 +201,11 @@ function GoogleLoginButton({
   disabled: boolean;
   loading: boolean;
 }) {
+  const theme = useThemeStore((s) => s.resolved);
+
   if (loading) {
     return (
-      <div className="flex h-12 w-full items-center justify-center rounded-full border border-border bg-card text-sm text-muted-foreground">
+      <div className="flex h-11 w-full items-center justify-center rounded-full border border-border bg-card text-sm text-muted-foreground">
         <svg className="mr-2 size-4 animate-spin" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -214,7 +216,10 @@ function GoogleLoginButton({
   }
 
   return (
-    <div className="flex justify-center [&>div]:w-full">
+    <div
+      key={theme}
+      className="flex justify-center overflow-hidden rounded-full [&>div]:!w-full [&>div>div]:!w-full [&_iframe]:!w-full"
+    >
       <GoogleLogin
         onSuccess={(resp) => {
           if (resp.credential) {
@@ -224,11 +229,11 @@ function GoogleLoginButton({
         onError={() => {
           notify.error('No se pudo iniciar sesión con Google', 'Error de Google');
         }}
-        theme="outline"
+        theme={theme === 'dark' ? 'filled_black' : 'outline'}
         size="large"
         shape="pill"
-        width="350"
         text="continue_with"
+        width="100%"
       />
     </div>
   );

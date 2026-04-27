@@ -91,7 +91,8 @@ export function TopBar() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => openAuthModal('register', 'ARRENDADOR')}
+              onClick={() => openAuthModal('register', 'ESTUDIANTE')}
+
               className={cn(
                 "hidden text-xs font-black uppercase tracking-[0.2em] transition-colors sm:inline-block",
                 isTransparent ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"

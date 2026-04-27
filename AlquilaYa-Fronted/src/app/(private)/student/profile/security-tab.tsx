@@ -3,6 +3,8 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock } from 'lucide-react';
+import { PasswordStrength } from '@/components/auth/password-strength';
+
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,6 +76,7 @@ export function SecurityTab() {
               <FormControl>
                 <Input {...field} type="password" className="h-11" autoComplete="new-password" />
               </FormControl>
+              <PasswordStrength password={field.value} />
               <FormMessage className="text-xs" />
             </FormItem>
           )}

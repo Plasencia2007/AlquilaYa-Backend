@@ -11,11 +11,9 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
-import { parseFetchError } from '@/lib/api-errors';
 import { servicioAuth } from '@/services/auth-service';
 import { otpSchema, type OtpFormData } from '@/schemas/auth-schema';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 export function OtpStep() {
   const { personal, setStep } = useAuthModal();
@@ -38,24 +36,13 @@ export function OtpStep() {
 
   const onSubmit = async (data: OtpFormData) => {
     try {
-      const response = await fetch(`${API_BASE}/usuarios/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefono: personal?.telefono ?? '', codigo: data.codigo }),
-      });
-
-      if (!response.ok) {
-        const msg = await parseFetchError(response, 'Código incorrecto. Inténtalo de nuevo.');
-        notify.error(null, msg);
-        form.setError('codigo', { message: msg });
-        return;
-      }
+      await servicioAuth.verificarOtp(personal?.telefono ?? '', data.codigo);
 
       const usuario = servicioAuth.completarActivacion();
       if (usuario) inicializar();
       setStep('result');
     } catch (err) {
-      notify.error(err, 'Error de conexión con el servidor');
+      notify.error(err, 'Código incorrecto. Inténtalo de nuevo.');
     }
   };
 
@@ -64,18 +51,7 @@ export function OtpStep() {
     setReenviando(true);
     
     try {
-      const response = await fetch(`${API_BASE}/usuarios/auth/resend-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefono: personal?.telefono ?? '' }),
-      });
-
-      if (!response.ok) {
-        const msg = await parseFetchError(response, 'No se pudo reenviar el código.');
-        notify.error(null, msg);
-        return;
-      }
-
+      await servicioAuth.reenviarOtp(personal?.telefono ?? '');
       notify.success('Código reenviado', 'Te hemos enviado un nuevo código por WhatsApp.');
       setCooldown(60);
     } catch (err) {
