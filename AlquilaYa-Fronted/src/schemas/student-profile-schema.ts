@@ -3,7 +3,10 @@ import { z } from 'zod';
 export const datosPersonalesSchema = z.object({
   nombre: z.string().min(2, 'Mínimo 2 caracteres').max(50),
   apellido: z.string().min(2, 'Mínimo 2 caracteres').max(50),
-  telefono: z.string().min(8, 'Teléfono inválido').max(20),
+  telefono: z
+    .string()
+    .min(1, 'Requerido')
+    .regex(/^\+519\d{8}$/, 'Teléfono inválido. Debe empezar con +51 y tener 9 dígitos que empiecen con 9'),
   passwordActual: z.string().optional(),
 });
 

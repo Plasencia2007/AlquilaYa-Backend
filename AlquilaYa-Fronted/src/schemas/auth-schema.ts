@@ -6,39 +6,42 @@ export const loginSchema = z.object({
 });
 
 export const registerSchema = z.object({
-  nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(50),
-  apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres').max(50),
-  dni: z.string().regex(/^[0-9]{8}$/, 'El DNI debe tener 8 dígitos numéricos'),
-  correo: z.string().min(1, 'El correo es obligatorio').email('Email inválido'),
+  nombre: z.string().min(2, 'Mínimo 2 caracteres').max(50),
+  apellido: z.string().min(2, 'Mínimo 2 caracteres').max(50),
+  dni: z.string().regex(/^[0-9]{8}$/, 'DNI: 8 dígitos'),
+  correo: z.string().min(1, 'Requerido').email('Email inválido'),
   password: z
     .string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .regex(/[A-Z]/, 'Debe incluir al menos una letra mayúscula')
-    .regex(/[a-z]/, 'Debe incluir al menos una letra minúscula')
-    .regex(/[0-9]/, 'Debe incluir al menos un número')
-    .regex(/[@$!%*?&]/, 'Debe incluir al menos un carácter especial (@$!%*?&)'),
+    .min(8, 'Mínimo 8 caracteres')
+    .regex(/[A-Z]/, 'Falta una mayúscula')
+    .regex(/[a-z]/, 'Falta una minúscula')
+    .regex(/[0-9]/, 'Falta un número')
+    .regex(/[@$!%*?&]/, 'Falta un símbolo (@$!%*?&)'),
 
-  telefono: z.string().min(1, 'El teléfono es obligatorio'),
+  telefono: z
+    .string()
+    .min(1, 'Requerido')
+    .regex(/^\+519\d{8}$/, 'Teléfono inválido. Debe empezar con +51 y tener 9 dígitos que empiecen con 9'),
   rol: z.enum(['ESTUDIANTE', 'ARRENDADOR'] as const, {
-    errorMap: () => ({ message: 'Selecciona un rol válido' }),
+    errorMap: () => ({ message: 'Selecciona un rol' }),
   }),
 });
 
 export const studentDetailsSchema = z.object({
-  universidad: z.string().min(2, 'La universidad es obligatoria'),
-  codigoEstudiante: z.string().min(1, 'El código es obligatorio'),
-  carrera: z.string().min(2, 'La carrera es obligatoria'),
+  universidad: z.string().min(2, 'Requerido'),
+  codigoEstudiante: z.string().min(1, 'Requerido'),
+  carrera: z.string().min(2, 'Requerido'),
   ciclo: z
     .string()
-    .min(1, 'El ciclo es obligatorio')
+    .min(1, 'Requerido')
     .regex(/^([1-9]|1[0-2])$/, 'Ciclo entre 1 y 12'),
 });
 
 export const landlordDetailsSchema = z.object({
-  ruc: z.string().regex(/^([0-9]{11})?$/, 'El RUC debe tener 11 dígitos').optional().or(z.literal('')),
-  direccionCuartos: z.string().min(5, 'Dirección obligatoria'),
-  latitud: z.number().refine((v) => v !== null && !Number.isNaN(v), 'Marca la ubicación en el mapa'),
-  longitud: z.number().refine((v) => v !== null && !Number.isNaN(v), 'Marca la ubicación en el mapa'),
+  ruc: z.string().regex(/^([0-9]{11})?$/, 'RUC: 11 dígitos').optional().or(z.literal('')),
+  direccionCuartos: z.string().min(5, 'Requerido'),
+  latitud: z.number().refine((v) => v !== null && !Number.isNaN(v), 'Marca la ubicación'),
+  longitud: z.number().refine((v) => v !== null && !Number.isNaN(v), 'Marca la ubicación'),
 });
 
 export const otpSchema = z.object({

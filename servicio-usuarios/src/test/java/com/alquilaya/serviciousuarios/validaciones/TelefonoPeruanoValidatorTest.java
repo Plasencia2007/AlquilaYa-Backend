@@ -32,7 +32,7 @@ class TelefonoPeruanoValidatorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"987654321", "51987654321", "+5198765432", "+511234567890", "abc", "+5198765432a"})
+    @ValueSource(strings = {"987654321", "51987654321", "+5198765432", "+511234567890", "abc", "+5198765432a", "+51123456789"})
     void telefonosInvalidosDeberianFallar(String tel) {
         assertThat(validator.isValid(tel, context)).isFalse();
     }

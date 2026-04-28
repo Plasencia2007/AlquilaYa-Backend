@@ -52,7 +52,7 @@ export function LoginForm() {
 
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <header className="space-y-1">
         <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">Bienvenido</h2>
         <p className="text-sm text-muted-foreground">

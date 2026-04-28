@@ -20,10 +20,12 @@ export function AuthDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent className={cn(
-        "grid w-full gap-0 overflow-hidden border-none bg-card p-0 shadow-2xl rounded-2xl max-h-[92dvh] md:max-h-[min(720px,90vh)] md:rounded-[1.5rem]",
+        "flex w-full flex-col gap-0 overflow-hidden border-none bg-card p-0 shadow-2xl rounded-2xl md:rounded-[1.5rem] lg:flex-row",
         isForgotPassword
-          ? "max-w-[440px] grid-cols-1"
-          : "max-w-[420px] grid-cols-1 lg:max-w-[820px] lg:grid-cols-[0.85fr_1fr]"
+          ? "max-w-[440px] h-[min(95dvh,520px)]"
+          : isRegister
+            ? "max-w-[420px] lg:max-w-[820px] h-[min(95dvh,780px)]"
+            : "max-w-[420px] lg:max-w-[820px] h-[min(95dvh,660px)]"
       )}>
         <DialogTitle className="sr-only">
           {isRegister ? 'Crear cuenta' : isForgotPassword ? 'Recuperar contraseña' : 'Iniciar sesión'}
@@ -31,8 +33,8 @@ export function AuthDialog() {
 
         <aside
           className={cn(
-            'relative hidden overflow-hidden bg-primary text-primary-foreground lg:block',
-            isRegister ? 'order-1' : 'order-2',
+            'relative hidden overflow-hidden bg-primary text-primary-foreground lg:block lg:w-[46%] lg:flex-shrink-0',
+            isRegister ? 'lg:order-1' : 'lg:order-2',
             isForgotPassword && 'lg:hidden'
           )}
         >
@@ -92,20 +94,20 @@ export function AuthDialog() {
 
         <section
           className={cn(
-            'flex flex-col overflow-y-auto bg-card px-6 py-6 sm:px-8 sm:py-8 lg:px-9 xl:px-10',
-            isRegister ? 'order-2' : 'order-1',
+            'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-card auth-modal-scroll lg:w-[54%]',
+            isRegister ? 'lg:order-2' : 'lg:order-1',
           )}
         >
-          <div key={view} className="my-auto w-full animate-fade-in">
-
-            {isRegister ? (
-              <RegisterForm />
-            ) : isForgotPassword ? (
-              <ForgotPasswordForm />
-            ) : (
-              <LoginForm />
-            )}
-
+          <div className="flex min-h-full flex-col justify-center px-6 py-12 sm:px-8 sm:py-14 lg:px-9 lg:py-14 xl:px-10">
+            <div key={view} className="w-full animate-fade-in">
+              {isRegister ? (
+                <RegisterForm />
+              ) : isForgotPassword ? (
+                <ForgotPasswordForm />
+              ) : (
+                <LoginForm />
+              )}
+            </div>
           </div>
         </section>
       </DialogContent>

@@ -18,7 +18,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface TelefonoPeruano {
 
-    String message() default "El teléfono debe tener formato peruano +51 seguido de 9 dígitos (ejemplo: +51987654321)";
+    String message() default "El teléfono debe tener formato peruano +51 seguido de 9 dígitos que empiecen con 9 (ejemplo: +51987654321)";
 
     Class<?>[] groups() default {};
 

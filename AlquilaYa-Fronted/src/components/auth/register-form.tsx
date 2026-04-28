@@ -67,7 +67,7 @@ export function RegisterForm() {
   if (step === 'result') return <ResultStep />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <header className="space-y-1">
         <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
           Crea tu cuenta

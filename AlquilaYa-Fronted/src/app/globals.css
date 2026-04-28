@@ -280,4 +280,38 @@
     margin-right: 0.375rem;
     flex-shrink: 0;
   }
+
+  /* Scrollbar discreto + fade en los bordes para el panel del modal de auth */
+  .auth-modal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    /* Difumina el contenido contra los bordes superior e inferior cuando hay scroll. */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 32px,
+      black calc(100% - 32px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 32px,
+      black calc(100% - 32px),
+      transparent 100%
+    );
+  }
+  .auth-modal-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .auth-modal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .auth-modal-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+  .auth-modal-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
 }
