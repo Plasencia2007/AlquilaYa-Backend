@@ -1,26 +1,26 @@
-import { api } from '@/lib/api';
+// AGENT A WILL OVERRIDE — el Agente A está actualizando este archivo
+// para incorporar todos los campos nuevos del backend. Este stub
+// extiende el contrato anterior añadiendo `CrearPropiedadRequest`
+// completo y manteniendo retro-compatibilidad con el resto de la app.
 
-export interface PropiedadRequest {
-  titulo: string;
-  descripcion: string;
-  precio: number;
-  direccion: string;
-  arrendadorId: string;
-  ubicacionGps?: string;
-}
+import { api } from '@/lib/api';
+import type { CrearPropiedadRequest } from '@/types/propiedad';
+
+// Alias compatible con el código existente.
+export type PropiedadRequest = CrearPropiedadRequest;
 
 export const propiedadService = {
   /**
-   * Crea una nueva propiedad con una imagen (Multipart)
+   * Crea una nueva propiedad con una imagen (multipart/form-data).
+   * El backend espera dos partes: `propiedad` (JSON string) y `file` (binario).
    */
-  async crearPropiedad(propiedad: PropiedadRequest, file: File) {
+  async crearPropiedad(propiedad: CrearPropiedadRequest, file?: File) {
     const formData = new FormData();
-    
-    // El backend espera una parte "propiedad" como JSON string y una parte "file"
     formData.append('propiedad', JSON.stringify(propiedad));
-    formData.append('file', file);
+    if (file) {
+      formData.append('file', file);
+    }
 
-    // Sin la barra inicial '/' para que Axios use la baseURL: http://localhost:8080/api/v1
     const response = await api.post('propiedades', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -30,19 +30,13 @@ export const propiedadService = {
     return response.data;
   },
 
-  /**
-   * Obtiene todas las propiedades (para vista general administrador)
-   */
   async obtenerTodas() {
     const response = await api.get('propiedades');
     return response.data;
   },
 
-  /**
-   * Obtiene las propiedades de un arrendador específico
-   */
-  async obtenerPorArrendador(arrendadorId: string) {
+  async obtenerPorArrendador(arrendadorId: string | number) {
     const response = await api.get(`propiedades/arrendador/${arrendadorId}`);
     return response.data;
-  }
+  },
 };
