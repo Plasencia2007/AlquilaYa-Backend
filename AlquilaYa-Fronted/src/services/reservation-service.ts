@@ -96,4 +96,23 @@ export const reservationService = {
     const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/cancelar`);
     return fromDTO(data);
   },
+
+  /**
+   * Lista las reservas en las que el usuario logueado actúa como arrendador.
+   * Si se pasa `estado`, filtra por estado (ej. 'PAGADA' para finanzas).
+   * Endpoints backend:
+   *   - GET /reservas/arrendador
+   *   - GET /reservas/arrendador/estado/{estado}
+   *
+   * NOTA: este método se duplica en el worktree del Agente 2 con la misma firma.
+   * Al hacer merge debe quedar una sola implementación.
+   */
+  listarComoArrendador: async (estado?: string): Promise<Reserva[]> => {
+    const url = estado
+      ? `/reservas/arrendador/estado/${estado}`
+      : '/reservas/arrendador';
+    const { data } = await api.get<ReservaResponseDTO[]>(url);
+    const reservas = data.map(fromDTO);
+    return enriquecer(reservas);
+  },
 };
