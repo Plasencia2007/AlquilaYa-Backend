@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/resenas/propiedad/*").permitAll()
                         .requestMatchers("/api/v1/resenas/arrendador/*").permitAll()
                         .requestMatchers("/api/v1/resenas/**").authenticated()
+                        .requestMatchers("/api/v1/dashboard/**").authenticated()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
