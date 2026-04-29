@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a12683b3087602754 add -A)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a12683b3087602754 commit -m 'feat: landlord properties CRUD \\(edit/delete/gallery/services/rules\\) *)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend worktree remove C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a3063cf397752f531 --force)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend worktree remove C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a7fc79fac5709d942 --force)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend worktree remove C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a12683b3087602754 --force)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend worktree remove C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-ac167e3314b462d0a --force)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend branch -D worktree-agent-a3063cf397752f531 worktree-agent-a7fc79fac5709d942 worktree-agent-a12683b3087602754 worktree-agent-ac167e3314b462d0a)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend log --oneline main -10)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a9960aa13b5ef5e3e add -A)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a9960aa13b5ef5e3e commit -m 'feat\\(landlord/add\\): redesigned Publicar mi cuarto form *)",
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend merge --no-ff worktree-agent-a99ede91f36ad8ecd -m \"merge: data layer for new property form \\(Agent A\\)\")"
+    ]
+  }
+}

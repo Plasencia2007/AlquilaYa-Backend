@@ -96,4 +96,35 @@ export const reservationService = {
     const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/cancelar`);
     return fromDTO(data);
   },
+
+  /**
+   * Lista las reservas del arrendador autenticado. Si se pasa `estado`
+   * el backend filtra; en caso contrario devuelve todas. Enriquecemos las
+   * filas con datos visibles de la propiedad.
+   */
+  listarComoArrendador: async (estado?: EstadoReserva): Promise<Reserva[]> => {
+    const url = estado
+      ? `/reservas/arrendador/estado/${estado}`
+      : '/reservas/arrendador';
+    const { data } = await api.get<ReservaResponseDTO[]>(url);
+    const reservas = data.map(fromDTO);
+    return enriquecer(reservas);
+  },
+
+  aprobar: async (id: string): Promise<Reserva> => {
+    const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/aprobar`);
+    return fromDTO(data);
+  },
+
+  rechazar: async (id: string, motivo?: string): Promise<Reserva> => {
+    const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/rechazar`, {
+      motivo: motivo ?? '',
+    });
+    return fromDTO(data);
+  },
+
+  finalizar: async (id: string): Promise<Reserva> => {
+    const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/finalizar`);
+    return fromDTO(data);
+  },
 };

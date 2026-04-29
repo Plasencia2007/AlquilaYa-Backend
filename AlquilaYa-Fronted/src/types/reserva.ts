@@ -37,3 +37,15 @@ export interface CrearReservaRequest {
   solicitaVisitaPrevia: boolean;
   notaEstudiante?: string;
 }
+
+/**
+ * Reserva enriquecida con información visible adicional del estudiante y
+ * propiedad. La forma actual ya incluye los campos opcionales necesarios
+ * dentro de `Reserva`; este alias documenta el caso de uso del arrendador.
+ */
+export interface ReservaConDetalles extends Reserva {
+  estudianteCorreo?: string;
+  estudianteAvatar?: string;
+}
+
+export type FiltroEstadoReserva = EstadoReserva | 'TODAS';
