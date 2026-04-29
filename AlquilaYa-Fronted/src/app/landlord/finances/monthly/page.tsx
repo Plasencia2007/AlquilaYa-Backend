@@ -124,7 +124,7 @@ export default function LandlordFinancesMonthlyPage() {
                 <XAxis dataKey="etiqueta" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(v: number) => formatearMoneda(Number(v))}
+                  formatter={(v) => formatearMoneda(Number(v))}
                   labelStyle={{ fontWeight: 700 }}
                 />
                 <Bar dataKey="total" fill="#3b82f6" radius={[6, 6, 0, 0]} />
