@@ -1,59 +1,59 @@
 import { api } from '@/lib/api';
 import type {
+  CrearPropiedadRequest,
   PropiedadBackend,
   PropiedadCompleta,
   PropiedadImagen,
   PropiedadUpdate,
 } from '@/types/propiedad';
 
-export interface PropiedadRequest {
-  titulo: string;
-  descripcion: string;
-  precio: number;
-  direccion: string;
-  arrendadorId: string;
-  ubicacionGps?: string;
-}
+/**
+ * Re-export para compatibilidad con código existente que importaba
+ * `PropiedadRequest` desde este módulo. El payload completo vive en
+ * `@/types/propiedad` (`CrearPropiedadRequest`).
+ */
+export type PropiedadRequest = CrearPropiedadRequest;
 
 export const propiedadService = {
   /**
-   * Crea una nueva propiedad con una imagen (Multipart)
+   * Crea una nueva propiedad vía `POST /api/v1/propiedades`.
+   *
+   * Multipart con dos parts:
+   *  - `propiedad`: Blob con JSON serializado y `Content-Type: application/json`
+   *                 (Spring lo requiere explícito para deserializar la entidad).
+   *  - `file`: imagen principal opcional. JPG/PNG/WEBP, max 10 MB.
    */
-  async crearPropiedad(propiedad: PropiedadRequest, file: File) {
+  async crearPropiedad(propiedad: CrearPropiedadRequest, file?: File | null) {
     const formData = new FormData();
-
-    // El backend espera una parte "propiedad" como JSON string y una parte "file"
-    formData.append('propiedad', JSON.stringify(propiedad));
-    formData.append('file', file);
-
-    // Sin la barra inicial '/' para que Axios use la baseURL: http://localhost:8080/api/v1
-    const response = await api.post('propiedades', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
+    formData.append(
+      'propiedad',
+      new Blob([JSON.stringify(propiedad)], { type: 'application/json' }),
+    );
+    if (file) {
+      formData.append('file', file);
+    }
+    const response = await api.post('propiedades', formData);
     return response.data;
   },
 
   /**
-   * Obtiene todas las propiedades (para vista general administrador)
+   * Lista todas las propiedades disponibles.
    */
-  async obtenerTodas() {
+  async listarPropiedades() {
     const response = await api.get('propiedades');
     return response.data;
   },
 
   /**
-   * Obtiene las propiedades de un arrendador específico
+   * Propiedades de un arrendador específico.
    */
-  async obtenerPorArrendador(arrendadorId: string): Promise<PropiedadBackend[]> {
+  async obtenerPorArrendador(arrendadorId: string | number): Promise<PropiedadBackend[]> {
     const response = await api.get(`propiedades/arrendador/${arrendadorId}`);
     return response.data;
   },
 
   /**
-   * Obtiene el detalle completo de la propiedad (incluye galería, servicios y reglas)
+   * Detalle completo (galería, servicios y reglas).
    * GET /propiedades/{id}/completo
    */
   async obtenerCompleto(id: string | number): Promise<PropiedadCompleta> {
@@ -62,9 +62,8 @@ export const propiedadService = {
   },
 
   /**
-   * Actualiza una propiedad. El backend espera JSON (PUT). FormData no es soportado en
-   * el endpoint actual; las imágenes se gestionan vía endpoints dedicados.
-   * PUT /propiedades/{id}
+   * PUT /propiedades/{id} (JSON, no multipart). Las imágenes se gestionan
+   * con endpoints dedicados.
    */
   async actualizar(id: string | number, data: PropiedadUpdate): Promise<PropiedadBackend> {
     const response = await api.put(`propiedades/${id}`, data);
@@ -72,7 +71,6 @@ export const propiedadService = {
   },
 
   /**
-   * Elimina una propiedad.
    * DELETE /propiedades/{id}
    */
   async eliminar(id: string | number): Promise<void> {
@@ -86,14 +84,18 @@ export const propiedadService = {
   async subirImagenes(id: string | number, files: File[]): Promise<PropiedadImagen[]> {
     const formData = new FormData();
     files.forEach((f) => formData.append('files', f));
-    const response = await api.post(`propiedades/${id}/imagenes`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post(`propiedades/${id}/imagenes`, formData);
     return response.data;
   },
 
   /**
-   * Elimina una imagen específica.
+   * Alias de `subirImagenes` para coherencia semántica con el flujo de creación.
+   */
+  async subirImagenesAdicionales(id: string | number, files: File[]): Promise<PropiedadImagen[]> {
+    return this.subirImagenes(id, files);
+  },
+
+  /**
    * DELETE /propiedades/{id}/imagenes/{imagenId}
    */
   async eliminarImagen(propiedadId: string | number, imagenId: string | number): Promise<void> {
