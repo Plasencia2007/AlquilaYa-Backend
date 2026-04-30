@@ -41,16 +41,6 @@ const NAVIGATION: NavCategory[] = [
         subItems: [
           { label: 'Cuartos activos', href: '/landlord/properties/active' },
           { label: 'Agregar cuarto', href: '/landlord/properties/add' },
-          { label: 'Editar / pausar', href: '/landlord/properties/edit' },
-        ],
-      },
-      {
-        label: 'Fotos y detalles',
-        icon: 'image',
-        subItems: [
-          { label: 'Galería por cuarto', href: '/landlord/details/gallery' },
-          { label: 'Servicios incluidos', href: '/landlord/details/services' },
-          { label: 'Reglas de la casa', href: '/landlord/details/rules' },
         ],
       },
     ],
@@ -63,10 +53,8 @@ const NAVIGATION: NavCategory[] = [
         icon: 'calendar_month',
         badge: 2,
         subItems: [
-          { label: 'Pendientes', href: '/landlord/reservations/pending' },
-          { label: 'Confirmadas', href: '/landlord/reservations/confirmed' },
-          { label: 'Historial', href: '/landlord/reservations/history' },
-          { label: 'Contratos', href: '/landlord/reservations/contracts' },
+          { label: 'Reservas activas', href: '/landlord/reservations/active' },
+          { label: 'Historial',        href: '/landlord/reservations/history' },
         ],
       },
     ],

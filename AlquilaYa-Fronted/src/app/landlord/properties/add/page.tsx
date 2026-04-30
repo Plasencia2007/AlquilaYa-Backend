@@ -12,11 +12,6 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { Badge } from '@/components/ui/legacy-badge';
-import { Button } from '@/components/ui/legacy-button';
-import { Input } from '@/components/ui/legacy-input';
-import { Card } from '@/components/ui/legacy-card';
-
 import { propiedadService } from '@/services/landlord-property-service';
 import {
   catalogosService,
@@ -30,6 +25,7 @@ import {
   distanciaHaversineKm,
   formatearDistancia,
 } from '@/lib/geo';
+import { cn } from '@/lib/cn';
 import type {
   CrearPropiedadRequest,
   PeriodoAlquiler,
@@ -37,7 +33,78 @@ import type {
 } from '@/types/propiedad';
 
 // =============================================================================
-// Tipos locales
+// Font Awesome → Material Symbols mapper
+// El backend almacena íconos como "fa-wifi", "fa-paw", etc.
+// Material Symbols (Google) usa nombres distintos como "wifi", "pets", etc.
+// =============================================================================
+
+const FA_TO_MATERIAL: Record<string, string> = {
+  // Períodos
+  'fa-calendar-alt': 'calendar_month',
+  'fa-calendar':     'calendar_today',
+  'fa-calendar-day': 'today',
+  'fa-repeat':       'event_repeat',
+  'fa-clock':        'schedule',
+  // Servicios comunes
+  'fa-wifi':             'wifi',
+  'fa-tint':             'water_drop',
+  'fa-bolt':             'bolt',
+  'fa-lightbulb':        'lightbulb',
+  'fa-female':           'lightbulb',
+  'fa-tshirt':           'checkroom',
+  'fa-shirt':            'checkroom',
+  'fa-utensils':         'restaurant',
+  'fa-key':              'key',
+  'fa-shower':           'shower',
+  'fa-bath':             'bathtub',
+  'fa-tv':               'tv',
+  'fa-snowflake':        'ac_unit',
+  'fa-temperature-high': 'thermostat',
+  'fa-parking':          'local_parking',
+  'fa-bus':              'directions_bus',
+  'fa-lock':             'lock',
+  'fa-couch':            'weekend',
+  'fa-bed':              'bed',
+  'fa-dumbbell':         'fitness_center',
+  'fa-water':            'water',
+  'fa-gas-pump':         'local_gas_station',
+  'fa-fire':             'local_fire_department',
+  'fa-broom':            'cleaning_services',
+  'fa-shield-alt':       'security',
+  'fa-dog':              'pets',
+  // Reglas comunes
+  'fa-paw':             'pets',
+  'fa-smoking-ban':     'smoke_free',
+  'fa-smoking':         'smoking_rooms',
+  'fa-graduation-cap':  'school',
+  'fa-music':           'music_note',
+  'fa-glass-martini':   'local_bar',
+  'fa-cocktail':        'local_bar',
+  'fa-beer':            'sports_bar',
+  'fa-volume-up':       'volume_up',
+  'fa-user-friends':    'group',
+  'fa-users':           'group',
+  'fa-child':           'child_care',
+  'fa-ban':             'block',
+  'fa-check':           'check_circle',
+  'fa-times':           'cancel',
+  // Tipos de propiedad
+  'fa-home':       'home',
+  'fa-building':   'apartment',
+  'fa-hotel':      'hotel',
+  'fa-door-open':  'door_front',
+  'fa-house':      'house',
+};
+
+function resolveIcon(icon: string | undefined): string | undefined {
+  if (!icon) return undefined;
+  const key = icon.toLowerCase().trim();
+  if (key.startsWith('fa-')) return FA_TO_MATERIAL[key] ?? 'label';
+  return icon;
+}
+
+// =============================================================================
+// Types
 // =============================================================================
 
 interface FormState {
@@ -76,11 +143,11 @@ const INITIAL_FORM: FormState = {
   disponibleDesde: '',
 };
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 // =============================================================================
-// Subcomponentes
+// Section
 // =============================================================================
 
 interface SectionProps {
@@ -93,28 +160,33 @@ interface SectionProps {
 
 function Section({ step, icon, title, subtitle, children }: SectionProps) {
   return (
-    <Card className="border-none shadow-sm bg-surface-container-low" hoverable={false}>
-      <div className="flex items-start gap-4 mb-6">
-        <div className="flex-shrink-0 w-11 h-11 rounded-2xl bg-primary/10 text-primary grid place-items-center">
-          <span className="material-symbols-outlined">{icon}</span>
+    <div className="bg-card rounded-2xl border border-border shadow-sm">
+      <div className="px-6 py-4 border-b border-border flex items-center gap-3 rounded-t-2xl overflow-hidden">
+        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-[17px] text-accent-foreground">
+            {icon}
+          </span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Badge variant="surface" className="!px-2 !py-0.5">
-              Paso {step}
-            </Badge>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[9px] font-bold tracking-[0.2em] text-muted-foreground uppercase tabular-nums">
+              {String(step).padStart(2, '0')}
+            </span>
+            <h3 className="text-sm font-bold text-foreground">{title}</h3>
           </div>
-          <h3 className="text-xl font-black text-on-surface tracking-tight">{title}</h3>
           {subtitle && (
-            <p className="text-sm text-on-surface-variant mt-0.5 leading-snug">{subtitle}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</p>
           )}
         </div>
       </div>
-
-      <div className="space-y-4">{children}</div>
-    </Card>
+      <div className="p-6 space-y-4">{children}</div>
+    </div>
   );
 }
+
+// =============================================================================
+// Field
+// =============================================================================
 
 interface FieldProps {
   label: string;
@@ -127,25 +199,68 @@ interface FieldProps {
 function Field({ label, hint, error, required, children }: FieldProps) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant px-1 flex items-center gap-1.5">
+      <label className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
         {label}
-        {required && <span className="text-error">*</span>}
+        {required && <span className="text-destructive text-[13px] leading-none">*</span>}
         {hint && (
-          <span className="font-medium normal-case tracking-normal text-[10px] text-outline">
+          <span className="normal-case tracking-normal font-normal opacity-60 ml-0.5">
             · {hint}
           </span>
         )}
       </label>
       {children}
       {error && (
-        <p className="text-error text-[11px] font-bold px-2 flex items-center gap-1 animate-fade-in">
-          <span className="material-symbols-outlined text-[14px]">error</span>
+        <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1 animate-fade-in">
+          <span className="material-symbols-outlined text-[13px]">error</span>
           {error}
         </p>
       )}
     </div>
   );
 }
+
+// =============================================================================
+// InputField — native input con tokens correctos
+// =============================================================================
+
+interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  icon?: string;
+  error?: boolean;
+}
+
+function InputField({ icon, error, className, ...props }: InputFieldProps) {
+  return (
+    <div className="relative">
+      {icon && (
+        <span
+          className={cn(
+            'material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[17px] pointer-events-none transition-colors',
+            error ? 'text-destructive/50' : 'text-muted-foreground',
+          )}
+        >
+          {icon}
+        </span>
+      )}
+      <input
+        className={cn(
+          'w-full bg-input border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50',
+          'py-2.5 px-4 outline-none transition-all',
+          'focus:ring-2 focus:ring-primary/20 focus:border-primary',
+          icon && 'pl-10',
+          error
+            ? 'border-destructive/60 focus:ring-destructive/20 focus:border-destructive'
+            : 'border-border hover:border-primary/40',
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  );
+}
+
+// =============================================================================
+// CustomSelect
+// =============================================================================
 
 interface CustomSelectProps<T extends string> {
   value: T | '';
@@ -168,9 +283,7 @@ function CustomSelect<T extends string>({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -181,33 +294,43 @@ function CustomSelect<T extends string>({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center justify-between gap-3 bg-surface-container-low border rounded-2xl py-4 px-4 text-left text-sm font-medium transition-all
-          ${error ? 'border-error focus:ring-error/20 focus:border-error' : 'border-outline-variant/20 hover:border-primary/40 focus:ring-2 focus:ring-primary/20 focus:border-primary'}
-          ${open ? 'ring-2 ring-primary/20 border-primary' : ''}
-        `}
+        className={cn(
+          'w-full flex items-center justify-between gap-3 bg-input border rounded-xl py-2.5 px-4 text-sm text-left outline-none transition-all',
+          error
+            ? 'border-destructive/60'
+            : open
+              ? 'border-primary ring-2 ring-primary/20'
+              : 'border-border hover:border-primary/40',
+        )}
       >
         <span className="flex items-center gap-2 min-w-0">
           {selected?.icon && (
-            <span className="material-symbols-outlined text-primary text-[20px]">
+            <span className="material-symbols-outlined text-[16px] text-muted-foreground shrink-0">
               {selected.icon}
             </span>
           )}
           <span
-            className={`truncate ${selected ? 'text-on-surface' : 'text-outline/60'}`}
+            className={cn(
+              'truncate text-sm',
+              selected ? 'text-foreground font-medium' : 'text-muted-foreground/50',
+            )}
           >
             {selected ? selected.label : placeholder}
           </span>
         </span>
         <span
-          className={`material-symbols-outlined text-on-surface-variant text-[20px] transition-transform ${open ? 'rotate-180' : ''}`}
+          className={cn(
+            'material-symbols-outlined text-[18px] text-muted-foreground transition-transform shrink-0',
+            open && 'rotate-180',
+          )}
         >
           expand_more
         </span>
       </button>
 
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-2 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
-          <ul className="max-h-72 overflow-y-auto py-1.5">
+        <div className="absolute z-30 left-0 right-0 mt-1.5 bg-card border border-border rounded-xl shadow-lg overflow-hidden animate-fade-in">
+          <ul className="max-h-64 overflow-y-auto py-1">
             {options.map((opt) => {
               const active = opt.value === value;
               return (
@@ -218,28 +341,31 @@ function CustomSelect<T extends string>({
                       onChange(opt.value);
                       setOpen(false);
                     }}
-                    className={`w-full flex items-start gap-3 px-3 py-2.5 mx-1.5 my-0.5 rounded-xl text-left transition-colors
-                      ${active ? 'bg-primary/10 text-primary' : 'hover:bg-surface-container text-on-surface'}
-                    `}
-                    style={{ width: 'calc(100% - 0.75rem)' }}
+                    className={cn(
+                      'w-full flex items-start gap-2.5 px-3 py-2.5 text-sm text-left transition-colors',
+                      active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted text-foreground',
+                    )}
                   >
                     {opt.icon && (
                       <span
-                        className={`material-symbols-outlined mt-0.5 text-[20px] ${active ? 'text-primary' : 'text-on-surface-variant'}`}
+                        className={cn(
+                          'material-symbols-outlined text-[15px] mt-0.5 shrink-0',
+                          active ? 'text-accent-foreground' : 'text-muted-foreground',
+                        )}
                       >
                         {opt.icon}
                       </span>
                     )}
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold">{opt.label}</span>
+                      <span className="block font-medium leading-tight">{opt.label}</span>
                       {opt.description && (
-                        <span className="block text-[11px] text-on-surface-variant mt-0.5">
+                        <span className="block text-[11px] opacity-60 mt-0.5">
                           {opt.description}
                         </span>
                       )}
                     </span>
                     {active && (
-                      <span className="material-symbols-outlined text-primary text-[20px]">
+                      <span className="material-symbols-outlined text-[15px] text-accent-foreground shrink-0">
                         check
                       </span>
                     )}
@@ -254,6 +380,10 @@ function CustomSelect<T extends string>({
   );
 }
 
+// =============================================================================
+// ChipsMultiselect
+// =============================================================================
+
 interface ChipsMultiselectProps {
   items: ItemCatalogo[];
   selected: string[];
@@ -264,7 +394,7 @@ interface ChipsMultiselectProps {
 function ChipsMultiselect({ items, selected, onToggle, emptyHint }: ChipsMultiselectProps) {
   if (!items.length) {
     return (
-      <p className="text-xs text-on-surface-variant italic px-1">
+      <p className="text-xs text-muted-foreground italic">
         {emptyHint ?? 'No hay opciones disponibles aún.'}
       </p>
     );
@@ -278,18 +408,19 @@ function ChipsMultiselect({ items, selected, onToggle, emptyHint }: ChipsMultise
             key={item.id ?? item.valor}
             type="button"
             onClick={() => onToggle(item.valor)}
-            className={`group inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold transition-all border
-              ${isOn
-                ? 'bg-primary text-on-primary border-primary shadow-md shadow-primary/20'
-                : 'bg-surface-container-lowest text-on-surface border-outline-variant/30 hover:border-primary/50 hover:text-primary'}
-            `}
-          >
-            {item.icono && (
-              <span className="material-symbols-outlined text-[16px]">{item.icono}</span>
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold border transition-all',
+              isOn
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-card text-foreground border-border hover:border-primary/60 hover:text-primary',
             )}
-            <span>{item.nombre}</span>
+          >
+            {resolveIcon(item.icono) && (
+              <span className="material-symbols-outlined text-[13px]">{resolveIcon(item.icono)}</span>
+            )}
+            {item.nombre}
             {isOn && (
-              <span className="material-symbols-outlined text-[14px] -mr-0.5">check</span>
+              <span className="material-symbols-outlined text-[11px] ml-0.5">check</span>
             )}
           </button>
         );
@@ -297,6 +428,10 @@ function ChipsMultiselect({ items, selected, onToggle, emptyHint }: ChipsMultise
     </div>
   );
 }
+
+// =============================================================================
+// Switch
+// =============================================================================
 
 interface SwitchProps {
   checked: boolean;
@@ -311,15 +446,137 @@ function Switch({ checked, onChange, label }: SwitchProps) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200
-        ${checked ? 'bg-primary' : 'bg-surface-container-high'}`}
       title={label}
+      className={cn(
+        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+        checked ? 'bg-primary' : 'bg-muted',
+      )}
     >
       <span
-        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out
-          ${checked ? 'translate-x-5' : 'translate-x-0'}`}
+        className={cn(
+          'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200',
+          checked ? 'translate-x-5' : 'translate-x-0',
+        )}
       />
     </button>
+  );
+}
+
+// =============================================================================
+// SkeletonChips
+// =============================================================================
+
+// =============================================================================
+// CustomItemInput
+// =============================================================================
+
+interface CustomItemInputProps {
+  items: string[];
+  onAdd: (text: string) => void;
+  onRemove: (text: string) => void;
+  maxItems?: number;
+  maxChars?: number;
+  placeholder?: string;
+}
+
+function CustomItemInput({
+  items,
+  onAdd,
+  onRemove,
+  maxItems = 3,
+  maxChars = 60,
+  placeholder = 'Escribe y presiona Enter…',
+}: CustomItemInputProps) {
+  const [inputValue, setInputValue] = useState('');
+  const canAdd = items.length < maxItems;
+
+  const commit = () => {
+    const v = inputValue.trim();
+    if (!v || v.length > maxChars) return;
+    if (items.some((i) => i.toLowerCase() === v.toLowerCase())) return;
+    if (!canAdd) return;
+    onAdd(v);
+    setInputValue('');
+  };
+
+  return (
+    <div className="space-y-2">
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((item) => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold bg-amber-50 border border-amber-200 text-amber-800"
+            >
+              <span className="material-symbols-outlined text-[12px]">edit_note</span>
+              {item}
+              <button
+                type="button"
+                onClick={() => onRemove(item)}
+                className="ml-0.5 hover:text-amber-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[11px]">close</span>
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {canAdd && (
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commit();
+                }
+              }}
+              maxLength={maxChars}
+              placeholder={placeholder}
+              className={cn(
+                'w-full bg-input border border-border rounded-xl text-sm text-foreground',
+                'py-2.5 px-4 outline-none transition-all',
+                'focus:ring-2 focus:ring-primary/20 focus:border-primary',
+                'placeholder:text-muted-foreground/50',
+                inputValue.length > 0 && 'pr-14',
+              )}
+            />
+            {inputValue.length > 0 && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground tabular-nums pointer-events-none">
+                {inputValue.length}/{maxChars}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={commit}
+            disabled={!inputValue.trim() || inputValue.length > maxChars}
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 active:scale-95 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+          </button>
+        </div>
+      )}
+
+      {!canAdd && (
+        <p className="text-[11px] text-muted-foreground">
+          Máximo {maxItems} ítems personalizados.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SkeletonChips() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <span key={i} className="h-8 rounded-full bg-muted animate-pulse" style={{ width: `${60 + (i % 3) * 20}px` }} />
+      ))}
+    </div>
   );
 }
 
@@ -336,16 +593,14 @@ export default function AddPropertyPage() {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Imagen
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [coverIndex, setCoverIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_IMAGES = 6;
 
-  // Geolocalización
   const [requestingGeo, setRequestingGeo] = useState(false);
-
-  // Catálogos
   const [catalogos, setCatalogos] = useState<CatalogosActivos | null>(null);
   const [cargandoCat, setCargandoCat] = useState(true);
 
@@ -353,21 +608,12 @@ export default function AddPropertyPage() {
     let cancel = false;
     catalogosService
       .obtenerActivos()
-      .then((data) => {
-        if (!cancel) setCatalogos(data);
-      })
-      .catch(() => {
-        // Silencioso — el servicio cae a fallback.
-      })
-      .finally(() => {
-        if (!cancel) setCargandoCat(false);
-      });
-    return () => {
-      cancel = true;
-    };
+      .then((data) => { if (!cancel) setCatalogos(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancel) setCargandoCat(false); });
+    return () => { cancel = true; };
   }, []);
 
-  // Helpers de actualización
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrores((prev) => {
@@ -382,14 +628,13 @@ export default function AddPropertyPage() {
     setField(name as keyof FormState, value as never);
   };
 
-  // Catálogos: opciones para selects
   const tiposOptions = useMemo(() => {
     const fromCat = catalogos?.TIPO_CUARTO ?? [];
     if (fromCat.length) {
       return fromCat.map((i) => ({
         value: i.valor as TipoPropiedad,
         label: i.nombre,
-        icon: i.icono,
+        icon: resolveIcon(i.icono),
         description: i.descripcion,
       }));
     }
@@ -407,7 +652,7 @@ export default function AddPropertyPage() {
       return fromCat.map((i) => ({
         value: i.valor as PeriodoAlquiler,
         label: i.nombre,
-        icon: i.icono,
+        icon: resolveIcon(i.icono),
       }));
     }
     return [
@@ -418,35 +663,37 @@ export default function AddPropertyPage() {
     ];
   }, [catalogos]);
 
-  // Imagen handlers
-  const handleFile = (file?: File | null) => {
-    if (!file) return;
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setErrores((p) => ({ ...p, imagen: 'Formato no soportado. Usa JPG, PNG o WEBP.' }));
+  const handleFiles = (incoming: File[]) => {
+    const remaining = MAX_IMAGES - imageFiles.length;
+    if (remaining <= 0) return;
+    const candidates = incoming.slice(0, remaining);
+    const invalid = candidates.find(
+      (f) => !ACCEPTED_IMAGE_TYPES.includes(f.type) || f.size > MAX_IMAGE_BYTES,
+    );
+    if (invalid) {
+      setErrores((p) => ({ ...p, imagen: `"${invalid.name}": formato no soportado o excede 10 MB.` }));
       return;
     }
-    if (file.size > MAX_IMAGE_BYTES) {
-      setErrores((p) => ({ ...p, imagen: 'La imagen excede 10 MB.' }));
-      return;
-    }
-    setErrores((p) => {
-      const { imagen: _omit, ...rest } = p;
-      return rest;
+    setErrores((p) => { const { imagen: _omit, ...rest } = p; return rest; });
+    candidates.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageFiles((prev) => [...prev, file]);
+        setPreviews((prev) => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
     });
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
   };
 
   const onFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    handleFile(e.target.files?.[0]);
+    handleFiles(Array.from(e.target.files ?? []));
+    e.target.value = '';
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFile(e.dataTransfer.files?.[0]);
+    handleFiles(Array.from(e.dataTransfer.files));
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -456,13 +703,17 @@ export default function AddPropertyPage() {
 
   const onDragLeave = () => setIsDragging(false);
 
-  const removeImage = () => {
-    setImageFile(null);
-    setPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  const removeImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviews((prev) => prev.filter((_, i) => i !== index));
+    setCoverIndex((prev) => {
+      if (imageFiles.length <= 1) return 0;
+      if (index === prev) return 0;
+      if (index < prev) return prev - 1;
+      return prev;
+    });
   };
 
-  // Geolocalización
   const usarMiUbicacion = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setErrores((p) => ({ ...p, latitud: 'Tu navegador no soporta geolocalización.' }));
@@ -482,11 +733,10 @@ export default function AddPropertyPage() {
         }));
         setRequestingGeo(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
-  // Distancia a UPeU (preview en vivo para que el usuario vea si está en rango)
   const distanciaUpeu = useMemo(() => {
     const lat = parseFloat(form.latitud);
     const lng = parseFloat(form.longitud);
@@ -495,31 +745,24 @@ export default function AddPropertyPage() {
     return distanciaHaversineKm({ lat, lng }, UPEU_COORDS);
   }, [form.latitud, form.longitud]);
 
-  // Validación
   const validar = (): Errores => {
     const e: Errores = {};
-
     if (!form.titulo.trim()) e.titulo = 'Ponle un título a tu publicación.';
     else if (form.titulo.length > 150) e.titulo = 'Máximo 150 caracteres.';
-
     if (form.descripcion.length > 5000) e.descripcion = 'La descripción no debe superar 5000 caracteres.';
-
     const precioNum = parseFloat(form.precio);
     if (!form.precio.trim()) e.precio = 'Indica un precio.';
     else if (Number.isNaN(precioNum) || precioNum <= 0) e.precio = 'El precio debe ser mayor a 0.';
-
     if (!form.direccion.trim()) e.direccion = 'Indica la dirección.';
     else if (form.direccion.length > 255) e.direccion = 'Máximo 255 caracteres.';
-
     if (form.area !== '') {
       const a = parseFloat(form.area);
-      if (Number.isNaN(a) || a < 0) e.area = 'Área debe ser >= 0.';
+      if (Number.isNaN(a) || a < 0) e.area = 'Área debe ser ≥ 0.';
     }
     if (form.nroPiso !== '') {
       const p = parseInt(form.nroPiso, 10);
       if (Number.isNaN(p) || p < 0) e.nroPiso = 'Número de piso inválido.';
     }
-
     const latRaw = form.latitud.trim();
     const lngRaw = form.longitud.trim();
     if ((latRaw && !lngRaw) || (!latRaw && lngRaw)) {
@@ -531,43 +774,30 @@ export default function AddPropertyPage() {
       else if (Number.isNaN(lng) || lng < -180 || lng > 180) e.longitud = 'Longitud entre -180 y 180.';
       else {
         const km = distanciaHaversineKm({ lat, lng }, UPEU_COORDS);
-        if (km > UPEU_RADIO_MAX_KM) {
-          e.longitud = `La ubicación está a ${formatearDistancia(km)} de UPeU. Máximo permitido: ${UPEU_RADIO_MAX_KM} km.`;
-        }
+        if (km > UPEU_RADIO_MAX_KM)
+          e.longitud = `La ubicación está a ${formatearDistancia(km)} de UPeU. Máx: ${UPEU_RADIO_MAX_KM} km.`;
       }
     }
-
-    if (!imageFile) e.imagen = 'Sube una foto de portada.';
-
+    if (imageFiles.length === 0) e.imagen = 'Sube al menos una foto.';
     return e;
   };
 
-  // Submit
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
-
-    if (!usuario) {
-      setSubmitError('Debes iniciar sesión para publicar.');
-      return;
-    }
-
+    if (!usuario) { setSubmitError('Debes iniciar sesión para publicar.'); return; }
     const validationErrors = validar();
     if (Object.keys(validationErrors).length > 0) {
       setErrores(validationErrors);
-      // scroll al primer error
       const firstField = Object.keys(validationErrors)[0];
-      const el = document.querySelector(`[data-field="${firstField}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.querySelector(`[data-field="${firstField}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-
     const arrendadorIdNumber = Number(usuario.perfilId ?? usuario.id);
     if (!arrendadorIdNumber || Number.isNaN(arrendadorIdNumber)) {
       setSubmitError('No pudimos identificar tu perfil de arrendador. Vuelve a iniciar sesión.');
       return;
     }
-
     const payload: CrearPropiedadRequest = {
       titulo: form.titulo.trim(),
       descripcion: form.descripcion.trim() || undefined,
@@ -589,16 +819,19 @@ export default function AddPropertyPage() {
       disponibleDesde: form.disponibleDesde || undefined,
       arrendadorId: arrendadorIdNumber,
     };
-
     setLoading(true);
     try {
-      await propiedadService.crearPropiedad(payload, imageFile ?? undefined);
+      const coverFile = imageFiles[coverIndex] ?? imageFiles[0];
+      const extraFiles = imageFiles.filter((_, i) => i !== imageFiles.indexOf(coverFile));
+      const nuevaPropiedad = await propiedadService.crearPropiedad(payload, coverFile);
+      if (extraFiles.length > 0 && nuevaPropiedad?.id) {
+        await propiedadService.subirImagenes(nuevaPropiedad.id, extraFiles);
+      }
       router.push('/landlord/properties/active');
     } catch (err) {
       console.error('Error al crear propiedad:', err);
       const message =
-        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-          ?.message ||
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ||
         (err as { message?: string })?.message ||
         'Hubo un error al publicar la propiedad. Inténtalo de nuevo.';
       setSubmitError(message);
@@ -607,97 +840,75 @@ export default function AddPropertyPage() {
     }
   };
 
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────────────────────
   // Render
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 animate-fade-in">
-      {/* Header con hero gradient */}
-      <div className="relative mb-10 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border border-outline-variant/10 p-6 sm:p-10">
-        <div className="absolute -top-16 -right-12 w-64 h-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-10 w-72 h-72 rounded-full bg-secondary-container/50 blur-3xl pointer-events-none" />
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 animate-fade-in">
 
-        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-          <div className="flex items-start gap-4">
-            <Link
-              href="/landlord/dashboard"
-              className="mt-1 w-10 h-10 grid place-items-center rounded-2xl bg-surface-container-lowest border border-outline-variant/20 text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors"
-              aria-label="Volver"
-            >
-              <span className="material-symbols-outlined">arrow_back</span>
-            </Link>
-            <div>
-              <Badge variant="primary" className="mb-2">
-                Publicación nueva
-              </Badge>
-              <h1 className="text-3xl sm:text-5xl font-black text-on-surface tracking-tighter leading-tight">
-                Publicar mi <span className="text-primary">cuarto</span>
-              </h1>
-              <p className="text-on-surface-variant mt-2 max-w-xl text-sm sm:text-base">
-                Completa los datos para que estudiantes encuentren tu propiedad. Cuanta más
-                información compartas, más confianza generarás.
-              </p>
-            </div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-3 self-start">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-lowest border border-outline-variant/20 text-xs font-bold text-on-surface-variant">
-              <span className="material-symbols-outlined text-[18px] text-primary">
-                school
-              </span>
-              Cerca a UPeU
-            </div>
-          </div>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="mb-8 flex items-start gap-4">
+        <Link
+          href="/landlord/dashboard"
+          aria-label="Volver al dashboard"
+          className="shrink-0 mt-0.5 w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+        </Link>
+        <div>
+          <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-1.5">
+            Propiedades · Nueva publicación
+          </p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            Publicar mi cuarto
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-lg leading-relaxed">
+            Completa los datos de tu cuarto. Cuanta más información compartas, más rápido
+            encontrarás inquilino.
+          </p>
         </div>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8"
+        className="grid grid-cols-1 lg:grid-cols-3 gap-5"
         noValidate
       >
-        {/* ============================================================ */}
-        {/* Columna principal: secciones                                  */}
-        {/* ============================================================ */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* SECCIÓN 1: INFORMACIÓN BÁSICA */}
-          <Section
-            step={1}
-            icon="info"
-            title="Información básica"
-            subtitle="Lo primero que verán los estudiantes."
-          >
+        {/* ── Columna principal ─────────────────────────────────────────── */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* 01 — Información básica */}
+          <Section step={1} icon="info" title="Información básica" subtitle="Lo primero que verán los estudiantes">
+
             <div data-field="titulo">
-              <Field
-                label="Título del anuncio"
-                hint={`${form.titulo.length}/150`}
-                required
-                error={errores.titulo}
-              >
-                <Input
+              <Field label="Título del anuncio" hint={`${form.titulo.length}/150`} required error={errores.titulo}>
+                <InputField
                   name="titulo"
                   value={form.titulo}
                   onChange={onInput}
                   placeholder="Ej: Cuarto acogedor a 5 min de UPeU"
                   maxLength={150}
-                  error={errores.titulo}
+                  error={!!errores.titulo}
                 />
               </Field>
             </div>
 
             <div data-field="descripcion">
-              <Field
-                label="Descripción"
-                hint={`${form.descripcion.length}/5000`}
-                error={errores.descripcion}
-              >
+              <Field label="Descripción" hint={`${form.descripcion.length}/5000`} error={errores.descripcion}>
                 <textarea
                   name="descripcion"
                   value={form.descripcion}
                   onChange={onInput}
-                  placeholder="Cuenta qué hace especial tu cuarto, qué hay alrededor, ambiente, etc."
+                  placeholder="Cuenta qué hace especial tu cuarto: ubicación, ambiente, lo que incluye…"
                   maxLength={5000}
-                  className="w-full min-h-[140px] rounded-2xl bg-surface-container-low border border-outline-variant/20 p-4 text-sm text-on-surface placeholder:text-outline/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium resize-y"
+                  className={cn(
+                    'w-full min-h-[120px] bg-input border rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50',
+                    'py-2.5 px-4 outline-none transition-all resize-y',
+                    'focus:ring-2 focus:ring-primary/20 focus:border-primary',
+                    errores.descripcion
+                      ? 'border-destructive/60'
+                      : 'border-border hover:border-primary/40',
+                  )}
                 />
               </Field>
             </div>
@@ -705,7 +916,7 @@ export default function AddPropertyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div data-field="precio">
                 <Field label="Precio" hint="en soles (S/)" required error={errores.precio}>
-                  <Input
+                  <InputField
                     type="number"
                     inputMode="decimal"
                     step="0.01"
@@ -715,7 +926,7 @@ export default function AddPropertyPage() {
                     value={form.precio}
                     onChange={onInput}
                     placeholder="450.00"
-                    error={errores.precio}
+                    error={!!errores.precio}
                   />
                 </Field>
               </div>
@@ -743,28 +954,23 @@ export default function AddPropertyPage() {
             </div>
           </Section>
 
-          {/* SECCIÓN 2: UBICACIÓN */}
+          {/* 02 — Ubicación */}
           <Section
             step={2}
             icon="location_on"
             title="Ubicación"
-            subtitle="Las propiedades deben estar a menos de 15 km del campus UPeU."
+            subtitle="Las propiedades deben estar a menos de 15 km del campus UPeU"
           >
             <div data-field="direccion">
-              <Field
-                label="Dirección"
-                hint={`${form.direccion.length}/255`}
-                required
-                error={errores.direccion}
-              >
-                <Input
+              <Field label="Dirección" hint={`${form.direccion.length}/255`} required error={errores.direccion}>
+                <InputField
                   name="direccion"
                   icon="home_pin"
                   value={form.direccion}
                   onChange={onInput}
                   placeholder="Av. Las Flores 123, Ñaña, Lima"
                   maxLength={255}
-                  error={errores.direccion}
+                  error={!!errores.direccion}
                 />
               </Field>
             </div>
@@ -772,76 +978,78 @@ export default function AddPropertyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div data-field="latitud">
                 <Field label="Latitud" hint="-90 a 90" error={errores.latitud}>
-                  <Input
+                  <InputField
                     type="number"
                     step="0.000001"
                     name="latitud"
                     value={form.latitud}
                     onChange={onInput}
                     placeholder="-11.987800"
-                    error={errores.latitud}
+                    error={!!errores.latitud}
                   />
                 </Field>
               </div>
               <div data-field="longitud">
                 <Field label="Longitud" hint="-180 a 180" error={errores.longitud}>
-                  <Input
+                  <InputField
                     type="number"
                     step="0.000001"
                     name="longitud"
                     value={form.longitud}
                     onChange={onInput}
                     placeholder="-76.898000"
-                    error={errores.longitud}
+                    error={!!errores.longitud}
                   />
                 </Field>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <Button
+            <div className="flex flex-wrap items-center gap-3">
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
                 onClick={usarMiUbicacion}
-                isLoading={requestingGeo}
-                leftIcon={<span className="material-symbols-outlined text-[18px]">my_location</span>}
+                disabled={requestingGeo}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card text-sm font-semibold text-foreground hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
+                <span className={cn('material-symbols-outlined text-[16px]', requestingGeo && 'animate-spin')}>
+                  {requestingGeo ? 'autorenew' : 'my_location'}
+                </span>
                 {requestingGeo ? 'Buscando…' : 'Usar mi ubicación'}
-              </Button>
+              </button>
 
               {distanciaUpeu !== null && (
-                <div
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold border
-                  ${distanciaUpeu <= UPEU_RADIO_MAX_KM
-                      ? 'bg-green-500/10 text-green-600 border-green-500/20'
-                      : 'bg-error/10 text-error border-error/20'}
-                `}
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border',
+                    distanciaUpeu <= UPEU_RADIO_MAX_KM
+                      ? 'bg-[var(--color-success-light)] text-[var(--color-success)] border-[var(--color-success)]/20'
+                      : 'bg-destructive/10 text-destructive border-destructive/20',
+                  )}
                 >
-                  <span className="material-symbols-outlined text-[14px]">school</span>
-                  {distanciaUpeu <= UPEU_RADIO_MAX_KM ? 'A' : 'Fuera de rango:'}{' '}
+                  <span className="material-symbols-outlined text-[13px]">school</span>
+                  {distanciaUpeu <= UPEU_RADIO_MAX_KM ? 'A ' : 'Fuera de rango: '}
                   {formatearDistancia(distanciaUpeu)} de UPeU
-                </div>
+                </span>
               )}
             </div>
 
-            <p className="text-[11px] text-on-surface-variant px-1">
-              Las coordenadas son opcionales pero recomendadas: aparece tu propiedad en el mapa
-              y los estudiantes pueden filtrarla por cercanía.
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Las coordenadas son opcionales pero recomendadas: tu propiedad aparecerá en el mapa
+              y los estudiantes podrán filtrarla por cercanía.
             </p>
           </Section>
 
-          {/* SECCIÓN 3: DETALLES */}
+          {/* 03 — Detalles */}
           <Section
             step={3}
             icon="straighten"
             title="Detalles del espacio"
-            subtitle="Datos prácticos para que el estudiante decida más rápido."
+            subtitle="Datos prácticos para que el estudiante decida más rápido"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div data-field="area">
-                <Field label="Área" hint="m² (opcional)" error={errores.area}>
-                  <Input
+                <Field label="Área" hint="m² · opcional" error={errores.area}>
+                  <InputField
                     type="number"
                     inputMode="decimal"
                     step="0.1"
@@ -851,13 +1059,13 @@ export default function AddPropertyPage() {
                     value={form.area}
                     onChange={onInput}
                     placeholder="12"
-                    error={errores.area}
+                    error={!!errores.area}
                   />
                 </Field>
               </div>
               <div data-field="nroPiso">
-                <Field label="Nro. de piso" hint="opcional" error={errores.nroPiso}>
-                  <Input
+                <Field label="Piso" hint="opcional" error={errores.nroPiso}>
+                  <InputField
                     type="number"
                     inputMode="numeric"
                     min="0"
@@ -866,7 +1074,7 @@ export default function AddPropertyPage() {
                     value={form.nroPiso}
                     onChange={onInput}
                     placeholder="2"
-                    error={errores.nroPiso}
+                    error={!!errores.nroPiso}
                   />
                 </Field>
               </div>
@@ -875,7 +1083,7 @@ export default function AddPropertyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               <div data-field="disponibleDesde">
                 <Field label="Disponible desde" hint="opcional">
-                  <Input
+                  <InputField
                     type="date"
                     name="disponibleDesde"
                     icon="event"
@@ -884,20 +1092,24 @@ export default function AddPropertyPage() {
                   />
                 </Field>
               </div>
-              <div data-field="estaDisponible" className="sm:pt-7">
-                <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20 px-4 py-3.5">
-                  <div className="flex items-center gap-3 min-w-0">
+
+              <div data-field="estaDisponible" className="sm:pt-[22px]">
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 border border-border px-4 py-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <span
-                      className={`material-symbols-outlined text-[22px] ${form.estaDisponible ? 'text-primary' : 'text-outline'}`}
+                      className={cn(
+                        'material-symbols-outlined text-[20px] shrink-0',
+                        form.estaDisponible ? 'text-[var(--color-success)]' : 'text-muted-foreground',
+                      )}
                     >
                       {form.estaDisponible ? 'check_circle' : 'pause_circle'}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-on-surface">
+                      <p className="text-sm font-semibold text-foreground">
                         {form.estaDisponible ? 'Disponible ahora' : 'Pausada'}
                       </p>
-                      <p className="text-[11px] text-on-surface-variant">
-                        Visible en búsquedas si está activa.
+                      <p className="text-[11px] text-muted-foreground">
+                        {form.estaDisponible ? 'Visible en búsquedas' : 'No aparece en búsquedas'}
                       </p>
                     </div>
                   </div>
@@ -911,12 +1123,12 @@ export default function AddPropertyPage() {
             </div>
           </Section>
 
-          {/* SECCIÓN 4: SERVICIOS */}
+          {/* 04 — Servicios */}
           <Section
             step={4}
             icon="bolt"
             title="Servicios incluidos"
-            subtitle="Marca todo lo que tu cuarto incluye."
+            subtitle="Marca todo lo que tu cuarto ofrece"
           >
             {cargandoCat ? (
               <SkeletonChips />
@@ -929,26 +1141,49 @@ export default function AddPropertyPage() {
                     'serviciosIncluidos',
                     form.serviciosIncluidos.includes(valor)
                       ? form.serviciosIncluidos.filter((v) => v !== valor)
-                      : [...form.serviciosIncluidos, valor]
+                      : [...form.serviciosIncluidos, valor],
                   )
                 }
               />
             )}
             {form.serviciosIncluidos.length > 0 && (
-              <p className="text-[11px] text-on-surface-variant px-1">
+              <p className="text-[11px] text-muted-foreground">
                 {form.serviciosIncluidos.length} servicio
-                {form.serviciosIncluidos.length === 1 ? '' : 's'} seleccionado
-                {form.serviciosIncluidos.length === 1 ? '' : 's'}.
+                {form.serviciosIncluidos.length !== 1 ? 's' : ''} seleccionado
+                {form.serviciosIncluidos.length !== 1 ? 's' : ''}.
               </p>
             )}
+
+            <div className="pt-3 border-t border-border/50">
+              <p className="text-[11px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                No está en el catálogo
+                <span className="font-normal opacity-60">· máx. 3 · 60 caracteres</span>
+              </p>
+              <CustomItemInput
+                items={form.serviciosIncluidos.filter(
+                  (v) => !(catalogos?.SERVICIO ?? []).some((c) => c.valor === v),
+                )}
+                onAdd={(text) =>
+                  setField('serviciosIncluidos', [...form.serviciosIncluidos, text])
+                }
+                onRemove={(text) =>
+                  setField(
+                    'serviciosIncluidos',
+                    form.serviciosIncluidos.filter((v) => v !== text),
+                  )
+                }
+                placeholder="Ej: Calefacción central, balcón privado…"
+              />
+            </div>
           </Section>
 
-          {/* SECCIÓN 5: REGLAS */}
+          {/* 05 — Reglas */}
           <Section
             step={5}
             icon="rule"
             title="Reglas de la casa"
-            subtitle="Sé claro: evita malentendidos con tus inquilinos."
+            subtitle="Sé claro para evitar malentendidos con tus inquilinos"
           >
             {cargandoCat ? (
               <SkeletonChips />
@@ -961,193 +1196,225 @@ export default function AddPropertyPage() {
                     'reglas',
                     form.reglas.includes(valor)
                       ? form.reglas.filter((v) => v !== valor)
-                      : [...form.reglas, valor]
+                      : [...form.reglas, valor],
                   )
                 }
               />
             )}
             {form.reglas.length > 0 && (
-              <p className="text-[11px] text-on-surface-variant px-1">
-                {form.reglas.length} regla{form.reglas.length === 1 ? '' : 's'} aplicará
-                {form.reglas.length === 1 ? '' : 'n'}.
+              <p className="text-[11px] text-muted-foreground">
+                {form.reglas.length} regla{form.reglas.length !== 1 ? 's' : ''} aplicará
+                {form.reglas.length !== 1 ? 'n' : ''}.
               </p>
             )}
+
+            <div className="pt-3 border-t border-border/50">
+              <p className="text-[11px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                No está en el catálogo
+                <span className="font-normal opacity-60">· máx. 3 · 60 caracteres</span>
+              </p>
+              <CustomItemInput
+                items={form.reglas.filter(
+                  (v) => !(catalogos?.REGLA ?? []).some((c) => c.valor === v),
+                )}
+                onAdd={(text) => setField('reglas', [...form.reglas, text])}
+                onRemove={(text) =>
+                  setField(
+                    'reglas',
+                    form.reglas.filter((v) => v !== text),
+                  )
+                }
+                placeholder="Ej: No visitas nocturnas, silencio después de las 10 PM…"
+              />
+            </div>
           </Section>
         </div>
 
-        {/* ============================================================ */}
-        {/* Sidebar: Foto + Acciones (sticky)                              */}
-        {/* ============================================================ */}
-        <aside className="space-y-6 lg:sticky lg:top-6 self-start">
-          <Card
-            className="border-none shadow-sm bg-surface-container-low"
-            hoverable={false}
-            padding="md"
-          >
-            <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-2xl bg-primary/10 text-primary grid place-items-center">
-                <span className="material-symbols-outlined">image</span>
-              </div>
+        {/* ── Sidebar ───────────────────────────────────────────────────── */}
+        <aside className="space-y-4 lg:sticky lg:top-6 self-start">
+
+          {/* Fotos */}
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-on-surface tracking-tight">
-                  Foto de portada
-                </h3>
-                <p className="text-[11px] text-on-surface-variant leading-snug">
-                  La primera impresión: usa una foto luminosa y nítida.
+                <h3 className="text-sm font-bold text-foreground">Fotos del cuarto</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Sube hasta {MAX_IMAGES} fotos · elige la portada
                 </p>
               </div>
+              <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+                {imageFiles.length}/{MAX_IMAGES}
+              </span>
             </div>
 
-            <div data-field="imagen">
-              <div
-                onDrop={onDrop}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onClick={() => !preview && fileInputRef.current?.click()}
-                className={`relative aspect-[4/3] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden transition-all
-                  ${preview
-                    ? 'border-transparent'
-                    : isDragging
-                      ? 'border-primary bg-primary/5'
-                      : errores.imagen
-                        ? 'border-error/60 bg-error/5'
-                        : 'border-outline-variant/40 hover:border-primary/50 bg-surface-container-lowest cursor-pointer'}
-                `}
-              >
-                {preview ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={preview}
-                      alt="Vista previa"
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 flex items-center justify-between">
-                      <span className="text-[11px] text-white font-bold truncate">
-                        {imageFile?.name}
-                      </span>
-                      <div className="flex items-center gap-1.5">
+            <div data-field="imagen" className="p-5 space-y-3">
+
+              {/* Grid de previews */}
+              {previews.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {previews.map((src, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        'relative aspect-[4/3] rounded-lg overflow-hidden group',
+                        i === coverIndex && 'ring-2 ring-primary ring-offset-1 ring-offset-card',
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                      {i === coverIndex && (
+                        <div className="absolute top-1 left-1 bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none select-none">
+                          Portada
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                        {i !== coverIndex && (
+                          <button
+                            type="button"
+                            onClick={() => setCoverIndex(i)}
+                            title="Usar como portada"
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">star</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/90 text-on-surface hover:bg-white transition-colors"
-                          title="Cambiar imagen"
+                          onClick={() => removeImage(i)}
+                          title="Eliminar foto"
+                          className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/80 transition-colors"
                         >
-                          Cambiar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeImage();
-                          }}
-                          className="w-7 h-7 grid place-items-center rounded-full bg-error/90 text-on-error hover:bg-error transition-colors"
-                          title="Eliminar"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">close</span>
+                          <span className="material-symbols-outlined text-[13px]">close</span>
                         </button>
                       </div>
                     </div>
-                  </>
-                ) : (
-                  <div className="text-center px-6 select-none">
-                    <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-2">
+                  ))}
+
+                  {imageFiles.length < MAX_IMAGES && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-[4/3] rounded-lg border-2 border-dashed border-border hover:border-primary/50 bg-background flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[22px]">add_photo_alternate</span>
+                      <span className="text-[10px] font-semibold">Agregar</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Dropzone vacío */}
+              {previews.length === 0 && (
+                <div
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all select-none',
+                    isDragging
+                      ? 'border-primary bg-accent/50'
+                      : errores.imagen
+                        ? 'border-destructive/50 bg-destructive/5'
+                        : 'border-border hover:border-primary/50 hover:bg-muted/50',
+                  )}
+                >
+                  <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[26px] text-accent-foreground">
                       add_photo_alternate
                     </span>
-                    <p className="text-sm font-bold text-on-surface">
-                      Arrastra una foto aquí
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground">
+                      {isDragging ? 'Suelta aquí' : 'Arrastra fotos aquí'}
                     </p>
-                    <p className="text-[11px] text-on-surface-variant mt-1">
-                      o haz clic para subir
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      o haz clic para explorar
                     </p>
                   </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={onFileInput}
-                  className="hidden"
-                />
-              </div>
+                  <p className="text-[10px] text-muted-foreground/70 text-center">
+                    JPG, PNG o WEBP · Máx. 10 MB por foto
+                  </p>
+                </div>
+              )}
 
-              <p className="mt-2 text-[10px] text-on-surface-variant text-center">
-                JPG, PNG o WEBP · Máximo 10 MB
-              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                multiple
+                onChange={onFileInput}
+                className="hidden"
+              />
+
               {errores.imagen && (
-                <p className="text-error text-[11px] font-bold px-1 mt-1.5 flex items-center gap-1 animate-fade-in">
-                  <span className="material-symbols-outlined text-[14px]">error</span>
+                <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 animate-fade-in">
+                  <span className="material-symbols-outlined text-[13px]">error</span>
                   {errores.imagen}
                 </p>
               )}
+
+              {previews.length > 0 && (
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Toca <span className="font-bold">★</span> sobre una imagen para elegirla como portada
+                </p>
+              )}
             </div>
-          </Card>
+          </div>
 
           {/* Acciones */}
-          <Card
-            className="border-none shadow-sm bg-surface-container-low"
-            hoverable={false}
-            padding="md"
-          >
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
             {submitError && (
-              <div className="mb-3 p-3 bg-error/10 text-error text-xs rounded-2xl border border-error/20 flex items-start gap-2">
-                <span className="material-symbols-outlined text-[18px]">error</span>
-                <span className="font-medium">{submitError}</span>
+              <div className="px-5 py-3 bg-destructive/5 border-b border-destructive/20 flex items-start gap-2">
+                <span className="material-symbols-outlined text-destructive text-[16px] mt-0.5 shrink-0">
+                  error
+                </span>
+                <p className="text-[12px] font-medium text-destructive leading-snug">{submitError}</p>
               </div>
             )}
 
-            <Button
-              type="submit"
-              disabled={loading}
-              isLoading={loading}
-              variant="dark"
-              className="w-full h-12 text-sm font-bold rounded-2xl"
-              leftIcon={
-                !loading ? (
-                  <span className="material-symbols-outlined text-[20px]">publish</span>
-                ) : undefined
-              }
-            >
-              {loading ? 'Publicando…' : 'Publicar propiedad'}
-            </Button>
+            <div className="p-5 space-y-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <span className="material-symbols-outlined text-[18px] animate-spin">
+                      autorenew
+                    </span>
+                    Publicando…
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">publish</span>
+                    Publicar propiedad
+                  </>
+                )}
+              </button>
 
-            <Button
-              asChild
-              variant="ghost"
-              className="w-full mt-2 rounded-2xl border border-outline-variant/30"
-            >
-              <Link href="/landlord/dashboard">Cancelar</Link>
-            </Button>
+              <Link
+                href="/landlord/dashboard"
+                className="w-full h-10 flex items-center justify-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                Cancelar
+              </Link>
 
-            <div className="mt-4 pt-4 border-t border-outline-variant/15 flex items-start gap-2">
-              <span className="material-symbols-outlined text-primary text-[18px]">verified</span>
-              <p className="text-[11px] text-on-surface-variant leading-snug">
-                Tu publicación pasa por una revisión rápida antes de ser visible para
-                estudiantes. Te avisaremos por correo cuando se apruebe.
-              </p>
+              <div className="pt-3 border-t border-border flex items-start gap-2 mt-1">
+                <span className="material-symbols-outlined text-primary text-[16px] mt-0.5 shrink-0">
+                  verified
+                </span>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Tu publicación pasa por revisión antes de aparecer en búsquedas. Te
+                  avisaremos cuando se apruebe.
+                </p>
+              </div>
             </div>
-          </Card>
+          </div>
         </aside>
       </form>
-    </div>
-  );
-}
-
-// =============================================================================
-// Skeleton para chips mientras carga el catálogo
-// =============================================================================
-function SkeletonChips() {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <span
-          key={i}
-          className="h-9 w-24 rounded-full bg-surface-container-high animate-pulse"
-        />
-      ))}
     </div>
   );
 }

@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/usuarios/permisos/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/usuarios/arrendador/*/info").authenticated()
                         .requestMatchers("/api/v1/usuarios/estudiante/*/info").authenticated()
+                        .requestMatchers("/api/v1/usuarios/documentos/**").authenticated()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session

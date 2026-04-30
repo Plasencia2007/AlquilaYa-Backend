@@ -11,7 +11,9 @@
       "Bash(git -C C:/Users/jhons/AlquilaYa-Backend log --oneline main -10)",
       "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a9960aa13b5ef5e3e add -A)",
       "Bash(git -C C:/Users/jhons/AlquilaYa-Backend/.claude/worktrees/agent-a9960aa13b5ef5e3e commit -m 'feat\\(landlord/add\\): redesigned Publicar mi cuarto form *)",
-      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend merge --no-ff worktree-agent-a99ede91f36ad8ecd -m \"merge: data layer for new property form \\(Agent A\\)\")"
+      "Bash(git -C C:/Users/jhons/AlquilaYa-Backend merge --no-ff worktree-agent-a99ede91f36ad8ecd -m \"merge: data layer for new property form \\(Agent A\\)\")",
+      "Bash(xargs grep *)",
+      "Read(//c/Users/jhons/AlquilaYa-Fronted/src/app/admin-master/**)"
     ]
   }
 }

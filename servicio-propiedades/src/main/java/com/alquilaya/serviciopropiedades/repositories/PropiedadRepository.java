@@ -1,6 +1,7 @@
 package com.alquilaya.serviciopropiedades.repositories;
 
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
+import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -15,6 +16,8 @@ import java.util.Optional;
 @Repository
 public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> findByArrendadorId(Long arrendadorId);
+
+    List<Propiedad> findByEstadoOrderByFechaCreacionAsc(EstadoPropiedad estado);
 
     // Lock pesimista para serializar creaciones de reserva concurrentes sobre la misma propiedad.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @Service
@@ -23,7 +24,7 @@ public class DocumentoService {
 
     private final DocumentoVerificacionRepository documentoRepository;
     private final UsuarioRepository usuarioRepository;
-    private final StorageService storageService;
+    private final CloudinaryDocumentService cloudinaryDocumentService;
     private final NotificationService notificationService;
 
     @Transactional
@@ -32,12 +33,17 @@ public class DocumentoService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + usuarioId + " para subir el documento"));
 
         log.info("Subiendo documento tipo {} para el usuario {}", tipo, usuarioId);
-        String nombreArchivo = storageService.store(archivo);
+        String archivoUrl;
+        try {
+            archivoUrl = cloudinaryDocumentService.subirDocumento(archivo, usuarioId, tipo.name());
+        } catch (IOException e) {
+            throw new RuntimeException("Error al subir el documento a Cloudinary", e);
+        }
 
         DocumentoVerificacion documento = DocumentoVerificacion.builder()
                 .usuario(usuario)
                 .tipoDocumento(tipo)
-                .archivoUrl(nombreArchivo)
+                .archivoUrl(archivoUrl)
                 .estadoVerificacion(EstadoVerificacion.PENDIENTE)
                 .build();
 
@@ -78,7 +84,7 @@ public class DocumentoService {
     @Transactional
     public void eliminarDocumento(Long id) {
         DocumentoVerificacion doc = obtenerPorId(id);
-        // Opcional: eliminar el archivo físico del storage si se desea
+        cloudinaryDocumentService.eliminarDocumento(doc.getArchivoUrl());
         documentoRepository.delete(doc);
         log.info("Documento {} eliminado", id);
     }

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
 import { Modal } from '@/components/ui/Modal';
+import { EditPropertyModal } from '@/components/landlord/edit-property-modal';
 import { propiedadService } from '@/services/landlord-property-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { notify } from '@/lib/notify';
@@ -27,15 +28,21 @@ export default function ActivePropertiesPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<PropiedadItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editProp, setEditProp] = useState<PropiedadItem | null>(null);
 
   const fetchProperties = async () => {
-    if (!usuario || !usuario.perfilId) {
+    if (!usuario) {
+      setLoading(false);
+      return;
+    }
+    const landlordId = usuario.perfilId ?? Number(usuario.id);
+    if (!landlordId || Number.isNaN(landlordId)) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const data = await propiedadService.obtenerPorArrendador(usuario.perfilId.toString());
+      const data = await propiedadService.obtenerPorArrendador(landlordId.toString());
       setProperties(data as unknown as PropiedadItem[]);
     } catch (err) {
       console.error('Error al cargar propiedades:', err);
@@ -48,7 +55,7 @@ export default function ActivePropertiesPage() {
   useEffect(() => {
     fetchProperties();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario, usuario?.perfilId]);
+  }, [usuario]);
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
@@ -69,25 +76,32 @@ export default function ActivePropertiesPage() {
     switch (status) {
       case 'PENDIENTE':
         return (
-          <Badge variant="surface" className="bg-amber-100 text-amber-700 border-amber-200">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-amber-600 px-2.5 py-1 rounded-full shadow-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
             En revisión
-          </Badge>
+          </span>
         );
       case 'APROBADO':
       case 'ACTIVA':
         return (
-          <Badge variant="surface" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-emerald-600 px-2.5 py-1 rounded-full shadow-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
             Publicada
-          </Badge>
+          </span>
         );
       case 'RECHAZADO':
         return (
-          <Badge variant="surface" className="bg-rose-100 text-rose-700 border-rose-200">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-rose-600 px-2.5 py-1 rounded-full shadow-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
             Rechazada
-          </Badge>
+          </span>
         );
       default:
-        return <Badge variant="surface">{status}</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-on-surface-variant px-2.5 py-1 rounded-full shadow-md">
+            {status}
+          </span>
+        );
     }
   };
 
@@ -134,14 +148,15 @@ export default function ActivePropertiesPage() {
 
       {/* Grid de Propiedades */}
       {properties.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
           {properties.map((prop) => (
             <Card
               key={prop.id}
               padding="none"
-              className="group overflow-hidden border-none shadow-sm hover:shadow-xl transition-all duration-500 bg-surface-container-low hover:-translate-y-1"
+              className="group overflow-hidden rounded-3xl border-0 shadow-lg hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 bg-white"
             >
-              <div className="relative aspect-[16/10] overflow-hidden">
+              {/* ── Image area ─────────────────────────────────── */}
+              <div className="relative aspect-[3/2] overflow-hidden rounded-t-3xl">
                 {prop.imagenUrl ? (
                   <img
                     src={prop.imagenUrl}
@@ -149,54 +164,84 @@ export default function ActivePropertiesPage() {
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
                 ) : (
-                  <div className="w-full h-full bg-surface-variant/30 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-4xl text-on-surface-variant/30">
-                      image
-                    </span>
+                  <div className="w-full h-full bg-primary/10 flex flex-col items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[64px] text-primary/40">bed</span>
+                    <span className="text-xs text-primary/50 font-semibold tracking-wide uppercase">Sin imagen</span>
                   </div>
                 )}
-                <div className="absolute top-3 left-3 flex flex-col gap-2">
+
+                {/* Deep gradient overlay — bottom two-thirds */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+                {/* Top tint strip for badge legibility */}
+                <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/30 to-transparent" />
+
+                {/* Status badge — top left */}
+                <div className="absolute top-3 left-3 z-10">
                   {getStatusBadge(prop.estado)}
                 </div>
-                <div className="absolute top-3 right-3">
-                  <div className="bg-surface/90 backdrop-blur-md px-3 py-1.5 rounded-full text-primary font-black text-sm shadow-lg">
+
+                {/* Price pill — bottom right */}
+                <div className="absolute bottom-3 right-3 z-10">
+                  <span className="inline-flex items-baseline gap-0.5 font-black text-white text-[15px] px-3.5 py-1.5 rounded-2xl shadow-xl bg-primary">
                     S/ {prop.precio.toLocaleString()}
-                  </div>
+                    <span className="text-[10px] font-medium text-white/70 ml-0.5">/mes</span>
+                  </span>
+                </div>
+
+                {/* Bottom-left faint location ghost text on image */}
+                <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 max-w-[60%]">
+                  <span className="material-symbols-outlined text-white/80 text-[13px] shrink-0">location_on</span>
+                  <span className="text-white/80 text-[11px] font-medium line-clamp-1 drop-shadow">
+                    {prop.direccion}
+                  </span>
                 </div>
               </div>
 
-              <div className="p-5">
-                <h3 className="font-black text-lg text-on-surface tracking-tight mb-1 line-clamp-1 group-hover:text-primary transition-colors">
+              {/* ── Card body ──────────────────────────────────── */}
+              <div className="px-5 pt-4 pb-1 bg-white">
+                <h3 className="font-extrabold text-[15px] text-gray-900 line-clamp-1 leading-snug tracking-tight">
                   {prop.titulo}
                 </h3>
-                <div className="flex items-center gap-1.5 text-on-surface-variant text-sm mb-4">
-                  <span className="material-symbols-outlined text-base">location_on</span>
-                  <span className="line-clamp-1">{prop.direccion}</span>
-                </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="w-full rounded-xl border border-surface-variant text-xs h-9"
-                  >
-                    <Link href={`/landlord/properties/edit/${prop.id}`}>
-                      <span className="material-symbols-outlined text-base mr-2">edit</span>
-                      Editar
-                    </Link>
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => setConfirmDelete(prop)}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full rounded-xl text-xs h-9 text-error hover:bg-error/10 hover:text-error border border-error/20"
-                  >
-                    <span className="material-symbols-outlined text-base mr-2">delete</span>
-                    Eliminar
-                  </Button>
+                {/* Subtle accent underline */}
+                <div className="mt-1.5 mb-3 h-0.5 w-10 rounded-full bg-primary" />
+
+                {/* Location row */}
+                <div className="flex items-center gap-1.5 text-gray-500 mb-4">
+                  <span className="material-symbols-outlined text-[15px] shrink-0 text-primary">location_on</span>
+                  <p className="text-xs line-clamp-1 font-medium">{prop.direccion}</p>
                 </div>
+              </div>
+
+              {/* ── Divider ────────────────────────────────────── */}
+              <div className="h-px mx-0 bg-primary/10" />
+
+              {/* ── Action row ─────────────────────────────────── */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-white">
+                <Button
+                  type="button"
+                  onClick={() => setEditProp(prop)}
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 h-9 rounded-xl text-xs font-bold gap-1.5 justify-center text-white border-0"
+                  style={{ background: '#1e3a5f' }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">edit</span>
+                  Editar
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setConfirmDelete(prop)}
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 h-9 rounded-xl text-xs font-bold gap-1.5 justify-center text-white border-0"
+                  style={{ background: '#dc2626' }}
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                  Eliminar
+                </Button>
               </div>
             </Card>
           ))}
@@ -218,6 +263,12 @@ export default function ActivePropertiesPage() {
           </Button>
         </div>
       )}
+
+      <EditPropertyModal
+        prop={editProp}
+        onClose={() => setEditProp(null)}
+        onSaved={fetchProperties}
+      />
 
       <Modal
         open={!!confirmDelete}

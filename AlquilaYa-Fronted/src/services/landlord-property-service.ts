@@ -23,7 +23,7 @@ export const propiedadService = {
    *                 (Spring lo requiere explícito para deserializar la entidad).
    *  - `file`: imagen principal opcional. JPG/PNG/WEBP, max 10 MB.
    */
-  async crearPropiedad(propiedad: CrearPropiedadRequest, file?: File | null) {
+  async crearPropiedad(propiedad: CrearPropiedadRequest, file?: File | null): Promise<PropiedadBackend> {
     const formData = new FormData();
     formData.append(
       'propiedad',
@@ -32,7 +32,9 @@ export const propiedadService = {
     if (file) {
       formData.append('file', file);
     }
-    const response = await api.post('propiedades', formData);
+    const response = await api.post<PropiedadBackend>('propiedades', formData, {
+      headers: { 'Content-Type': undefined },
+    });
     return response.data;
   },
 
@@ -84,7 +86,9 @@ export const propiedadService = {
   async subirImagenes(id: string | number, files: File[]): Promise<PropiedadImagen[]> {
     const formData = new FormData();
     files.forEach((f) => formData.append('files', f));
-    const response = await api.post(`propiedades/${id}/imagenes`, formData);
+    const response = await api.post(`propiedades/${id}/imagenes`, formData, {
+      headers: { 'Content-Type': undefined },
+    });
     return response.data;
   },
 
@@ -93,6 +97,14 @@ export const propiedadService = {
    */
   async subirImagenesAdicionales(id: string | number, files: File[]): Promise<PropiedadImagen[]> {
     return this.subirImagenes(id, files);
+  },
+
+  /**
+   * GET /propiedades/{id}/imagenes — lista imágenes con sus IDs reales para poder eliminarlas.
+   */
+  async obtenerImagenes(id: string | number): Promise<{ id: number; url: string; orden: number }[]> {
+    const response = await api.get(`propiedades/${id}/imagenes`);
+    return response.data;
   },
 
   /**

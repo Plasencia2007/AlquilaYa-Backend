@@ -50,3 +50,9 @@ export interface Documento {
   fechaCreacion: string;
   fechaActualizacion?: string;
 }
+
+export interface TipoDocConfig {
+  tipo: string;
+  titulo: string;
+  descripcion: string;
+}

@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
+import com.alquilaya.serviciopropiedades.dto.PropiedadAdminDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
@@ -140,6 +141,48 @@ public class PropiedadService {
                 .estado(p.getEstado())
                 .imagenes(extraerUrlsImagenes(p))
                 .arrendadorId(p.getArrendadorId());
+
+        if (info != null) {
+            b.arrendadorNombre((info.getNombre() != null ? info.getNombre() : "") +
+                    (info.getApellido() != null ? " " + info.getApellido() : ""))
+             .arrendadorTelefono(info.getTelefono())
+             .arrendadorCorreo(info.getCorreo());
+        }
+        return b.build();
+    }
+
+    public PropiedadAdminDTO toAdmin(Propiedad p) {
+        ArrendadorInfoDTO info = null;
+        try {
+            info = obtenerArrendadorResiliente(p.getArrendadorId()).join();
+        } catch (Exception e) {
+            log.warn("No se pudo obtener info del arrendador {}: {}", p.getArrendadorId(), e.getMessage());
+        }
+
+        PropiedadAdminDTO.PropiedadAdminDTOBuilder b = PropiedadAdminDTO.builder()
+                .id(p.getId())
+                .titulo(p.getTitulo())
+                .descripcion(p.getDescripcion())
+                .precio(p.getPrecio())
+                .direccion(p.getDireccion())
+                .tipoPropiedad(p.getTipoPropiedad())
+                .periodoAlquiler(p.getPeriodoAlquiler())
+                .area(p.getArea())
+                .nroPiso(p.getNroPiso())
+                .estaDisponible(p.getEstaDisponible())
+                .disponibleDesde(p.getDisponibleDesde())
+                .serviciosIncluidos(p.getServiciosIncluidos())
+                .reglas(p.getReglas())
+                .latitud(p.getLatitud())
+                .longitud(p.getLongitud())
+                .distanciaMetros(p.getDistanciaMetros())
+                .aprobadoPorAdmin(p.getAprobadoPorAdmin())
+                .calificacion(p.getCalificacion())
+                .numResenas(p.getNumResenas())
+                .estado(p.getEstado())
+                .imagenes(extraerUrlsImagenes(p))
+                .arrendadorId(p.getArrendadorId())
+                .fechaCreacion(p.getFechaCreacion());
 
         if (info != null) {
             b.arrendadorNombre((info.getNombre() != null ? info.getNombre() : "") +

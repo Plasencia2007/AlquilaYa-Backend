@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 
 interface ModalProps {
@@ -12,6 +13,7 @@ interface ModalProps {
   footer?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  showCloseButton?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   size = 'md',
   className,
+  showCloseButton = true,
 }) => {
   React.useEffect(() => {
     if (!open) return;
@@ -49,15 +52,15 @@ export const Modal: React.FC<ModalProps> = ({
     lg: 'max-w-2xl',
   } as const;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'modal-title' : undefined}
     >
       <div
-        className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-md"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -68,14 +71,16 @@ export const Modal: React.FC<ModalProps> = ({
           className,
         )}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cerrar"
-          className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-surface-container-low text-on-surface-variant transition-colors"
-        >
-          <span className="material-symbols-outlined text-xl">close</span>
-        </button>
+        {showCloseButton && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-surface-container-low text-on-surface-variant transition-colors"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        )}
         {title && (
           <h2 id="modal-title" className="text-xl font-black text-on-surface tracking-tight mb-1 pr-8">
             {title}
@@ -87,7 +92,8 @@ export const Modal: React.FC<ModalProps> = ({
         {children && <div className={cn(title || description ? 'mt-2' : '')}>{children}</div>}
         {footer && <div className="mt-6 flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

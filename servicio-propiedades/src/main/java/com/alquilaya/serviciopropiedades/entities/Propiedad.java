@@ -61,7 +61,6 @@ public class Propiedad {
     private String imagenUrl;
 
     @OneToMany(mappedBy = "propiedad", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
     @ToString.Exclude
     private List<PropiedadImagen> imagenes = new ArrayList<>();
 
@@ -90,13 +89,11 @@ public class Propiedad {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "propiedad_servicios", joinColumns = @JoinColumn(name = "propiedad_id"))
     @Column(name = "servicio")
-    @Builder.Default
     private List<String> serviciosIncluidos = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "propiedad_reglas", joinColumns = @JoinColumn(name = "propiedad_id"))
     @Column(name = "regla")
-    @Builder.Default
     private List<String> reglas = new ArrayList<>();
 
     @CoordenadaLatitud
@@ -123,6 +120,11 @@ public class Propiedad {
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();
         fechaActualizacion = LocalDateTime.now();
+        if (estado == null)           estado = EstadoPropiedad.PENDIENTE;
+        if (estaDisponible == null)   estaDisponible = true;
+        if (aprobadoPorAdmin == null) aprobadoPorAdmin = false;
+        if (calificacion == null)     calificacion = 5.0;
+        if (numResenas == null)       numResenas = 0;
     }
 
     @PreUpdate

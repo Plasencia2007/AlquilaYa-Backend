@@ -15,6 +15,10 @@ public class KafkaProducerService {
 
     public void enviarEventoPropiedad(String mensaje) {
         log.info("Enviando evento a Kafka: {}", mensaje);
-        kafkaTemplate.send(TOPIC, mensaje);
+        try {
+            kafkaTemplate.send(TOPIC, mensaje);
+        } catch (Exception e) {
+            log.warn("No se pudo enviar evento a Kafka ({}): {}", TOPIC, e.getMessage());
+        }
     }
 }

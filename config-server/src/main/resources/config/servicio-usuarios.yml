@@ -126,6 +126,12 @@ turnstile:
   secret-key: ${TURNSTILE_SECRET_KEY:}
   enabled: ${CAPTCHA_ENABLED:false}
 
+# Cloudinary para almacenamiento de documentos de verificación
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:ddiyaoxkt}
+  api-key: ${CLOUDINARY_API_KEY:387589685746197}
+  api-secret: ${CLOUDINARY_API_SECRET:ccDoynk9aR2ibapCNqo6LWxyZao}
+
 # URL pública del frontend para construir links (reset password, etc.)
 app:
   base-url: ${APP_BASE_URL:http://localhost:3000}

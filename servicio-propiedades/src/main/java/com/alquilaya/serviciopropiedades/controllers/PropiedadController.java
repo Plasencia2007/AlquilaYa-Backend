@@ -85,6 +85,7 @@ public class PropiedadController {
                     .url(urlFoto)
                     .orden(0)
                     .build();
+            if (nueva.getImagenes() == null) nueva.setImagenes(new ArrayList<>());
             nueva.getImagenes().add(img);
             nueva = propiedadRepository.save(nueva);
         }
@@ -239,6 +240,12 @@ public class PropiedadController {
             creadas.add(propiedadImagenRepository.save(img));
         }
         return ResponseEntity.ok(creadas);
+    }
+
+    @GetMapping("/{id}/imagenes")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<List<PropiedadImagen>> listarImagenes(@PathVariable Long id) {
+        return ResponseEntity.ok(propiedadImagenRepository.findByPropiedadIdOrderByOrdenAsc(id));
     }
 
     @DeleteMapping("/{id}/imagenes/{imagenId}")

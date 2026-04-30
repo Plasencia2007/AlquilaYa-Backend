@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.controllers;
 
+import com.alquilaya.serviciousuarios.dto.TipoDocumentoConfigDTO;
 import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
@@ -8,7 +9,6 @@ import com.alquilaya.serviciousuarios.validaciones.anotaciones.ArchivoValido;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -24,13 +24,21 @@ public class DocumentoController {
 
     private final DocumentoService documentoService;
 
+    @GetMapping("/tipos-requeridos")
+    public ResponseEntity<List<TipoDocumentoConfigDTO>> getTiposRequeridos() {
+        return ResponseEntity.ok(List.of(
+            new TipoDocumentoConfigDTO("DNI_FRONTAL", "DNI Parte Frontal", "Foto del frente de tu DNI"),
+            new TipoDocumentoConfigDTO("DNI_REVERSO", "DNI Parte Posterior", "Foto del reverso de tu DNI")
+        ));
+    }
+
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DocumentoVerificacion> uploadDocumento(
             @RequestParam("usuarioId") Long usuarioId,
             @RequestParam("tipo") TipoDocumento tipo,
             @RequestParam("archivo") @ArchivoValido MultipartFile archivo) {
-        
+
         return ResponseEntity.ok(documentoService.subirDocumento(usuarioId, tipo, archivo));
     }
 
@@ -57,7 +65,7 @@ public class DocumentoController {
     public ResponseEntity<DocumentoVerificacion> verifyDocumento(
             @PathVariable Long id,
             @Valid @RequestBody VerificarDocumentoRequest request) {
-        
+
         return ResponseEntity.ok(documentoService.verificarDocumento(id, request.getEstado(), request.getComentario()));
     }
 

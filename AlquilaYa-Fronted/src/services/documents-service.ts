@@ -2,7 +2,7 @@ import Cookies from 'js-cookie';
 
 import { api } from '@/lib/api';
 import { servicioAuth } from '@/services/auth-service';
-import type { Documento, TipoDocumento } from '@/types/profile';
+import type { Documento, TipoDocConfig, TipoDocumento } from '@/types/profile';
 
 function obtenerMiUserId(): number | null {
   const token = Cookies.get('auth-token');
@@ -20,6 +20,11 @@ function obtenerMiUserId(): number | null {
  *  - DELETE /api/v1/usuarios/documentos/{id}     (requiere permiso GESTIONAR_DOCUMENTOS)
  */
 export const documentsService = {
+  obtenerTiposRequeridos: async (): Promise<TipoDocConfig[]> => {
+    const { data } = await api.get<TipoDocConfig[]>('/usuarios/documentos/tipos-requeridos');
+    return data;
+  },
+
   listarMisDocumentos: async (): Promise<Documento[]> => {
     const userId = obtenerMiUserId();
     if (!userId) throw new Error('No hay sesión activa');
