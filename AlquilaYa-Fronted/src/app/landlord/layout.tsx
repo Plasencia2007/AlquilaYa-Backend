@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useStomp } from '@/hooks/use-stomp';
 import LandlordSidebar from '@/components/landlord/landlord-sidebar';
 
 export default function LandlordLayout({
@@ -12,6 +13,7 @@ export default function LandlordLayout({
 }) {
   const { estaAutenticado, usuario, cargando } = useAuth();
   const router = useRouter();
+  useStomp();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {

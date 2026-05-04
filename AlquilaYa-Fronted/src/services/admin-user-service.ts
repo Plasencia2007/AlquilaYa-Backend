@@ -11,43 +11,39 @@ export interface UsuarioMaster {
   estado: 'PENDING' | 'ACTIVE' | 'BANNED';
   telefonoVerificado: boolean;
   perfilId?: number;
+  // Campos del endpoint /admin/arrendadores
+  fotoUrl?: string;
+  fechaCreacion?: string;
+  calificacion?: number;
+  nombreComercial?: string;
+  perfilArrendadorId?: number;
 }
 
 export const usuarioMasterService = {
-  /**
-   * Obtiene usuarios por rol
-   */
   obtenerPorRol: async (rol: string): Promise<UsuarioMaster[]> => {
     const response = await api.get<UsuarioMaster[]>(`usuarios/rol/${rol}`);
     return response.data;
   },
 
-  /**
-   * Actualiza el estado o datos de un usuario (Deep Update)
-   */
-  actualizarUsuario: async (id: number, updates: any): Promise<UsuarioMaster> => {
+  obtenerArrendadoresAdmin: async (): Promise<UsuarioMaster[]> => {
+    const response = await api.get<UsuarioMaster[]>('usuarios/admin/arrendadores');
+    return response.data;
+  },
+
+  actualizarUsuario: async (id: number, updates: Record<string, unknown>): Promise<UsuarioMaster> => {
     const response = await api.put<UsuarioMaster>(`usuarios/${id}`, updates);
     return response.data;
   },
 
-  /**
-   * Elimina un usuario definitivamente
-   */
   eliminarUsuario: async (id: number): Promise<void> => {
     await api.delete(`usuarios/${id}`);
   },
 
-  /**
-   * Banear usuario (Atajo funcional)
-   */
   banearUsuario: async (id: number): Promise<UsuarioMaster> => {
     return usuarioMasterService.actualizarUsuario(id, { estado: 'BANNED' });
   },
 
-  /**
-   * Activar usuario (Atajo funcional)
-   */
   activarUsuario: async (id: number): Promise<UsuarioMaster> => {
     return usuarioMasterService.actualizarUsuario(id, { estado: 'ACTIVE' });
-  }
+  },
 };

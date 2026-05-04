@@ -3,8 +3,10 @@ package com.alquilaya.serviciopropiedades.controllers;
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaArrendadorRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
+import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
+import com.alquilaya.serviciopropiedades.entities.ResenaEstudiante;
 import com.alquilaya.serviciopropiedades.entities.ResenaPropiedad;
 import com.alquilaya.serviciopropiedades.services.ResenaService;
 import jakarta.validation.Valid;
@@ -53,6 +55,17 @@ public class ResenaController {
     @GetMapping("/arrendador/{arrendadorId}/calificacion")
     public ResponseEntity<Map<String, Object>> calificacionArrendador(@PathVariable Long arrendadorId) {
         return ResponseEntity.ok(resenaService.calificacionArrendador(arrendadorId));
+    }
+
+    @PostMapping("/estudiante")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('RESENAR')")
+    public ResponseEntity<ResenaEstudiante> resenarEstudiante(@Valid @RequestBody CrearResenaEstudianteRequest req) {
+        return ResponseEntity.ok(resenaService.resenarEstudiante(req, CurrentUserProvider.get()));
+    }
+
+    @GetMapping("/estudiante/{estudianteId}")
+    public ResponseEntity<List<ResenaEstudiante>> porEstudiante(@PathVariable Long estudianteId) {
+        return ResponseEntity.ok(resenaService.listarPorEstudiante(estudianteId));
     }
 
     @PatchMapping("/{id}/ocultar")

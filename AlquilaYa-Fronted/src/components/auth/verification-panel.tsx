@@ -221,16 +221,30 @@ function ProgressBar({ aprobados, total }: ProgressBarProps) {
 // Componente principal
 // ---------------------------------------------------------------------------
 
+const STORAGE_KEY = 'verification_panel_collapsed';
+
 export default function VerificationPanel() {
   const [tipos, setTipos] = useState<TipoDocConfig[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [cargando, setCargando] = useState(true);
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [colapsado, setColapsado] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEY) === 'true';
+  });
 
   useEffect(() => {
     cargar();
   }, []);
+
+  const toggleColapsar = () => {
+    setColapsado((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEY, String(next));
+      return next;
+    });
+  };
 
   const cargar = async () => {
     setCargando(true);
@@ -273,6 +287,9 @@ export default function VerificationPanel() {
   };
 
   const aprobados = documentos.filter(d => d.estadoVerificacion === 'APROBADO').length;
+  const total = tipos.length;
+  const pct = total === 0 ? 0 : Math.round((aprobados / total) * 100);
+  const todosAprobados = aprobados === total && total > 0;
 
   return (
     <>
@@ -280,56 +297,104 @@ export default function VerificationPanel() {
         <PreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
       )}
 
-      <div className="bg-[#e8e3df] rounded-[2rem] p-8 border border-white/30 shadow-sm overflow-hidden relative">
+      <div className="bg-[#e8e3df] rounded-[2rem] border border-white/30 shadow-sm overflow-hidden relative">
+        {/* Marca de agua */}
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
           <ShieldCheck size={180} className="text-[#8f0304]" />
         </div>
 
-        <div className="relative z-10 space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-[#8f0304] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-[#8f0304]/20 shrink-0">
-              <ShieldCheck size={32} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-black text-[#281721] tracking-tight">Verifica tu Identidad</h3>
-              <p className="text-[#bda5a8] text-sm font-medium">Sube tus documentos para desbloquear beneficios premium.</p>
-            </div>
+        {/* ── Header siempre visible ── */}
+        <button
+          type="button"
+          onClick={toggleColapsar}
+          className="relative z-10 w-full flex items-center gap-4 p-6 text-left hover:bg-black/[0.02] transition-colors"
+        >
+          <div className={cn(
+            'w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-md shrink-0 transition-colors',
+            todosAprobados ? 'bg-green-500 shadow-green-200' : 'bg-[#8f0304] shadow-[#8f0304]/20'
+          )}>
+            <ShieldCheck size={22} />
           </div>
 
-          {/* Progress bar */}
-          {!cargando && tipos.length > 0 && (
-            <ProgressBar aprobados={aprobados} total={tipos.length} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-[#281721] tracking-tight">
+              Verifica tu Identidad
+            </p>
+            <p className="text-[11px] text-[#bda5a8] mt-0.5 truncate">
+              {cargando
+                ? 'Cargando documentos…'
+                : todosAprobados
+                  ? '¡Identidad verificada! Todos los documentos aprobados.'
+                  : `${aprobados} de ${total} documentos aprobados · ${pct}%`}
+            </p>
+          </div>
+
+          {/* Barra de progreso compacta */}
+          {!cargando && total > 0 && (
+            <div className="hidden sm:block w-28 shrink-0">
+              <div className="h-1.5 bg-white/40 rounded-full overflow-hidden border border-white/20">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500',
+                    todosAprobados ? 'bg-green-500' : 'bg-[#8f0304]'
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
           )}
 
-          {/* Document cards */}
-          <div className="space-y-3">
-            {cargando ? (
-              <>
-                <SkeletonCard />
-                <SkeletonCard />
-              </>
-            ) : (
-              tipos.map((cfg) => (
-                <DocumentCard
-                  key={cfg.tipo}
-                  config={cfg}
-                  doc={documentos.find(d => d.tipoDocumento === cfg.tipo)}
-                  isUploading={subiendo === cfg.tipo}
-                  onUpload={(file) => handleUpload(cfg.tipo, file)}
-                  onPreview={setPreviewUrl}
-                />
-              ))
-            )}
+          {/* Chevron */}
+          <div className={cn(
+            'w-7 h-7 rounded-full bg-white/50 flex items-center justify-center shrink-0 transition-transform duration-300',
+            colapsado ? 'rotate-0' : 'rotate-180'
+          )}>
+            <span className="material-symbols-outlined text-[16px] text-[#8f0304]">
+              expand_more
+            </span>
           </div>
+        </button>
 
-          {/* Disclaimer */}
-          <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/50 flex gap-3">
-            <Info className="text-amber-600 shrink-0 mt-0.5" size={18} />
-            <p className="text-[11px] text-amber-800 leading-relaxed">
-              Tus documentos son procesados de forma segura y solo se utilizan para verificar tu identidad en la plataforma.
-              El proceso de revisión puede tardar hasta <strong>24 horas hábiles</strong>.
-            </p>
+        {/* ── Contenido colapsable ── */}
+        <div className={cn(
+          'overflow-hidden transition-all duration-300 ease-in-out',
+          colapsado ? 'max-h-0' : 'max-h-[1000px]'
+        )}>
+          <div className="relative z-10 space-y-5 px-6 pb-6">
+            {/* Barra de progreso completa */}
+            {!cargando && total > 0 && (
+              <ProgressBar aprobados={aprobados} total={total} />
+            )}
+
+            {/* Document cards */}
+            <div className="space-y-3">
+              {cargando ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                tipos.map((cfg) => (
+                  <DocumentCard
+                    key={cfg.tipo}
+                    config={cfg}
+                    doc={documentos.find(d => d.tipoDocumento === cfg.tipo)}
+                    isUploading={subiendo === cfg.tipo}
+                    onUpload={(file) => handleUpload(cfg.tipo, file)}
+                    onPreview={setPreviewUrl}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* Disclaimer */}
+            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/50 flex gap-3">
+              <Info className="text-amber-600 shrink-0 mt-0.5" size={18} />
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Tus documentos son procesados de forma segura y solo se utilizan para verificar tu identidad en la plataforma.
+                El proceso de revisión puede tardar hasta <strong>24 horas hábiles</strong>.
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -1,8 +1,5 @@
-/**
- * Tipos del perfil del usuario logueado y sus documentos de verificación.
- */
-
 export type RolPerfil = 'ESTUDIANTE' | 'ARRENDADOR' | 'ADMIN';
+export type EstadoUsuario = 'PENDING' | 'ACTIVE' | 'BANNED';
 
 export interface Perfil {
   id: number;
@@ -12,25 +9,47 @@ export interface Perfil {
   correo: string;
   telefono?: string;
   rol: RolPerfil;
+  estado?: EstadoUsuario;
   fotoUrl?: string;
-  direccion?: string;
-  // Datos por rol (opcionales).
   detallesArrendador?: {
     nombreComercial?: string;
+    ruc?: string;
+    telefono?: string;
+    direccionPropiedades?: string;
+    latitud?: number;
+    longitud?: number;
+    esEmpresa?: boolean;
     calificacion?: number;
   };
   detallesEstudiante?: {
     universidad?: string;
+    codigoEstudiante?: string;
     carrera?: string;
+    ciclo?: number;
+    verificado?: boolean;
   };
 }
 
 export interface ActualizarPerfilRequest {
   nombre?: string;
   apellido?: string;
+  dni?: string;
   telefono?: string;
-  direccion?: string;
-  fotoUrl?: string;
+  detallesArrendador?: {
+    nombreComercial?: string;
+    ruc?: string;
+    telefono?: string;
+    direccionCuartos?: string;
+    latitud?: number;
+    longitud?: number;
+    esEmpresa?: boolean;
+  };
+  detallesEstudiante?: {
+    universidad?: string;
+    codigoEstudiante?: string;
+    carrera?: string;
+    ciclo?: number;
+  };
 }
 
 export type EstadoDocumento = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';

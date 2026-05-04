@@ -45,6 +45,22 @@ public class CloudinaryDocumentService {
         return url;
     }
 
+    public String subirAvatar(MultipartFile archivo, Long usuarioId) throws IOException {
+        String folder = ROOT + "/" + usuarioId + "/avatar";
+        Map<String, Object> opciones = new HashMap<>();
+        opciones.put("folder", folder);
+        opciones.put("public_id", "profile");
+        opciones.put("overwrite", true);
+        opciones.put("resource_type", "image");
+        opciones.put("use_filename", false);
+        opciones.put("unique_filename", false);
+        opciones.put("allowed_formats", "jpg,jpeg,png,webp");
+        Map<?, ?> result = cloudinary.uploader().upload(archivo.getBytes(), opciones);
+        String url = String.valueOf(result.get("secure_url"));
+        log.debug("[Cloudinary] avatar subido: {}/profile -> {}", folder, url);
+        return url;
+    }
+
     public void eliminarDocumento(String archivoUrl) {
         if (archivoUrl == null || archivoUrl.isBlank() || !archivoUrl.startsWith("http")) return;
         try {

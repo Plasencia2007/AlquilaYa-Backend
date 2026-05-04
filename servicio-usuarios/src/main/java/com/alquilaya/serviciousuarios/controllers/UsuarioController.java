@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.dto.ActualizarUsuarioRequest;
 import com.alquilaya.serviciousuarios.dto.ArrendadorInfoResponse;
+import com.alquilaya.serviciousuarios.dto.CambiarPasswordRequest;
 import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
@@ -14,13 +15,16 @@ import com.alquilaya.serviciousuarios.services.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/usuarios")
@@ -40,7 +44,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS') or (authentication.principal.toString() == #id.toString())")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS') or @permisoEnforcer.esPropioUsuario(#id)")
     public ResponseEntity<Usuario> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(usuarioService.obtenerPorId(id));
     }
@@ -54,8 +58,14 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarios);
     }
 
+    @GetMapping("/admin/arrendadores")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
+    public ResponseEntity<List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO>> listarArrendadoresAdmin() {
+        return ResponseEntity.ok(usuarioService.listarArrendadoresAdmin());
+    }
+
     @PutMapping("/{id}")
-    @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO') or (authentication.principal.toString() == #id.toString())")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO') or @permisoEnforcer.esPropioUsuario(#id)")
     public ResponseEntity<Usuario> actualizarUsuario(
             @PathVariable Long id,
             @Valid @RequestBody ActualizarUsuarioRequest updates) {
@@ -69,6 +79,24 @@ public class UsuarioController {
         log.warn("Eliminando usuario ID: {}", id);
         usuarioService.eliminarUsuario(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/cambiar-password")
+    @PreAuthorize("@permisoEnforcer.esPropioUsuario(#id)")
+    public ResponseEntity<Void> cambiarPassword(
+            @PathVariable Long id,
+            @Valid @RequestBody CambiarPasswordRequest request) {
+        usuarioService.cambiarPassword(id, request.getPasswordActual(), request.getNuevaPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permisoEnforcer.esPropioUsuario(#id)")
+    public ResponseEntity<Map<String, String>> subirFoto(
+            @PathVariable Long id,
+            @RequestParam("archivo") MultipartFile archivo) throws IOException {
+        String url = usuarioService.subirFotoPerfil(id, archivo);
+        return ResponseEntity.ok(Map.of("fotoUrl", url));
     }
 
     @GetMapping("/arrendador/{perfilId}/info")

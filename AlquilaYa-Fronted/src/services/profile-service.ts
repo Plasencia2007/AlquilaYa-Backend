@@ -2,12 +2,8 @@ import Cookies from 'js-cookie';
 
 import { api } from '@/lib/api';
 import { servicioAuth } from '@/services/auth-service';
-import type { ActualizarPerfilRequest, Perfil } from '@/types/profile';
+import type { ActualizarPerfilRequest, EstadoUsuario, Perfil } from '@/types/profile';
 
-/**
- * Obtiene el `userId` del JWT en cookie. Lo necesitamos para las rutas
- * `/usuarios/{id}` que el backend expone (no hay un endpoint "me" propio).
- */
 function obtenerMiUserId(): number | null {
   const token = Cookies.get('auth-token');
   if (!token) return null;
@@ -25,17 +21,26 @@ interface UsuarioBackend {
   correo: string;
   telefono?: string;
   rol: 'ESTUDIANTE' | 'ARRENDADOR' | 'ADMIN';
-  estado?: string;
+  estado?: EstadoUsuario;
+  fotoUrl?: string;
   arrendador?: {
     id: number;
     nombreComercial?: string;
-    calificacion?: number;
+    ruc?: string;
     telefono?: string;
+    direccionPropiedades?: string;
+    latitud?: number;
+    longitud?: number;
+    esEmpresa?: boolean;
+    calificacion?: number;
   } | null;
   estudiante?: {
     id: number;
     universidad?: string;
+    codigoEstudiante?: string;
     carrera?: string;
+    ciclo?: number;
+    verificado?: boolean;
   } | null;
 }
 
@@ -48,16 +53,27 @@ function fromBackend(u: UsuarioBackend): Perfil {
     correo: u.correo,
     telefono: u.telefono,
     rol: u.rol,
+    estado: u.estado,
+    fotoUrl: u.fotoUrl,
     detallesArrendador: u.arrendador
       ? {
           nombreComercial: u.arrendador.nombreComercial,
+          ruc: u.arrendador.ruc,
+          telefono: u.arrendador.telefono,
+          direccionPropiedades: u.arrendador.direccionPropiedades,
+          latitud: u.arrendador.latitud,
+          longitud: u.arrendador.longitud,
+          esEmpresa: u.arrendador.esEmpresa,
           calificacion: u.arrendador.calificacion,
         }
       : undefined,
     detallesEstudiante: u.estudiante
       ? {
           universidad: u.estudiante.universidad,
+          codigoEstudiante: u.estudiante.codigoEstudiante,
           carrera: u.estudiante.carrera,
+          ciclo: u.estudiante.ciclo,
+          verificado: u.estudiante.verificado,
         }
       : undefined,
   };
@@ -74,24 +90,10 @@ export const profileService = {
   actualizarPerfil: async (cambios: ActualizarPerfilRequest): Promise<Perfil> => {
     const userId = obtenerMiUserId();
     if (!userId) throw new Error('No hay sesión activa');
-    const { data } = await api.put<UsuarioBackend>(`/usuarios/${userId}`, {
-      nombre: cambios.nombre,
-      apellido: cambios.apellido,
-      telefono: cambios.telefono,
-      // direccion / fotoUrl aún no son campos del backend pero los enviamos por si
-      // se agregan; el backend ignora propiedades desconocidas.
-      direccion: cambios.direccion,
-      fotoUrl: cambios.fotoUrl,
-    });
+    const { data } = await api.put<UsuarioBackend>(`/usuarios/${userId}`, cambios);
     return fromBackend(data);
   },
 
-  /**
-   * El backend (estado actual) no expone aún un endpoint dedicado para que un
-   * usuario autenticado cambie su contraseña sin OTP. Se intenta primero el
-   * endpoint canónico y, si responde 404, se cae al flujo de reset solicitando
-   * un correo. Esta función queda como contrato estable para la UI.
-   */
   cambiarPassword: async (actual: string, nueva: string): Promise<void> => {
     const userId = obtenerMiUserId();
     if (!userId) throw new Error('No hay sesión activa');
@@ -99,5 +101,18 @@ export const profileService = {
       passwordActual: actual,
       nuevaPassword: nueva,
     });
+  },
+
+  subirFotoPerfil: async (file: File): Promise<string> => {
+    const userId = obtenerMiUserId();
+    if (!userId) throw new Error('No hay sesión activa');
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const { data } = await api.post<{ fotoUrl: string }>(
+      `/usuarios/${userId}/foto`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return data.fotoUrl;
   },
 };

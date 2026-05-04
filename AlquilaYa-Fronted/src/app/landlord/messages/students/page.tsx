@@ -1,16 +1,51 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
 
-import { Card } from '@/components/ui/legacy-card';
-import { useStompChat } from '@/hooks/use-stomp-chat';
 import { cn } from '@/lib/cn';
-import { tiempoChat, tiempoRelativo } from '@/lib/relative-time';
-import { messagingService } from '@/services/messaging-service';
-import { servicioAuth } from '@/services/auth-service';
 import { notify } from '@/lib/notify';
+import { conversationService } from '@/services/conversation-service';
+import { stompClient } from '@/services/stomp-client';
+import { servicioAuth } from '@/services/auth-service';
+import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
 import Cookies from 'js-cookie';
-import type { ConversacionResumen } from '@/types/messaging';
+import type { ConversacionResumen, Mensaje } from '@/types/chat';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500',   'bg-cyan-500',    'bg-orange-500',
+];
+
+function avatarColor(nombre: string): string {
+  let hash = 0;
+  for (let i = 0; i < nombre.length; i++) hash = nombre.charCodeAt(i) + hash * 31;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function horaMsg(fecha: string): string {
+  try { return format(new Date(fecha), 'HH:mm'); } catch { return ''; }
+}
+
+function grupoFechaMsg(fecha: string): string {
+  const d = new Date(fecha);
+  if (isToday(d)) return 'Hoy';
+  if (isYesterday(d)) return 'Ayer';
+  if (isThisWeek(d, { weekStartsOn: 1 })) return format(d, 'EEEE', { locale: es });
+  return format(d, "d 'de' MMMM", { locale: es });
+}
+
+function fechaLista(fecha: string): string {
+  const d = new Date(fecha);
+  if (isToday(d)) return format(d, 'HH:mm');
+  if (isYesterday(d)) return 'ayer';
+  if (isThisWeek(d, { weekStartsOn: 1 })) return format(d, 'EEE', { locale: es });
+  return format(d, 'dd/MM/yy');
+}
 
 function obtenerMiPerfilId(): number | null {
   const token = Cookies.get('auth-token');
@@ -20,227 +55,678 @@ function obtenerMiPerfilId(): number | null {
   return typeof v === 'number' ? v : v ? Number(v) : null;
 }
 
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
+
+function TypingDots() {
+  return (
+    <div className="flex justify-start px-2 py-1">
+      <div className="flex items-center gap-1 bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+      </div>
+    </div>
+  );
+}
+
+function FechaSeparador({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center my-3 select-none">
+      <span className="bg-white/80 text-gray-500 text-[11px] font-medium px-3 py-1 rounded-full shadow-sm">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+interface BurbujaMensajeProps {
+  msg: Mensaje;
+  mio: boolean;
+  onReply: () => void;
+}
+function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
+  const [hover, setHover] = useState(false);
+
+  let quoteText: string | null = null;
+  let mainText = msg.contenido;
+  if (msg.contenido.startsWith('> ') && msg.contenido.includes('\n\n')) {
+    const idx = msg.contenido.indexOf('\n\n');
+    quoteText = msg.contenido.slice(2, idx);
+    mainText = msg.contenido.slice(idx + 2);
+  }
+
+  const botonReply = (
+    <button
+      onClick={onReply}
+      className="mb-2 p-1 text-gray-400 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+      title="Responder"
+    >
+      <span className="material-symbols-outlined text-[18px]">reply</span>
+    </button>
+  );
+
+  return (
+    <div
+      className={cn('flex items-end gap-1 group', mio ? 'justify-end' : 'justify-start')}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {!mio && hover && botonReply}
+
+      <div className={cn(
+        'max-w-[65%] rounded-2xl px-4 py-2 shadow-sm',
+        mio
+          ? 'bg-indigo-500 text-white rounded-br-sm'
+          : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm',
+      )}>
+        {quoteText && (
+          <div className={cn(
+            'border-l-4 pl-2 mb-2 text-[11px] rounded-r py-1 pr-2 max-w-full truncate',
+            mio
+              ? 'border-indigo-300 bg-indigo-600/30 text-indigo-100'
+              : 'border-indigo-400 bg-indigo-50 text-indigo-700',
+          )}>
+            {quoteText}
+          </div>
+        )}
+        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{mainText}</p>
+        <div className="flex items-center justify-end gap-0.5 mt-1">
+          <span className={cn('text-[10px]', mio ? 'text-indigo-200' : 'text-gray-400')}>
+            {horaMsg(msg.fechaEnvio)}
+          </span>
+          {mio && (
+            <span className={cn('text-[11px] ml-0.5', msg.estado === 'LEIDO' ? 'text-indigo-200' : 'text-white/40')}>
+              {msg.estado === 'LEIDO' ? '✓✓' : '✓'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {mio && hover && botonReply}
+    </div>
+  );
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
+
 export default function LandlordMessagesStudentsPage() {
   const [conversaciones, setConversaciones] = useState<ConversacionResumen[]>([]);
-  const [cargandoLista, setCargandoLista] = useState(true);
-  const [seleccionada, setSeleccionada] = useState<ConversacionResumen | null>(null);
-  const [borrador, setBorrador] = useState('');
+  const [cargandoLista, setCargandoLista]   = useState(true);
+  const [seleccionada, setSeleccionada]     = useState<ConversacionResumen | null>(null);
+  const [busqueda, setBusqueda]             = useState('');
+
+  const [mensajes, setMensajes]             = useState<Mensaje[]>([]);
+  const [cargandoMensajes, setCargandoMensajes] = useState(false);
+  const [otroEscribiendo, setOtroEscribiendo]   = useState(false);
+  const [paginaActual, setPaginaActual]     = useState(0);
+  const [hayMasAntiguos, setHayMasAntiguos] = useState(false);
+  const [cargandoAntiguos, setCargandoAntiguos] = useState(false);
+
+  const [borrador, setBorrador]             = useState('');
+  const [quoteado, setQuoteado]             = useState<Mensaje | null>(null);
+  const [mostrarEmojis, setMostrarEmojis]   = useState(false);
+  const [stompConectado, setStompConectado] = useState(stompClient.isConnected());
+  const [vistaMovil, setVistaMovil]         = useState<'lista' | 'chat'>('lista');
+
+  const scrollRef        = useRef<HTMLDivElement>(null);
+  const inputRef         = useRef<HTMLTextAreaElement>(null);
+  const emojiRef         = useRef<HTMLDivElement>(null);
+  const seleccionadaRef  = useRef<ConversacionResumen | null>(null);
+  const typingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingState  = useRef(false);
+
   const miPerfilId = useMemo(() => obtenerMiPerfilId(), []);
+  const setTotal   = useUnreadMessagesStore((s) => s.setTotal);
 
-  const { mensajes, enviar, conectado, cargando: cargandoMensajes } = useStompChat(
-    seleccionada?.id ?? null,
-  );
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Mantener ref sincronizada para evitar closures rancios en callbacks de STOMP
+  useEffect(() => { seleccionadaRef.current = seleccionada; }, [seleccionada]);
 
-  // Cargar lista de conversaciones
+  // Estado de conexión STOMP
   useEffect(() => {
-    let cancelado = false;
-    setCargandoLista(true);
-    messagingService
-      .listarConversaciones()
-      .then((lista) => {
-        if (cancelado) return;
-        const ordenadas = lista
-          .slice()
-          .sort(
-            (a, b) =>
-              new Date(b.fechaUltimaActividad).getTime() -
-              new Date(a.fechaUltimaActividad).getTime(),
-          );
-        setConversaciones(ordenadas);
-        if (ordenadas.length > 0) setSeleccionada(ordenadas[0]);
-      })
-      .catch((err) => notify.error(err, 'No se pudieron cargar las conversaciones'))
-      .finally(() => {
-        if (!cancelado) setCargandoLista(false);
-      });
-    return () => {
-      cancelado = true;
-    };
+    const offConn    = stompClient.onConnect(() => setStompConectado(true));
+    const offDisconn = stompClient.onDisconnect(() => setStompConectado(false));
+    return () => { offConn(); offDisconn(); };
   }, []);
 
-  // Auto-scroll al fondo cuando llegan mensajes
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, [mensajes.length, seleccionada?.id]);
-
-  const onEnviar = async () => {
-    const txt = borrador.trim();
-    if (!txt || !seleccionada) return;
-    setBorrador('');
+  // ── Cargar lista de conversaciones ──────────────────────────────────────────
+  const cargarConversaciones = useCallback(async () => {
+    setCargandoLista(true);
     try {
-      await enviar(txt);
+      const lista = await conversationService.listarMias();
+      const ordenadas = lista.sort(
+        (a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime(),
+      );
+      setConversaciones(ordenadas);
+      setTotal(ordenadas.reduce((acc, c) => acc + (c.noLeidos || 0), 0));
+    } catch (err) {
+      notify.error(err, 'No se pudieron cargar las conversaciones');
+    } finally {
+      setCargandoLista(false);
+    }
+  }, [setTotal]);
+
+  useEffect(() => { cargarConversaciones(); }, [cargarConversaciones]);
+
+  // ── Suscripción a TODAS las conversaciones (mensajes + toasts) ───────────────
+  const convIds = conversaciones.map((c) => c.id).join(',');
+  useEffect(() => {
+    if (conversaciones.length === 0) return;
+
+    const unsubs = conversaciones.map((conv) =>
+      stompClient.subscribe(`/user/queue/conversacion.${conv.id}`, (raw) => {
+        try {
+          const msg: Mensaje = JSON.parse(raw.body);
+          const esMio = msg.emisorPerfilId === miPerfilId;
+
+          if (seleccionadaRef.current?.id === conv.id) {
+            // Conversación activa: agregar al chat
+            setMensajes((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+            if (!esMio) conversationService.marcarLeida(conv.id).catch(() => {});
+          } else if (!esMio) {
+            // Otra conversación: toast + actualizar badge
+            notify.info(conv.contraparteNombre, msg.contenido.substring(0, 70));
+            setConversaciones((prev) => {
+              const actualizada = prev.map((c) =>
+                c.id === conv.id
+                  ? { ...c, noLeidos: (c.noLeidos || 0) + 1, ultimoMensajePreview: msg.contenido, fechaUltimaActividad: new Date().toISOString() }
+                  : c,
+              ).sort((a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime());
+              setTotal(actualizada.reduce((acc, c) => acc + (c.noLeidos || 0), 0));
+              return actualizada;
+            });
+          }
+        } catch { /* noop */ }
+      }),
+    );
+
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convIds, miPerfilId]);
+
+  // ── Suscripción a eventos de la conversación activa (typing + read receipts) ─
+  useEffect(() => {
+    if (!seleccionada) return;
+    const id = seleccionada.id;
+
+    const unsub = stompClient.subscribe(`/user/queue/conversacion.${id}.eventos`, (raw) => {
+      try {
+        const ev = JSON.parse(raw.body);
+        if (ev.tipo === 'TYPING' && ev.emisorPerfilId !== miPerfilId) {
+          setOtroEscribiendo(ev.escribiendo);
+        } else if (ev.tipo === 'MENSAJES_LEIDOS' && ev.lectorPerfilId !== miPerfilId) {
+          setMensajes((prev) =>
+            prev.map((m) =>
+              m.emisorPerfilId === miPerfilId && !m.fechaLectura
+                ? { ...m, fechaLectura: new Date().toISOString(), estado: 'LEIDO' as const }
+                : m,
+            ),
+          );
+        }
+      } catch { /* noop */ }
+    });
+
+    return () => unsub();
+  }, [seleccionada?.id, miPerfilId]);
+
+  // ── Cargar mensajes al seleccionar conversación ─────────────────────────────
+  useEffect(() => {
+    if (!seleccionada) { setMensajes([]); return; }
+    const id = seleccionada.id;
+    let cancelado = false;
+
+    async function cargar() {
+      setCargandoMensajes(true);
+      setMensajes([]);
+      setOtroEscribiendo(false);
+      setHayMasAntiguos(false);
+      try {
+        // Paso 1: obtener total de mensajes
+        const probe = await conversationService.listarMensajes(id, 0, 1);
+        if (cancelado) return;
+        const total = probe.totalElements;
+
+        if (total === 0) { setCargandoMensajes(false); return; }
+
+        // Paso 2: cargar última página (mensajes más recientes)
+        const pageSize  = 50;
+        const ultimaPag = Math.max(0, Math.ceil(total / pageSize) - 1);
+        const pagina    = await conversationService.listarMensajes(id, ultimaPag, pageSize);
+        if (cancelado) return;
+
+        setMensajes(pagina.content);
+        setPaginaActual(ultimaPag);
+        setHayMasAntiguos(ultimaPag > 0);
+
+        // Marcar como leída + resetear badge en lista
+        conversationService.marcarLeida(id).catch(() => {});
+        const noLeidosAntes = seleccionadaRef.current?.noLeidos ?? 0;
+        setConversaciones((prev) => {
+          const actualizada = prev.map((c) => c.id === id ? { ...c, noLeidos: 0 } : c);
+          setTotal(Math.max(0, actualizada.reduce((acc, c) => acc + (c.noLeidos || 0), 0)));
+          return actualizada;
+        });
+        void noLeidosAntes;
+      } catch {
+        if (!cancelado) notify.error(null, 'No se pudieron cargar los mensajes');
+      } finally {
+        if (!cancelado) setCargandoMensajes(false);
+      }
+    }
+
+    cargar();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seleccionada?.id]);
+
+  // Auto-scroll al fondo cuando llegan mensajes nuevos
+  useEffect(() => {
+    if (cargandoMensajes || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [mensajes.length, otroEscribiendo, cargandoMensajes]);
+
+  // Cerrar emoji picker al hacer clic afuera
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setMostrarEmojis(false);
+      }
+    }
+    if (mostrarEmojis) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mostrarEmojis]);
+
+  // ── Cargar mensajes anteriores ───────────────────────────────────────────────
+  const cargarAntiguos = async () => {
+    if (!seleccionada || paginaActual <= 0 || cargandoAntiguos) return;
+    const scrollEl = scrollRef.current;
+    const prevHeight = scrollEl?.scrollHeight ?? 0;
+    setCargandoAntiguos(true);
+    try {
+      const prevPag = paginaActual - 1;
+      const data    = await conversationService.listarMensajes(seleccionada.id, prevPag, 50);
+      const ids     = new Set(mensajes.map((m) => m.id));
+      const nuevos  = data.content.filter((m) => !ids.has(m.id));
+      setMensajes((prev) => [...nuevos, ...prev]);
+      setPaginaActual(prevPag);
+      setHayMasAntiguos(prevPag > 0);
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight - prevHeight;
+      });
+    } catch {
+      notify.error(null, 'No se pudieron cargar mensajes anteriores');
+    } finally {
+      setCargandoAntiguos(false);
+    }
+  };
+
+  // ── Indicador de escritura ────────────────────────────────────────────────────
+  const notificarTyping = useCallback(() => {
+    const conv = seleccionadaRef.current;
+    if (!conv) return;
+    if (!lastTypingState.current) {
+      lastTypingState.current = true;
+      stompClient.publish(`/app/chat.typing/${conv.id}`, { escribiendo: true });
+    }
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      lastTypingState.current = false;
+      const c = seleccionadaRef.current;
+      if (c) stompClient.publish(`/app/chat.typing/${c.id}`, { escribiendo: false });
+    }, 2500);
+  }, []);
+
+  // ── Enviar mensaje ────────────────────────────────────────────────────────────
+  const enviarMensaje = useCallback(async () => {
+    const txt = borrador.trim();
+    if (!txt || !seleccionadaRef.current) return;
+
+    const conv = seleccionadaRef.current;
+    const contenido = quoteado
+      ? `> ${quoteado.contenido.slice(0, 120)}\n\n${txt}`
+      : txt;
+
+    setBorrador('');
+    setQuoteado(null);
+    if (inputRef.current) { inputRef.current.style.height = 'auto'; }
+    lastTypingState.current = false;
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    stompClient.publish(`/app/chat.typing/${conv.id}`, { escribiendo: false });
+
+    try {
+      const nuevo = await conversationService.enviarMensaje(conv.id, contenido);
+      setMensajes((prev) => prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]);
+      setConversaciones((prev) =>
+        prev.map((c) =>
+          c.id === conv.id
+            ? { ...c, ultimoMensajePreview: txt, fechaUltimaActividad: new Date().toISOString() }
+            : c,
+        ).sort((a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime()),
+      );
     } catch (err) {
       notify.error(err, 'No se pudo enviar el mensaje');
       setBorrador(txt);
     }
+  }, [borrador, quoteado]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); }
   };
 
+  const onInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setBorrador(e.target.value);
+    notificarTyping();
+    // Auto-resize
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`;
+  };
+
+  const seleccionarConv = (conv: ConversacionResumen) => {
+    setSeleccionada(conv);
+    setVistaMovil('chat');
+    setBorrador('');
+    setQuoteado(null);
+    setMostrarEmojis(false);
+  };
+
+  // ── Computed: conversaciones filtradas ────────────────────────────────────────
+  const filtradas = conversaciones.filter((c) =>
+    c.contraparteNombre.toLowerCase().includes(busqueda.toLowerCase()),
+  );
+
+  // ── Computed: mensajes con separadores de fecha ───────────────────────────────
+  const mensajesConSeps = useMemo(() => {
+    type Item =
+      | { type: 'sep'; label: string; key: string }
+      | { type: 'msg'; msg: Mensaje };
+    const result: Item[] = [];
+    let lastLabel = '';
+    for (const msg of mensajes) {
+      const label = grupoFechaMsg(msg.fechaEnvio);
+      if (label !== lastLabel) {
+        result.push({ type: 'sep', label, key: `sep-${msg.id}` });
+        lastLabel = label;
+      }
+      result.push({ type: 'msg', msg });
+    }
+    return result;
+  }, [mensajes]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 animate-fade-in">
-      <header>
-        <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90">
-          Mensajes con Estudiantes
-        </h1>
-        <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
-          Conversaciones en vivo con quienes están interesados en tus propiedades.
-          {!conectado && (
-            <span className="ml-2 text-amber-500">Reconectando…</span>
-          )}
-        </p>
-      </header>
+    // Ocupa todo el área disponible a la derecha del sidebar fijo (280px)
+    <div className="fixed top-0 right-0 bottom-0 left-[280px] flex overflow-hidden z-10">
 
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 h-[calc(100vh-220px)]">
-        {/* Lista de conversaciones */}
-        <Card padding="none" className="bg-white/40 border border-on-surface/5 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-on-surface/5">
-            <h3 className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest">
-              Conversaciones {conversaciones.length > 0 && `(${conversaciones.length})`}
-            </h3>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {cargandoLista && (
-              <div className="p-6 text-sm text-on-surface-variant">Cargando…</div>
+      {/* ══ Panel izquierdo: lista de conversaciones ══ */}
+      <aside className={cn(
+        'flex-col border-r border-gray-200 bg-white',
+        'w-full md:w-[360px] md:shrink-0',
+        vistaMovil === 'chat' ? 'hidden md:flex' : 'flex',
+      )}>
+        {/* Header azul indigo */}
+        <div className="bg-indigo-600 px-4 pt-4 pb-3 shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-white font-black text-lg tracking-tight">Mensajes</h2>
+            {!stompConectado && (
+              <span className="text-amber-300 text-[10px] font-bold animate-pulse">Reconectando…</span>
             )}
-            {!cargandoLista && conversaciones.length === 0 && (
-              <div className="p-6 text-sm text-on-surface-variant">
-                Aún no tienes conversaciones.
-              </div>
-            )}
-            {conversaciones.map((c) => {
-              const activa = seleccionada?.id === c.id;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setSeleccionada(c)}
-                  className={cn(
-                    'w-full text-left px-4 py-3 border-b border-on-surface/5 flex gap-3 items-start hover:bg-on-surface/5 transition-colors',
-                    activa && 'bg-blue-500/10 hover:bg-blue-500/10',
-                  )}
-                >
-                  <div className="w-10 h-10 rounded-full bg-on-surface/10 flex items-center justify-center text-sm font-black text-on-surface/70 shrink-0">
-                    {(c.contraparteNombre || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline gap-2">
-                      <h4 className="font-black text-sm text-on-surface/90 truncate">
-                        {c.contraparteNombre || 'Estudiante'}
-                      </h4>
-                      <span className="text-[10px] text-on-surface/40 font-bold shrink-0">
-                        {tiempoChat(c.fechaUltimaActividad)}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-on-surface-variant font-medium truncate mt-0.5">
-                      {c.ultimoMensajePreview ?? 'Sin mensajes'}
-                    </p>
-                    <p className="text-[10px] text-on-surface/40 italic truncate mt-0.5">
-                      {c.propiedadTitulo}
-                    </p>
-                  </div>
-                  {c.noLeidos > 0 && !activa && (
-                    <span className="bg-blue-500 text-white text-[10px] font-black rounded-full px-2 py-0.5 shrink-0">
-                      {c.noLeidos}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
           </div>
-        </Card>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 text-[18px]">
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="Buscar conversación…"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="w-full bg-indigo-700/50 text-white placeholder-indigo-300 pl-9 pr-4 py-2 rounded-full text-sm focus:outline-none focus:bg-indigo-700/70 transition-colors"
+            />
+          </div>
+        </div>
 
-        {/* Panel de chat */}
-        <Card padding="none" className="bg-white/40 border border-on-surface/5 flex flex-col overflow-hidden">
-          {!seleccionada ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-on-surface-variant">
-              Selecciona una conversación para empezar.
+        {/* Lista scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {cargandoLista && (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-5 h-5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
             </div>
-          ) : (
-            <>
-              <div className="p-4 border-b border-on-surface/5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-on-surface/10 flex items-center justify-center text-sm font-black text-on-surface/70">
-                  {(seleccionada.contraparteNombre || '?').charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h4 className="font-black text-sm text-on-surface/90">
-                    {seleccionada.contraparteNombre || 'Estudiante'}
-                  </h4>
-                  <p className="text-[10px] text-on-surface-variant font-medium italic">
-                    {seleccionada.propiedadTitulo}
-                  </p>
-                </div>
-              </div>
-
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-                {cargandoMensajes && (
-                  <p className="text-sm text-on-surface-variant text-center">Cargando mensajes…</p>
-                )}
-                {!cargandoMensajes && mensajes.length === 0 && (
-                  <p className="text-sm text-on-surface-variant text-center">
-                    Inicia la conversación enviando un mensaje.
-                  </p>
-                )}
-                {mensajes.map((m) => {
-                  const mio = m.emisorPerfilId === miPerfilId;
-                  return (
-                    <div
-                      key={m.id}
-                      className={cn('flex', mio ? 'justify-end' : 'justify-start')}
-                    >
-                      <div
-                        className={cn(
-                          'max-w-[70%] rounded-2xl px-4 py-2',
-                          mio
-                            ? 'bg-blue-500 text-white rounded-br-sm'
-                            : 'bg-on-surface/5 text-on-surface rounded-bl-sm',
-                        )}
-                      >
-                        <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">
-                          {m.contenido}
-                        </p>
-                        <p
-                          className={cn(
-                            'text-[9px] font-bold mt-1 uppercase tracking-wider',
-                            mio ? 'text-white/70' : 'text-on-surface/40',
-                          )}
-                        >
-                          {tiempoRelativo(m.fechaEnvio)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="p-4 border-t border-on-surface/5">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    onEnviar();
-                  }}
-                  className="flex gap-2"
-                >
-                  <input
-                    type="text"
-                    value={borrador}
-                    onChange={(e) => setBorrador(e.target.value)}
-                    placeholder="Escribe un mensaje…"
-                    className="flex-1 px-4 py-2 rounded-full bg-on-surface/5 border border-on-surface/10 text-sm focus:outline-none focus:border-blue-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!borrador.trim()}
-                    className="bg-blue-500 text-white rounded-full px-5 py-2 text-sm font-black disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
-                  >
-                    Enviar
-                  </button>
-                </form>
-              </div>
-            </>
           )}
-        </Card>
-      </div>
+          {!cargandoLista && filtradas.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-3">
+              <span className="material-symbols-outlined text-5xl text-gray-300">chat_bubble</span>
+              <p className="text-sm text-gray-400">
+                {busqueda ? 'Sin resultados para tu búsqueda' : 'Aún no tienes conversaciones'}
+              </p>
+            </div>
+          )}
+
+          {filtradas.map((conv) => {
+            const activa   = seleccionada?.id === conv.id;
+            const inicial  = (conv.contraparteNombre || '?').charAt(0).toUpperCase();
+            const color    = avatarColor(conv.contraparteNombre || '');
+
+            return (
+              <button
+                key={conv.id}
+                onClick={() => seleccionarConv(conv)}
+                className={cn(
+                  'w-full text-left flex items-center gap-3 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors',
+                  activa && 'bg-indigo-50 hover:bg-indigo-50',
+                )}
+              >
+                {/* Avatar con punto verde */}
+                <div className="relative shrink-0">
+                  <div className={cn('w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg', color)}>
+                    {inicial}
+                  </div>
+                  <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+                </div>
+
+                {/* Información */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={cn(
+                      'text-sm truncate',
+                      conv.noLeidos > 0 ? 'font-black text-gray-900' : 'font-semibold text-gray-800',
+                    )}>
+                      {conv.contraparteNombre || 'Estudiante'}
+                    </span>
+                    <span className={cn(
+                      'text-[11px] shrink-0',
+                      conv.noLeidos > 0 ? 'text-indigo-600 font-bold' : 'text-gray-400',
+                    )}>
+                      {fechaLista(conv.fechaUltimaActividad)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <p className="text-[12px] text-gray-500 truncate flex-1">
+                      {conv.ultimoMensajePreview || <em>Sin mensajes aún</em>}
+                    </p>
+                    {conv.noLeidos > 0 && !activa && (
+                      <span className="shrink-0 min-w-[20px] h-5 bg-indigo-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5">
+                        {conv.noLeidos > 99 ? '99+' : conv.noLeidos}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400 truncate mt-0.5 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[12px]">home</span>
+                    {conv.propiedadTitulo}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* ══ Panel derecho: área de chat ══ */}
+      <main className={cn(
+        'flex-1 flex flex-col min-w-0 bg-[#efeae2]',
+        vistaMovil === 'lista' ? 'hidden md:flex' : 'flex',
+      )}>
+        {!seleccionada ? (
+          /* Estado vacío */
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
+            <div className="w-24 h-24 bg-white/60 rounded-full flex items-center justify-center shadow-md">
+              <span className="material-symbols-outlined text-6xl text-indigo-300">chat</span>
+            </div>
+            <div>
+              <p className="text-gray-600 font-bold text-xl tracking-tight">AlquilaYa Mensajes</p>
+              <p className="text-gray-400 text-sm mt-1.5 max-w-xs">
+                Selecciona una conversación de la lista para comenzar a chatear con tus estudiantes.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Header del chat */}
+            <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 shrink-0 shadow-sm z-10">
+              <button
+                onClick={() => setVistaMovil('lista')}
+                className="md:hidden p-1 -ml-1 text-gray-500 hover:text-gray-700"
+              >
+                <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+              </button>
+
+              <div className={cn('w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-base shrink-0', avatarColor(seleccionada.contraparteNombre || ''))}>
+                {(seleccionada.contraparteNombre || '?').charAt(0).toUpperCase()}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-sm leading-tight truncate">
+                  {seleccionada.contraparteNombre || 'Estudiante'}
+                </p>
+                <p className="text-[11px] text-gray-400 truncate flex items-center gap-1 mt-0.5">
+                  <span className="material-symbols-outlined text-[13px]">home</span>
+                  {seleccionada.propiedadTitulo}
+                </p>
+              </div>
+
+              <span className="hidden sm:inline-flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[11px] font-bold px-3 py-1 rounded-full shrink-0">
+                <span className="material-symbols-outlined text-[14px]">apartment</span>
+                Propiedad
+              </span>
+            </header>
+
+            {/* Área de mensajes */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+              {/* Botón cargar mensajes anteriores */}
+              {hayMasAntiguos && (
+                <div className="flex justify-center pb-2">
+                  <button
+                    onClick={cargarAntiguos}
+                    disabled={cargandoAntiguos}
+                    className="text-[11px] font-bold text-indigo-600 bg-white/80 hover:bg-white border border-indigo-100 px-4 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    {cargandoAntiguos ? 'Cargando…' : '↑ Ver mensajes anteriores'}
+                  </button>
+                </div>
+              )}
+
+              {/* Spinner de carga */}
+              {cargandoMensajes && (
+                <div className="flex justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-indigo-400/30 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              )}
+
+              {/* Estado vacío de mensajes */}
+              {!cargandoMensajes && mensajes.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full py-20 text-center gap-2">
+                  <span className="material-symbols-outlined text-4xl text-gray-300">forum</span>
+                  <p className="text-gray-500 text-sm">Inicia la conversación enviando un mensaje</p>
+                </div>
+              )}
+
+              {/* Mensajes */}
+              {!cargandoMensajes && mensajesConSeps.map((item) => {
+                if (item.type === 'sep') {
+                  return <FechaSeparador key={item.key} label={item.label} />;
+                }
+                const mio = item.msg.emisorPerfilId === miPerfilId;
+                return (
+                  <BurbujaMensaje
+                    key={item.msg.id}
+                    msg={item.msg}
+                    mio={mio}
+                    onReply={() => setQuoteado(item.msg)}
+                  />
+                );
+              })}
+
+              {/* Typing indicator */}
+              {otroEscribiendo && <TypingDots />}
+            </div>
+
+            {/* Área de input */}
+            <div className="bg-white border-t border-gray-200 px-4 py-3 shrink-0">
+              {/* Preview del mensaje citado */}
+              {quoteado && (
+                <div className="flex items-start gap-2 mb-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                  <div className="w-1 self-stretch bg-indigo-400 rounded-full shrink-0 mt-0.5" />
+                  <p className="flex-1 text-[12px] text-gray-600 line-clamp-2 leading-relaxed">
+                    {quoteado.contenido}
+                  </p>
+                  <button
+                    onClick={() => setQuoteado(null)}
+                    className="text-gray-400 hover:text-gray-600 shrink-0 mt-0.5"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-end gap-2">
+                {/* Emoji picker */}
+                <div ref={emojiRef} className="relative shrink-0">
+                  <button
+                    onClick={() => setMostrarEmojis((v) => !v)}
+                    className="p-2 text-gray-400 hover:text-indigo-500 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[24px]">emoji_emotions</span>
+                  </button>
+                  {mostrarEmojis && (
+                    <div className="absolute bottom-12 left-0 z-50 shadow-2xl rounded-2xl overflow-hidden">
+                      <EmojiPicker
+                        onEmojiClick={(data: EmojiClickData) => {
+                          setBorrador((prev) => prev + data.emoji);
+                          inputRef.current?.focus();
+                        }}
+                        height={350}
+                        width={300}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  ref={inputRef}
+                  value={borrador}
+                  onChange={onInputChange}
+                  onKeyDown={onKeyDown}
+                  placeholder="Escribe un mensaje…"
+                  rows={1}
+                  maxLength={2000}
+                  className="flex-1 resize-none bg-gray-100 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:bg-gray-50 border border-transparent focus:border-indigo-200 transition-colors overflow-y-auto"
+                  style={{ maxHeight: '128px' }}
+                />
+
+                {/* Botón enviar */}
+                <button
+                  onClick={enviarMensaje}
+                  disabled={!borrador.trim()}
+                  className="w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[20px]">send</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </main>
     </div>
   );
 }

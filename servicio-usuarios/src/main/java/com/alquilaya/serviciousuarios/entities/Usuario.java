@@ -52,6 +52,9 @@ public class Usuario {
     @Builder.Default
     private boolean telefonoVerificado = false;
 
+    @Column(name = "foto_url", length = 512)
+    private String fotoUrl;
+
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private java.util.List<DocumentoVerificacion> documentos;

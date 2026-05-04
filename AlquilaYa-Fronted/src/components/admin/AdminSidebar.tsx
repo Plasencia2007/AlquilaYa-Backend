@@ -33,15 +33,6 @@ const NAVIGATION: NavCategory[] = [
         icon: 'dashboard',
         href: '/admin-master',
       },
-      {
-        label: 'Análisis global',
-        icon: 'grid_view',
-        subItems: [
-          { label: 'Métricas de red', href: '/admin-master/metrics/network' },
-          { label: 'Mapa de calor', href: '/admin-master/metrics/heatmap' },
-          { label: 'Monitor del sistema', href: '/admin-master/metrics/system' },
-        ],
-      },
     ],
   },
   {
@@ -50,12 +41,8 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Proveedores',
         icon: 'person_search',
+        href: '/admin-master/validations/providers',
         badge: METRICAS_LATERALES.proveedoresPendientes,
-        subItems: [
-          { label: 'Pendientes de aprob.', href: '/admin-master/validations/providers/pending' },
-          { label: 'Verificados', href: '/admin-master/validations/providers/verified' },
-          { label: 'Rechazados', href: '/admin-master/validations/providers/rejected' },
-        ],
       },
       {
         label: 'Auditoría inmuebles',
@@ -76,7 +63,7 @@ const NAVIGATION: NavCategory[] = [
         icon: 'group_add',
         subItems: [
           { label: 'Estudiantes', href: '/admin-master/clients/students' },
-          { label: 'Proveedores', href: '/admin-master/clients/providers' },
+          { label: 'Arrendadores (directorio)', href: '/admin-master/clients/providers' },
           { label: 'Staff / admins', href: '/admin-master/clients/staff' },
         ],
       },
@@ -167,7 +154,7 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { usuario, cerrarSesion } = useAuth();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Análisis global', 'Proveedores']);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleItem = (label: string) => {
     setExpandedItems(prev =>

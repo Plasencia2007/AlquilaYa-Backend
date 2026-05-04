@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'res.cloudinary.com' },
     ],
   },
+  async redirects() {
+    return [
+      { source: '/landlord/profile/personal', destination: '/landlord/profile', permanent: true },
+      { source: '/landlord/profile/docs',     destination: '/landlord/profile', permanent: true },
+      { source: '/landlord/profile/security', destination: '/landlord/profile', permanent: true },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

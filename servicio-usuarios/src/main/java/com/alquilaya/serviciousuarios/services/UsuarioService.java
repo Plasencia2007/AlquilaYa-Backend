@@ -10,6 +10,7 @@ import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.exceptions.CorreoYaRegistradoException;
+import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Optional;
 
 @Service
@@ -30,6 +33,7 @@ public class UsuarioService {
     private final EstudianteRepository estudianteRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
+    private final CloudinaryDocumentService cloudinaryDocumentService;
 
     @Transactional
     public Usuario registrarAdmin(AdminRegisterRequest request) {
@@ -130,6 +134,28 @@ public class UsuarioService {
         return usuarioRepository.findByRol(rol);
     }
 
+    public java.util.List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO> listarArrendadoresAdmin() {
+        return usuarioRepository.findByRol(Rol.ARRENDADOR).stream()
+                .map(u -> {
+                    com.alquilaya.serviciousuarios.entities.Arrendador a = u.getArrendador();
+                    return new com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO(
+                            u.getId(),
+                            u.getNombre(),
+                            u.getApellido(),
+                            u.getCorreo(),
+                            u.getDni(),
+                            u.getTelefono(),
+                            u.isTelefonoVerificado(),
+                            u.getFotoUrl(),
+                            u.getEstado().name(),
+                            u.getFechaCreacion(),
+                            a != null ? a.getCalificacion() : null,
+                            a != null ? a.getNombreComercial() : null,
+                            a != null ? a.getId() : null
+                    );
+                }).toList();
+    }
+
     @Transactional
     public Usuario actualizarUsuario(Long id, ActualizarUsuarioRequest updates) {
         Usuario usuario = usuarioRepository.findById(id)
@@ -195,5 +221,27 @@ public class UsuarioService {
 
     public boolean verificarPassword(String passwordPlana, String passwordHashed) {
         return passwordEncoder.matches(passwordPlana, passwordHashed);
+    }
+
+    @Transactional
+    public void cambiarPassword(Long id, String passwordActual, String nuevaPassword) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + id));
+        if (!passwordEncoder.matches(passwordActual, usuario.getPassword())) {
+            throw new CredencialesInvalidasException("La contraseña actual es incorrecta");
+        }
+        usuario.setPassword(passwordEncoder.encode(nuevaPassword));
+        usuarioRepository.save(usuario);
+    }
+
+    @Transactional
+    public String subirFotoPerfil(Long id, MultipartFile archivo) throws IOException {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + id));
+        String url = cloudinaryDocumentService.subirAvatar(archivo, id);
+        usuario.setFotoUrl(url);
+        usuarioRepository.save(usuario);
+        log.info("Foto de perfil actualizada para usuario ID: {}", id);
+        return url;
     }
 }

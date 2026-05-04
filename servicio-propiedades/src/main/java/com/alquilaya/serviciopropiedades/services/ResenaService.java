@@ -4,15 +4,18 @@ import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaArrendadorRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
+import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
+import com.alquilaya.serviciopropiedades.entities.ResenaEstudiante;
 import com.alquilaya.serviciopropiedades.entities.ResenaPropiedad;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ResenaArrendadorRepository;
+import com.alquilaya.serviciopropiedades.repositories.ResenaEstudianteRepository;
 import com.alquilaya.serviciopropiedades.repositories.ResenaPropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
@@ -38,9 +41,11 @@ public class ResenaService {
 
     private final ResenaPropiedadRepository resenaPropRepo;
     private final ResenaArrendadorRepository resenaArrRepo;
+    private final ResenaEstudianteRepository resenaEstRepo;
     private final ReservaRepository reservaRepository;
     private final PropiedadRepository propiedadRepository;
     private final UsuariosClient usuariosClient;
+    private final KafkaProducerService kafkaProducerService;
 
     // ======================= PROPIEDAD =======================
 
@@ -106,6 +111,7 @@ public class ResenaService {
                 .visible(true)
                 .build();
         ResenaArrendador guardada = resenaArrRepo.save(resena);
+        recalcularArrendador(req.getArrendadorId());
         log.info("⭐ Reseña de arrendador {} creada por estudiante {} (rating={})",
                 req.getArrendadorId(), estudianteId, req.getRating());
         return guardada;
@@ -137,6 +143,40 @@ public class ResenaService {
         );
     }
 
+    // ======================= ESTUDIANTE =======================
+
+    @Transactional
+    public ResenaEstudiante resenarEstudiante(CrearResenaEstudianteRequest req, CurrentUser current) {
+        Long arrendadorId = validarArrendador(current);
+
+        boolean tieneReservaFinalizada = propiedadRepository.findByArrendadorId(arrendadorId).stream()
+                .anyMatch(p -> reservaRepository.existsByEstudianteIdAndPropiedadIdAndEstado(
+                        req.getEstudianteId(), p.getId(), EstadoReserva.FINALIZADA));
+        if (!tieneReservaFinalizada) {
+            throw new IllegalStateException("Solo puedes reseñar estudiantes con los que hayas tenido una reserva FINALIZADA");
+        }
+
+        if (resenaEstRepo.existsByArrendadorIdAndEstudianteId(arrendadorId, req.getEstudianteId())) {
+            throw new IllegalStateException("Ya has reseñado a este estudiante");
+        }
+
+        ResenaEstudiante resena = ResenaEstudiante.builder()
+                .arrendadorId(arrendadorId)
+                .estudianteId(req.getEstudianteId())
+                .rating(req.getRating())
+                .comentario(req.getComentario())
+                .visible(true)
+                .build();
+        ResenaEstudiante guardada = resenaEstRepo.save(resena);
+        log.info("⭐ Reseña de estudiante {} creada por arrendador {} (rating={})",
+                req.getEstudianteId(), arrendadorId, req.getRating());
+        return guardada;
+    }
+
+    public List<ResenaEstudiante> listarPorEstudiante(Long estudianteId) {
+        return resenaEstRepo.findByEstudianteIdAndVisibleTrueOrderByFechaCreacionDesc(estudianteId);
+    }
+
     // ======================= MODERACIÓN =======================
 
     @Transactional
@@ -157,6 +197,7 @@ public class ResenaService {
                     .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de arrendador " + id));
             r.setVisible(false);
             resenaArrRepo.save(r);
+            recalcularArrendador(r.getArrendadorId());
             return ResenaResponseDTO.builder()
                     .id(r.getId()).tipo("ARRENDADOR").targetId(r.getArrendadorId())
                     .estudianteId(r.getEstudianteId()).rating(r.getRating())
@@ -201,6 +242,16 @@ public class ResenaService {
         return current.getPerfilId();
     }
 
+    private Long validarArrendador(CurrentUser current) {
+        if (current == null || current.getPerfilId() == null) {
+            throw new IllegalStateException("No hay perfilId en el contexto de seguridad");
+        }
+        if (!"ARRENDADOR".equalsIgnoreCase(current.getRol())) {
+            throw new IllegalStateException("Solo un arrendador puede reseñar estudiantes");
+        }
+        return current.getPerfilId();
+    }
+
     private void recalcularPropiedad(Long propiedadId) {
         Double promedio = resenaPropRepo.promedioRating(propiedadId);
         long total = resenaPropRepo.countByPropiedadIdAndVisibleTrue(propiedadId);
@@ -209,6 +260,15 @@ public class ResenaService {
             p.setNumResenas((int) total);
             propiedadRepository.save(p);
         });
+    }
+
+    private void recalcularArrendador(Long arrendadorId) {
+        Double promedio = resenaArrRepo.promedioRating(arrendadorId);
+        long total = resenaArrRepo.countByArrendadorIdAndVisibleTrue(arrendadorId);
+        kafkaProducerService.enviarCalificacionArrendador(
+                arrendadorId,
+                promedio != null ? promedio : 5.0,
+                total);
     }
 
     private <T> List<ResenaResponseDTO> mapearConNombresEstudiante(

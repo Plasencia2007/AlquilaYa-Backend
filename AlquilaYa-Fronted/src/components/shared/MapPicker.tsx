@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -21,12 +21,15 @@ interface MapPickerProps {
 
 function DraggableMarker({ lat, lng, onPositionChange }: MapPickerProps) {
   const [position, setPosition] = useState({ lat, lng });
-  
+
+  useEffect(() => {
+    setPosition({ lat, lng });
+  }, [lat, lng]);
+
   const eventHandlers = useMemo(
     () => ({
       dragend(e: any) {
-        const marker = e.target;
-        const pos = marker.getLatLng();
+        const pos = e.target.getLatLng();
         setPosition(pos);
         onPositionChange(pos.lat, pos.lng);
       },
@@ -44,7 +47,15 @@ function DraggableMarker({ lat, lng, onPositionChange }: MapPickerProps) {
   );
 }
 
-// Map center management component
+function MapClickHandler({ onPositionChange }: { onPositionChange: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onPositionChange(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 function ChangeView({ center }: { center: [number, number] }) {
   const map = useMapEvents({});
   map.setView(center, map.getZoom());
@@ -65,6 +76,7 @@ export default function MapPicker({ lat, lng, onPositionChange }: MapPickerProps
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <ChangeView center={[lat, lng]} />
+        <MapClickHandler onPositionChange={onPositionChange} />
         <DraggableMarker lat={lat} lng={lng} onPositionChange={onPositionChange} />
       </MapContainer>
     </div>

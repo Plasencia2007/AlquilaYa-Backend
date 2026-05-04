@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -34,6 +35,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/usuarios/arrendador/*/info").authenticated()
                         .requestMatchers("/api/v1/usuarios/estudiante/*/info").authenticated()
                         .requestMatchers("/api/v1/usuarios/documentos/**").authenticated()
+                        .requestMatchers(HttpMethod.GET,  "/api/v1/usuarios/{id}").authenticated()
+                        .requestMatchers(HttpMethod.PUT,  "/api/v1/usuarios/{id}").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/cambiar-password").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/foto").authenticated()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session

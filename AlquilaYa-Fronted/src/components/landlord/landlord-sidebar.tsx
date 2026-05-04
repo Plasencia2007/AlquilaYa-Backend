@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
 import { cn } from '@/lib/cn';
 
 interface NavSubItem {
@@ -37,7 +38,6 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Mis cuartos',
         icon: 'home',
-        badge: 4,
         subItems: [
           { label: 'Cuartos activos', href: '/landlord/properties/active' },
           { label: 'Agregar cuarto', href: '/landlord/properties/add' },
@@ -51,7 +51,6 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Reservas',
         icon: 'calendar_month',
-        badge: 2,
         subItems: [
           { label: 'Reservas activas', href: '/landlord/reservations/active' },
           { label: 'Historial',        href: '/landlord/reservations/history' },
@@ -78,7 +77,6 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Mensajes',
         icon: 'chat',
-        badge: 3,
         subItems: [
           { label: 'Estudiantes', href: '/landlord/messages/students' },
           { label: 'Notificaciones', href: '/landlord/messages/notifications' },
@@ -90,15 +88,7 @@ const NAVIGATION: NavCategory[] = [
   {
     title: 'CUENTA',
     items: [
-      {
-        label: 'Perfil',
-        icon: 'person',
-        subItems: [
-          { label: 'Datos personales', href: '/landlord/profile/personal' },
-          { label: 'Documentos / DNI', href: '/landlord/profile/docs' },
-          { label: 'Contraseña', href: '/landlord/profile/security' },
-        ],
-      },
+      { label: 'Perfil', icon: 'person', href: '/landlord/profile' },
     ],
   },
 ];
@@ -108,6 +98,7 @@ export default function LandlordSidebar() {
   const router = useRouter();
   const { usuario, cerrarSesion } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>(['PROPIEDADES', 'RESERVAS']);
+  const totalNoLeidos = useUnreadMessagesStore((s) => s.total);
 
   const toggleItem = (label: string) => {
     setExpandedItems(prev =>
@@ -147,6 +138,10 @@ export default function LandlordSidebar() {
                 const isAnySubItemActive = item.subItems?.some(si => pathname === si.href);
                 const isActive = isItemActive || isAnySubItemActive;
 
+                const efectivoBadge = item.label === 'Mensajes' && totalNoLeidos > 0
+                    ? totalNoLeidos
+                    : item.badge;
+
                 return (
                   <div key={item.label} className="space-y-1">
                     {item.href ? (
@@ -169,12 +164,12 @@ export default function LandlordSidebar() {
                           </span>
                           <span className="text-sm font-bold tracking-tight">{item.label}</span>
                         </div>
-                        {item.badge && (
+                        {efectivoBadge && (
                           <span className={cn(
-                            "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black",
-                            isActive ? "bg-white/20 text-white" : "bg-blue-500/20 text-blue-500"
+                            "min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black",
+                            isActive ? "bg-white/20 text-white" : "bg-red-500 text-white"
                           )}>
-                            {item.badge}
+                            {efectivoBadge > 99 ? '99+' : efectivoBadge}
                           </span>
                         )}
                       </Link>
@@ -201,9 +196,9 @@ export default function LandlordSidebar() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {item.badge && !isExpanded && (
-                            <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black bg-blue-500/20 text-blue-500">
-                              {item.badge}
+                          {efectivoBadge && !isExpanded && (
+                            <span className="min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black bg-red-500 text-white">
+                              {efectivoBadge > 99 ? '99+' : efectivoBadge}
                             </span>
                           )}
                           <span className={cn(
