@@ -8,9 +8,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Wrapper sobre JavaMailSender (Gmail SMTP) para envío transaccional.
@@ -44,28 +50,42 @@ public class EmailService {
     /**
      * Envía email HTML de recuperación de contraseña con link al frontend.
      */
-    public void enviarResetPassword(String correo, String nombre, String token) {
-        if (fromAddress == null || fromAddress.isBlank()) {
-            log.warn("[Email] spring.mail.username no configurado — no se envía reset a {}", correo);
-            return;
-        }
+    @TimeLimiter(name = "enviarEmailCB")
+    @CircuitBreaker(name = "enviarEmailCB", fallbackMethod = "fallbackEnviarResetPassword")
+    @Retry(name = "enviarEmailCB")
+    @Bulkhead(name = "enviarEmailCB", type = Bulkhead.Type.SEMAPHORE)
+    @RateLimiter(name = "enviarEmailCB", fallbackMethod = "fallbackEnviarResetPassword")
+    public CompletableFuture<Void> enviarResetPassword(String correo, String nombre, String token) {
+        return CompletableFuture.runAsync(() -> {
+            if (fromAddress == null || fromAddress.isBlank()) {
+                log.warn("[Email] spring.mail.username no configurado — no se envía reset a {}", correo);
+                return;
+            }
 
-        String link = appBaseUrl + "/reset-password?token=" + token;
-        String html = templateResetPassword(nombre, link);
+            String link = appBaseUrl + "/reset-password?token=" + token;
+            String html = templateResetPassword(nombre, link);
 
-        try {
-            MimeMessage mime = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromAddress, "AlquilaYa");
-            helper.setTo(correo);
-            helper.setSubject("Restablece tu contraseña en AlquilaYa");
-            helper.setText(html, true);
-            mailSender.send(mime);
-            log.info("[Email] Reset enviado a {}", correo);
-        } catch (MessagingException | MailException | java.io.UnsupportedEncodingException e) {
-            log.warn("[Email] Fallo enviando reset a {}: {}", correo, e.getMessage());
-            // No relanzamos: forgot-password debe responder 200 siempre.
-        }
+            try {
+                MimeMessage mime = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
+                helper.setFrom(fromAddress, "AlquilaYa");
+                helper.setTo(correo);
+                helper.setSubject("Restablece tu contraseña en AlquilaYa");
+                helper.setText(html, true);
+                mailSender.send(mime);
+                log.info("[Email] Reset enviado a {}", correo);
+            } catch (MessagingException | java.io.UnsupportedEncodingException e) {
+                log.error("Error preparando el correo: {}", e.getMessage());
+                throw new RuntimeException("Error preparando el correo", e);
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<Void> fallbackEnviarResetPassword(String correo, String nombre, String token, Throwable t) {
+        log.error("[FALLBACK] enviarResetPassword a {} — {}: {}. No se pudo enviar el correo de recuperación.",
+                correo, t.getClass().getSimpleName(), t.getMessage());
+        return CompletableFuture.completedFuture(null);
     }
 
     /**

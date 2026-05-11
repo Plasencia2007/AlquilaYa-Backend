@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.services;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +54,7 @@ public class NotificationService {
     @CircuitBreaker(name = "enviarWhatsAppCB", fallbackMethod = "fallbackEnviarMensajeWhatsApp")
     @Retry(name = "enviarWhatsAppCB")
     @Bulkhead(name = "enviarWhatsAppCB", type = Bulkhead.Type.SEMAPHORE)
+    @RateLimiter(name = "enviarWhatsAppCB", fallbackMethod = "fallbackEnviarMensajeWhatsApp")
     public CompletableFuture<Void> enviarMensajeWhatsAppResiliente(Map<String, String> body, HttpHeaders headers) {
         log.info("[Resilience4j] Enviando mensaje WhatsApp a notificaciones");
         return CompletableFuture.runAsync(() -> restTemplate.exchange(

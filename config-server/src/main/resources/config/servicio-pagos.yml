@@ -52,6 +52,15 @@ feign:
 resilience4j:
   circuitbreaker:
     instances:
+      crearPreferenciaCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
       servicio-propiedades:
         registerHealthIndicator: true
         slidingWindowType: COUNT_BASED
@@ -71,6 +80,15 @@ resilience4j:
         automaticTransitionFromOpenToHalfOpenEnabled: true
   retry:
     instances:
+      crearPreferenciaCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - java.lang.RuntimeException
       obtenerReservaCB:
         maxAttempts: 3
         waitDuration: 1s
@@ -84,6 +102,9 @@ resilience4j:
           - feign.FeignException.NotFound
   timelimiter:
     instances:
+      crearPreferenciaCB:
+        timeoutDuration: 8s
+        cancelRunningFuture: true
       servicio-propiedades:
         timeoutDuration: 10s
         cancelRunningFuture: true
@@ -95,3 +116,12 @@ resilience4j:
       obtenerReservaCB:
         maxConcurrentCalls: 5
         maxWaitDuration: 100ms
+      crearPreferenciaCB:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 100ms
+  ratelimiter:
+    instances:
+      crearPreferenciaCB:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 5s

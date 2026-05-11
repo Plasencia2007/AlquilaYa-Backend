@@ -16,6 +16,7 @@ import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +87,29 @@ public class PagoService {
                 "Servicio de reservas temporalmente no disponible. Causa: " + t.getClass().getSimpleName());
     }
 
+    @TimeLimiter(name = "crearPreferenciaCB")
+    @CircuitBreaker(name = "crearPreferenciaCB", fallbackMethod = "fallbackCrearPreferencia")
+    @Retry(name = "crearPreferenciaCB")
+    @Bulkhead(name = "crearPreferenciaCB", type = Bulkhead.Type.SEMAPHORE)
+    @RateLimiter(name = "crearPreferenciaCB", fallbackMethod = "fallbackCrearPreferencia")
+    public CompletableFuture<Preference> crearPreferenciaResiliente(PreferenceRequest preferenceRequest) {
+        log.info("[Resilience4j] Llamando a Mercado Pago para crear preferencia externa");
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                PreferenceClient client = new PreferenceClient();
+                return client.create(preferenceRequest);
+            } catch (Exception e) {
+                throw new RuntimeException("Error contactando a Mercado Pago: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @SuppressWarnings("unused")
+    private CompletableFuture<Preference> fallbackCrearPreferencia(PreferenceRequest preferenceRequest, Throwable t) {
+        log.error("[FALLBACK] crearPreferencia — {}: {}", t.getClass().getSimpleName(), t.getMessage());
+        throw new IllegalStateException("El servicio de pagos externos (Mercado Pago) no está disponible temporalmente.");
+    }
+
     public String crearPreferencia(Long reservaId) {
         try {
             log.info("Iniciando creación de preferencia para Reserva ID: {}", reservaId);
@@ -136,8 +160,7 @@ public class PagoService {
                     .expirationDateTo(OffsetDateTime.now().plusDays(2))
                     .build();
 
-            PreferenceClient client = new PreferenceClient();
-            Preference preference = client.create(preferenceRequest);
+            Preference preference = crearPreferenciaResiliente(preferenceRequest).join();
 
             Pago pago = Pago.builder()
                     .reservaId(reservaId)
