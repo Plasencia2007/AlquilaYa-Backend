@@ -70,7 +70,14 @@ resilience4j:
   timelimiter:
     configs:
       default:
-        timeoutDuration: 5s
+        timeoutDuration: 15s
+        cancelRunningFuture: true
+    instances:
+      propiedadesCB:
+        timeoutDuration: 90s
+        cancelRunningFuture: false
+      pagosCB:
+        timeoutDuration: 30s
         cancelRunningFuture: true
 
 cors:
