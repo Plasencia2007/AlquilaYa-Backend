@@ -12,7 +12,7 @@ spring:
               - StripPrefix=0
               - name: CircuitBreaker
                 args:
-                  name: usuariosCB
+                  id: usuariosCB
                   fallbackUri: forward:/fallback/usuarios
           - id: servicio-propiedades
             uri: lb://servicio-propiedades
@@ -22,7 +22,7 @@ spring:
               - StripPrefix=0
               - name: CircuitBreaker
                 args:
-                  name: propiedadesCB
+                  id: propiedadesCB
                   fallbackUri: forward:/fallback/propiedades
           - id: servicio-catalogos
             uri: lb://servicio-catalogos
@@ -32,7 +32,7 @@ spring:
               - StripPrefix=0
               - name: CircuitBreaker
                 args:
-                  name: catalogosCB
+                  id: catalogosCB
                   fallbackUri: forward:/fallback/catalogos
           - id: servicio-pagos
             uri: lb://servicio-pagos
@@ -42,7 +42,7 @@ spring:
               - StripPrefix=0
               - name: CircuitBreaker
                 args:
-                  name: pagosCB
+                  id: pagosCB
                   fallbackUri: forward:/fallback/pagos
           - id: servicio-mensajeria
             uri: lb://servicio-mensajeria
@@ -52,7 +52,7 @@ spring:
               - StripPrefix=0
               - name: CircuitBreaker
                 args:
-                  name: mensajeriaCB
+                  id: mensajeriaCB
                   fallbackUri: forward:/fallback/mensajeria
           # NOTA: WebSocket /ws-mensajeria NO se rutea por este gateway (Spring Cloud Gateway MVC
           # no soporta proxy WS). El frontend conecta directo al servicio en :8086.
