@@ -6,6 +6,53 @@ import type { Filtros } from '@/schemas/search-schema';
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
 
+interface PropiedadPublicoDTO {
+  id: number;
+  titulo: string;
+  descripcion?: string;
+  precio: number;
+  direccion?: string;
+  tipoPropiedad?: string;
+  area?: number;
+  estaDisponible?: boolean;
+  serviciosIncluidos?: string[];
+  latitud?: number;
+  longitud?: number;
+  calificacion?: number;
+  numResenas?: number;
+  estado?: string;
+  imagenes?: string[];
+  arrendadorId?: number;
+  arrendadorNombre?: string;
+}
+
+function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
+  return {
+    id: String(dto.id),
+    titulo: dto.titulo ?? '',
+    descripcion: dto.descripcion ?? '',
+    precio: Number(dto.precio ?? 0),
+    ubicacion: dto.direccion ?? '',
+    direccion: dto.direccion ?? '',
+    imagenes: dto.imagenes ?? [],
+    habitaciones: 0,
+    baños: 0,
+    area: dto.area ?? 0,
+    servicios: dto.serviciosIncluidos ?? [],
+    propietarioId: dto.arrendadorId != null ? String(dto.arrendadorId) : '',
+    propietarioNombre: dto.arrendadorNombre ?? '',
+    calificacion: dto.calificacion ?? 0,
+    reseñas: dto.numResenas ?? 0,
+    disponible: dto.estaDisponible ?? true,
+    tipo: (dto.tipoPropiedad as Propiedad['tipo']) ?? 'CUARTO',
+    estado: (dto.estado as Propiedad['estado']) ?? 'PENDIENTE',
+    coordenadas:
+      dto.latitud != null && dto.longitud != null
+        ? { lat: dto.latitud, lng: dto.longitud }
+        : undefined,
+  };
+}
+
 export interface BusquedaParams {
   zona?: string;
   precioMin?: number;
@@ -111,8 +158,8 @@ export const servicioPropiedades = {
       await new Promise((resolve) => setTimeout(resolve, 400));
       return MOCK_PROPIEDADES.find((p) => p.id === id) ?? null;
     }
-    const response = await api.get<Propiedad>(`/propiedades/${id}`);
-    return response.data;
+    const response = await api.get<PropiedadPublicoDTO>(`/propiedades/${id}/publico`);
+    return fromDTO(response.data);
   },
 
   buscar: async (filtros: BusquedaParams = {}): Promise<Propiedad[]> => {
@@ -130,8 +177,9 @@ export const servicioPropiedades = {
       params.calificacionMin = filtros.calificacionMin;
     }
 
-    const response = await api.get<Propiedad[]>('/propiedades/buscar', { params });
-    return aplicarFiltrosClient(response.data, {
+    const response = await api.get<PropiedadPublicoDTO[]>('/propiedades/buscar', { params });
+    const propiedades = response.data.map(fromDTO);
+    return aplicarFiltrosClient(propiedades, {
       servicios: filtros.servicios,
       distanciaMaxKm: filtros.distanciaMaxKm,
       orden: filtros.orden,
@@ -161,7 +209,7 @@ export const servicioPropiedades = {
   },
 
   obtenerDestacadas: async (n = 4): Promise<Propiedad[]> => {
-    const todas = await servicioPropiedades.obtenerTodas();
+    const todas = await servicioPropiedades.buscar({});
     const disponibles = todas.filter((p) => p.disponible);
     return aplicarFiltrosClient(disponibles, { orden: 'distancia' }).slice(0, n);
   },

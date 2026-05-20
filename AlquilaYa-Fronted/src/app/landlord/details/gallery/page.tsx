@@ -102,9 +102,8 @@ export default function GalleryPage() {
     }
   };
 
-  // Drag-drop reorder local. TODO: el backend actual no expone endpoint para
-  // persistir el orden (PUT /propiedades/{id}/imagenes/orden); solo se reordena
-  // en pantalla. Cuando exista endpoint, sincronizar aquí.
+  const [ordenCambiado, setOrdenCambiado] = useState(false);
+
   const handleDragStart = (idx: number) => setDragIndex(idx);
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = (idx: number) => {
@@ -119,6 +118,21 @@ export default function GalleryPage() {
       return next.map((it, i) => ({ ...it, orden: i }));
     });
     setDragIndex(null);
+    setOrdenCambiado(true);
+  };
+
+  const handleGuardarOrden = async () => {
+    if (!propiedadId || !ordenCambiado) return;
+    try {
+      setBusy(true);
+      await propiedadService.reordenarImagenes(propiedadId, imagenes.map((img) => img.id));
+      notify.success('Orden guardado correctamente');
+      setOrdenCambiado(false);
+    } catch (err) {
+      notify.error(err, 'No se pudo guardar el orden');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
@@ -185,7 +199,17 @@ export default function GalleryPage() {
               {imagenes.length} {imagenes.length === 1 ? 'imagen' : 'imágenes'}
             </h2>
             <p className="text-xs text-on-surface-variant">
-              Arrastra una imagen para reordenar (orden local).
+              Arrastra una imagen para reordenar.{' '}
+              {ordenCambiado && (
+                <button
+                  type="button"
+                  onClick={handleGuardarOrden}
+                  disabled={busy}
+                  className="text-primary font-bold underline underline-offset-2 disabled:opacity-50"
+                >
+                  Guardar orden
+                </button>
+              )}
             </p>
           </div>
           <label className="cursor-pointer">

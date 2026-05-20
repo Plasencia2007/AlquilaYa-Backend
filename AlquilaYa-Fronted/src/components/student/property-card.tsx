@@ -100,7 +100,7 @@ export function PropertyCard({
           />
         )}
 
-        {cfg.showBadges && propiedad.servicios.length > 0 && (
+        {cfg.showBadges && (propiedad.servicios?.length ?? 0) > 0 && (
           <div className="absolute inset-x-3 bottom-3 z-[5]">
             <ServiceBadges servicios={propiedad.servicios} max={3} variant="overlay" />
           </div>

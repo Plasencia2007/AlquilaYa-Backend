@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, ChevronDown, MapPin } from 'lucide-react';
+import { CalendarDays, ChevronDown, Loader2, MapPin } from 'lucide-react';
+import { pagoService } from '@/services/pago-service';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -33,9 +34,20 @@ const cancelable: Reserva['estado'][] = ['SOLICITADA', 'APROBADA'];
 
 export function ReservationCard({ reserva, onCancelar }: Props) {
   const [expandido, setExpandido] = useState(false);
+  const [pagando, setPagando] = useState(false);
   const meta = metaEstadoReserva(reserva.estado);
   const Icono = meta.icon;
   const puedeCancelar = cancelable.includes(reserva.estado);
+
+  const handlePagar = async () => {
+    setPagando(true);
+    try {
+      const { init_point } = await pagoService.crearPreferencia(reserva.id);
+      window.location.href = init_point;
+    } catch {
+      setPagando(false);
+    }
+  };
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -152,8 +164,15 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
               <Button
                 size="sm"
                 className="ml-auto h-8 gap-1.5 text-xs font-bold"
+                onClick={handlePagar}
+                disabled={pagando}
               >
-                <CalendarDays className="size-4" /> Pagar ahora
+                {pagando ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <CalendarDays className="size-4" />
+                )}
+                {pagando ? 'Redirigiendo...' : 'Pagar ahora'}
               </Button>
             )}
           </div>

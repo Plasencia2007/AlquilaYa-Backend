@@ -113,4 +113,11 @@ export const propiedadService = {
   async eliminarImagen(propiedadId: string | number, imagenId: string | number): Promise<void> {
     await api.delete(`propiedades/${propiedadId}/imagenes/${imagenId}`);
   },
+
+  /**
+   * PATCH /propiedades/{id}/imagenes/reordenar
+   */
+  async reordenarImagenes(propiedadId: string | number, orden: number[]): Promise<void> {
+    await api.patch(`propiedades/${propiedadId}/imagenes/reordenar`, { orden });
+  },
 };

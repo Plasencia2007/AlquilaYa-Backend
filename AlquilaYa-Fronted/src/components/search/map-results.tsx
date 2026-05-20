@@ -8,7 +8,7 @@ import type { Propiedad } from '@/types/propiedad';
 const PropertiesMap = dynamic(() => import('@/components/shared/PropertiesMap'), {
   ssr: false,
   loading: () => (
-    <div className="h-[600px] w-full overflow-hidden rounded-2xl border border-border">
+    <div className="mx-auto aspect-square w-full max-w-2xl overflow-hidden rounded-2xl border border-border">
       <Skeleton className="h-full w-full" />
     </div>
   ),
@@ -20,10 +20,10 @@ interface Props {
 
 export function MapResults({ propiedades }: Props) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border shadow-sm">
+    <div className="mx-auto aspect-square w-full max-w-2xl overflow-hidden rounded-2xl border border-border shadow-sm">
       <PropertiesMap
         propiedades={propiedades}
-        className="h-[60vh] min-h-[420px] w-full md:h-[70vh]"
+        className="h-full w-full"
       />
     </div>
   );

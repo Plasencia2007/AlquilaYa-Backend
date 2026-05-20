@@ -2,7 +2,7 @@
  * Constante de coordenadas de la Universidad Peruana Unión (Lima).
  * Se usa como ancla para calcular distancias y ordenar propiedades.
  */
-export const UPEU_COORDS = { lat: -11.9878, lng: -76.898 } as const;
+export const UPEU_COORDS: { lat: number; lng: number } = { lat: -11.99024, lng: -76.83992 };
 
 export const UPEU_RADIO_MAX_KM = 15;
 

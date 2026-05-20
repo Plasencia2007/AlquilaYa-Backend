@@ -12,30 +12,31 @@ COPY . .
 
 # Next.js lee NEXT_PUBLIC_* en build-time; se inyectan vía --build-arg.
 ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL
 ARG NEXT_PUBLIC_UPLOADS_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV NEXT_PUBLIC_UPLOADS_URL=${NEXT_PUBLIC_UPLOADS_URL}
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 
 # ------------------------------------------------------------
-# Runtime stage
+# Runtime stage — usa output standalone para imagen mínima
 # ------------------------------------------------------------
 FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-# Copiamos solo lo necesario para runtime.
-COPY --from=builder /app/package.json /app/package-lock.json* ./
-RUN npm ci --omit=dev
+RUN groupadd -r app && useradd -r -g app app
 
-COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.* ./
+COPY --from=builder --chown=app:app /app/.next/standalone ./
+COPY --from=builder --chown=app:app /app/.next/static ./.next/static
 
-RUN groupadd -r app && useradd -r -g app app \
-  && chown -R app:app /app
 USER app
-
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

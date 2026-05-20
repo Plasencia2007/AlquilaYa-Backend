@@ -259,6 +259,26 @@ public class PropiedadController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}/imagenes/reordenar")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<List<PropiedadImagen>> reordenarImagenes(
+            @PathVariable Long id,
+            @RequestBody Map<String, List<Long>> body
+    ) {
+        List<Long> orden = body.get("orden");
+        if (orden == null || orden.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<PropiedadImagen> imagenes = propiedadImagenRepository.findByPropiedadIdOrderByOrdenAsc(id);
+        for (PropiedadImagen img : imagenes) {
+            int pos = orden.indexOf(img.getId());
+            img.setOrden(pos >= 0 ? pos : imagenes.size());
+        }
+        List<PropiedadImagen> actualizadas = propiedadImagenRepository.saveAll(imagenes);
+        actualizadas.sort((a, b) -> Integer.compare(a.getOrden(), b.getOrden()));
+        return ResponseEntity.ok(actualizadas);
+    }
+
     // ===== Disponibilidad y aprobación admin =====
 
     @PatchMapping("/{id}/disponibilidad")

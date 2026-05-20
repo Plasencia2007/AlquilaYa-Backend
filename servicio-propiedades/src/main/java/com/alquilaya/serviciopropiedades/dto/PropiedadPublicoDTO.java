@@ -32,4 +32,6 @@ public class PropiedadPublicoDTO {
     private Integer numResenas;
     private EstadoPropiedad estado;
     private List<String> imagenes;
+    private Long arrendadorId;
+    private String arrendadorNombre;
 }

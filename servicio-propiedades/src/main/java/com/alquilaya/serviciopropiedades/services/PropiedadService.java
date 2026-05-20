@@ -79,6 +79,7 @@ public class PropiedadService {
                 .numResenas(p.getNumResenas())
                 .estado(p.getEstado())
                 .imagenes(extraerUrlsImagenes(p))
+                .arrendadorId(p.getArrendadorId())
                 .build();
     }
 
