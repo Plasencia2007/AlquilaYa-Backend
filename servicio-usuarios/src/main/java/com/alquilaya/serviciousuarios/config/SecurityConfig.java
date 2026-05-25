@@ -34,6 +34,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/usuarios/permisos/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/usuarios/arrendador/*/info").authenticated()
                         .requestMatchers("/api/v1/usuarios/estudiante/*/info").authenticated()
+                        // Bulk para enriquecer listados de propiedades (card premium).
+                        // Mismo nivel que el endpoint single: cualquier usuario autenticado.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/arrendadores/bulk").authenticated()
                         .requestMatchers("/api/v1/usuarios/documentos/**").authenticated()
                         .requestMatchers(HttpMethod.GET,  "/api/v1/usuarios/{id}").authenticated()
                         .requestMatchers(HttpMethod.PUT,  "/api/v1/usuarios/{id}").authenticated()

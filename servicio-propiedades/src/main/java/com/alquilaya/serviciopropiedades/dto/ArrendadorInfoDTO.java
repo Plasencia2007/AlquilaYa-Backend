@@ -16,4 +16,12 @@ public class ArrendadorInfoDTO {
     private String telefono;
     private String nombreComercial;
     private Double calificacion;
+
+    // ===== Campos premium (card rediseño) =====
+    /** URL de la foto de perfil del arrendador. */
+    private String avatar;
+    /** Verificado = usuario en estado ACTIVE (telefono validado + admin OK). */
+    private Boolean verificado;
+    /** Tiempo de respuesta promedio (minutos). Nullable mientras no haya métrica. */
+    private Integer tiempoRespuestaPromedio;
 }

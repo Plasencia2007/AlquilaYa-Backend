@@ -5,9 +5,11 @@ import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -23,6 +25,15 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Propiedad p WHERE p.id = :id")
     Optional<Propiedad> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * Incremento atómico del contador de vistas. Se invoca de forma asíncrona
+     * desde el endpoint de detalle para no penalizar la latencia del GET.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Propiedad p SET p.vistas = COALESCE(p.vistas, 0) + 1 WHERE p.id = :id")
+    int incrementarVistas(@Param("id") Long id);
 
     @Query("""
             SELECT DISTINCT p FROM Propiedad p

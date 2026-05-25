@@ -13,6 +13,7 @@ import type {
   EventoConversacion,
   Mensaje,
 } from '@/types/chat';
+import type { RolUsuario } from '@/types/auth';
 
 /**
  * Maneja el ciclo de vida de un chat individual:
@@ -30,7 +31,7 @@ export function useConversation(conversacionId: number | string) {
   const [error, setError] = useState(false);
   const [otroEscribiendo, setOtroEscribiendo] = useState(false);
 
-  const miPerfilId = obtenerMiPerfilId();
+  const { perfilId: miPerfilId, rol: miRol } = obtenerMiIdentidad();
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<boolean>(false);
 
@@ -75,8 +76,11 @@ export function useConversation(conversacionId: number | string) {
             if (prev.some((m) => m.id === nuevo.id)) return prev;
             return [...prev, nuevo];
           });
-          // Si el mensaje no es mío, marcar como leído
-          if (nuevo.emisorPerfilId !== miPerfilId) {
+          // perfilId solo es único dentro de un rol; comparamos también el rol
+          // para no confundir al otro participante con uno mismo cuando los ids
+          // colisionan entre tablas estudiantes/arrendadores.
+          const esMio = nuevo.emisorPerfilId === miPerfilId && nuevo.emisorRol === miRol;
+          if (!esMio) {
             conversationService
               .marcarLeida(conversacionId)
               .catch(() => {/* noop */});
@@ -91,17 +95,21 @@ export function useConversation(conversacionId: number | string) {
           const evento: EventoConversacion = JSON.parse(msg.body);
           if (evento.tipo === 'MENSAJES_LEIDOS') {
             // El otro leyó mis mensajes: marcar mensajes míos sin fechaLectura.
-            if (evento.lectorPerfilId !== miPerfilId) {
+            const lectorEsOtro =
+              evento.lectorPerfilId !== miPerfilId || evento.lectorRol !== miRol;
+            if (lectorEsOtro) {
               setMensajes((prev) =>
                 prev.map((m) =>
-                  m.emisorPerfilId === miPerfilId && !m.fechaLectura
+                  m.emisorPerfilId === miPerfilId && m.emisorRol === miRol && !m.fechaLectura
                     ? { ...m, fechaLectura: new Date().toISOString(), estado: 'LEIDO' }
                     : m,
                 ),
               );
             }
           } else if (evento.tipo === 'TYPING') {
-            if (evento.emisorPerfilId !== miPerfilId) {
+            const emisorEsOtro =
+              evento.emisorPerfilId !== miPerfilId || evento.emisorRol !== miRol;
+            if (emisorEsOtro) {
               setOtroEscribiendo(evento.escribiendo);
             }
           }
@@ -128,7 +136,7 @@ export function useConversation(conversacionId: number | string) {
       if (unsubMensajes) unsubMensajes();
       if (unsubEventos) unsubEventos();
     };
-  }, [conversacionId, estaAutenticado, miPerfilId]);
+  }, [conversacionId, estaAutenticado, miPerfilId, miRol]);
 
   const enviar = useCallback(
     async (contenido: string) => {
@@ -169,15 +177,17 @@ export function useConversation(conversacionId: number | string) {
     error,
     otroEscribiendo,
     miPerfilId,
+    miRol,
     enviar,
     notificarTyping,
   };
 }
 
-function obtenerMiPerfilId(): number | null {
+function obtenerMiIdentidad(): { perfilId: number | null; rol: RolUsuario | null } {
   const token = Cookies.get('auth-token');
-  if (!token) return null;
+  if (!token) return { perfilId: null, rol: null };
   const usuario = servicioAuth.obtenerUsuarioActualDesdeToken(token);
   const v = usuario?.perfilId;
-  return typeof v === 'number' ? v : v ? Number(v) : null;
+  const perfilId = typeof v === 'number' ? v : v ? Number(v) : null;
+  return { perfilId, rol: usuario?.rol ?? null };
 }

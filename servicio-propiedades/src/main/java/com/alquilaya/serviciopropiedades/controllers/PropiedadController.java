@@ -188,7 +188,9 @@ public class PropiedadController {
             @RequestParam(required = false) List<String> servicios
     ) {
         List<Propiedad> resultados = propiedadService.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios);
-        List<PropiedadPublicoDTO> dto = resultados.stream().map(propiedadService::toPublico).toList();
+        // Batch enrich: una sola llamada Feign al servicio-usuarios por página
+        // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
+        List<PropiedadPublicoDTO> dto = propiedadService.toPublicoBatch(resultados);
         return ResponseEntity.ok(dto);
     }
 
@@ -203,7 +205,11 @@ public class PropiedadController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PropiedadCompletoDTO> verCompleto(@PathVariable Long id) {
         return propiedadRepository.findById(id)
-                .map(p -> ResponseEntity.ok(propiedadService.toCompleto(p)))
+                .map(p -> {
+                    // Incremento asíncrono del contador de vistas (no bloquea el GET).
+                    propiedadService.incrementarVistasAsync(p.getId());
+                    return ResponseEntity.ok(propiedadService.toCompleto(p));
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 

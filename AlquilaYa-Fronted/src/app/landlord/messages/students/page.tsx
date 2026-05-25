@@ -13,6 +13,7 @@ import { servicioAuth } from '@/services/auth-service';
 import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
 import Cookies from 'js-cookie';
 import type { ConversacionResumen, Mensaje } from '@/types/chat';
+import type { RolUsuario } from '@/types/auth';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,12 +48,13 @@ function fechaLista(fecha: string): string {
   return format(d, 'dd/MM/yy');
 }
 
-function obtenerMiPerfilId(): number | null {
+function obtenerMiIdentidad(): { perfilId: number | null; rol: RolUsuario | null } {
   const token = Cookies.get('auth-token');
-  if (!token) return null;
+  if (!token) return { perfilId: null, rol: null };
   const u = servicioAuth.obtenerUsuarioActualDesdeToken(token);
   const v = u?.perfilId;
-  return typeof v === 'number' ? v : v ? Number(v) : null;
+  const perfilId = typeof v === 'number' ? v : v ? Number(v) : null;
+  return { perfilId, rol: u?.rol ?? null };
 }
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
@@ -165,17 +167,20 @@ export default function LandlordMessagesStudentsPage() {
   const [borrador, setBorrador]             = useState('');
   const [quoteado, setQuoteado]             = useState<Mensaje | null>(null);
   const [mostrarEmojis, setMostrarEmojis]   = useState(false);
+  const [mostrarMenuConv, setMostrarMenuConv] = useState(false);
+  const [eliminando, setEliminando]         = useState(false);
   const [stompConectado, setStompConectado] = useState(stompClient.isConnected());
   const [vistaMovil, setVistaMovil]         = useState<'lista' | 'chat'>('lista');
 
   const scrollRef        = useRef<HTMLDivElement>(null);
   const inputRef         = useRef<HTMLTextAreaElement>(null);
   const emojiRef         = useRef<HTMLDivElement>(null);
+  const menuConvRef      = useRef<HTMLDivElement>(null);
   const seleccionadaRef  = useRef<ConversacionResumen | null>(null);
   const typingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingState  = useRef(false);
 
-  const miPerfilId = useMemo(() => obtenerMiPerfilId(), []);
+  const { perfilId: miPerfilId, rol: miRol } = useMemo(() => obtenerMiIdentidad(), []);
   const setTotal   = useUnreadMessagesStore((s) => s.setTotal);
 
   // Mantener ref sincronizada para evitar closures rancios en callbacks de STOMP
@@ -216,7 +221,10 @@ export default function LandlordMessagesStudentsPage() {
       stompClient.subscribe(`/user/queue/conversacion.${conv.id}`, (raw) => {
         try {
           const msg: Mensaje = JSON.parse(raw.body);
-          const esMio = msg.emisorPerfilId === miPerfilId;
+          // perfilId solo es único dentro de un rol: arrendador y estudiante
+          // pueden compartir id numérico. Comparamos (perfilId, rol) para
+          // evitar que el mensaje del otro participante se muestre como mío.
+          const esMio = msg.emisorPerfilId === miPerfilId && msg.emisorRol === miRol;
 
           if (seleccionadaRef.current?.id === conv.id) {
             // Conversación activa: agregar al chat
@@ -241,7 +249,7 @@ export default function LandlordMessagesStudentsPage() {
 
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convIds, miPerfilId]);
+  }, [convIds, miPerfilId, miRol]);
 
   // ── Suscripción a eventos de la conversación activa (typing + read receipts) ─
   useEffect(() => {
@@ -251,22 +259,28 @@ export default function LandlordMessagesStudentsPage() {
     const unsub = stompClient.subscribe(`/user/queue/conversacion.${id}.eventos`, (raw) => {
       try {
         const ev = JSON.parse(raw.body);
-        if (ev.tipo === 'TYPING' && ev.emisorPerfilId !== miPerfilId) {
-          setOtroEscribiendo(ev.escribiendo);
-        } else if (ev.tipo === 'MENSAJES_LEIDOS' && ev.lectorPerfilId !== miPerfilId) {
-          setMensajes((prev) =>
-            prev.map((m) =>
-              m.emisorPerfilId === miPerfilId && !m.fechaLectura
-                ? { ...m, fechaLectura: new Date().toISOString(), estado: 'LEIDO' as const }
-                : m,
-            ),
-          );
+        if (ev.tipo === 'TYPING') {
+          const emisorEsOtro =
+            ev.emisorPerfilId !== miPerfilId || ev.emisorRol !== miRol;
+          if (emisorEsOtro) setOtroEscribiendo(ev.escribiendo);
+        } else if (ev.tipo === 'MENSAJES_LEIDOS') {
+          const lectorEsOtro =
+            ev.lectorPerfilId !== miPerfilId || ev.lectorRol !== miRol;
+          if (lectorEsOtro) {
+            setMensajes((prev) =>
+              prev.map((m) =>
+                m.emisorPerfilId === miPerfilId && m.emisorRol === miRol && !m.fechaLectura
+                  ? { ...m, fechaLectura: new Date().toISOString(), estado: 'LEIDO' as const }
+                  : m,
+              ),
+            );
+          }
         }
       } catch { /* noop */ }
     });
 
     return () => unsub();
-  }, [seleccionada?.id, miPerfilId]);
+  }, [seleccionada?.id, miPerfilId, miRol]);
 
   // ── Cargar mensajes al seleccionar conversación ─────────────────────────────
   useEffect(() => {
@@ -334,6 +348,45 @@ export default function LandlordMessagesStudentsPage() {
     if (mostrarEmojis) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [mostrarEmojis]);
+
+  // Cerrar menú de conversación al hacer clic afuera
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (menuConvRef.current && !menuConvRef.current.contains(e.target as Node)) {
+        setMostrarMenuConv(false);
+      }
+    }
+    if (mostrarMenuConv) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mostrarMenuConv]);
+
+  // ── Eliminar (soft-delete) conversación ─────────────────────────────────────
+  const eliminarConversacion = useCallback(async () => {
+    const conv = seleccionadaRef.current;
+    if (!conv || eliminando) return;
+    const ok = window.confirm(
+      `¿Borrar tu copia de la conversación con ${conv.contraparteNombre || 'este estudiante'}?\n\nNo se eliminará para el estudiante. Si te escribe de nuevo, la conversación reaparecerá.`,
+    );
+    if (!ok) return;
+    setEliminando(true);
+    setMostrarMenuConv(false);
+    try {
+      await conversationService.eliminar(conv.id);
+      setConversaciones((prev) => {
+        const sigue = prev.filter((c) => c.id !== conv.id);
+        setTotal(sigue.reduce((acc, c) => acc + (c.noLeidos || 0), 0));
+        return sigue;
+      });
+      setSeleccionada(null);
+      setVistaMovil('lista');
+      setMensajes([]);
+      notify.info('Conversación borrada', 'Se quitó de tu lista. Reaparecerá si el estudiante te escribe.');
+    } catch (err) {
+      notify.error(err, 'No se pudo borrar la conversación');
+    } finally {
+      setEliminando(false);
+    }
+  }, [eliminando, setTotal]);
 
   // ── Cargar mensajes anteriores ───────────────────────────────────────────────
   const cargarAntiguos = async () => {
@@ -608,6 +661,30 @@ export default function LandlordMessagesStudentsPage() {
                 <span className="material-symbols-outlined text-[14px]">apartment</span>
                 Propiedad
               </span>
+
+              {/* Menú ⋮ de la conversación */}
+              <div ref={menuConvRef} className="relative shrink-0">
+                <button
+                  onClick={() => setMostrarMenuConv((v) => !v)}
+                  className="p-1.5 -mr-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Más opciones"
+                  disabled={eliminando}
+                >
+                  <span className="material-symbols-outlined text-[22px]">more_vert</span>
+                </button>
+                {mostrarMenuConv && (
+                  <div className="absolute right-0 top-full mt-1 z-30 min-w-[200px] bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    <button
+                      onClick={eliminarConversacion}
+                      disabled={eliminando}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                      {eliminando ? 'Borrando…' : 'Borrar conversación'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </header>
 
             {/* Área de mensajes */}
@@ -645,7 +722,7 @@ export default function LandlordMessagesStudentsPage() {
                 if (item.type === 'sep') {
                   return <FechaSeparador key={item.key} label={item.label} />;
                 }
-                const mio = item.msg.emisorPerfilId === miPerfilId;
+                const mio = item.msg.emisorPerfilId === miPerfilId && item.msg.emisorRol === miRol;
                 return (
                   <BurbujaMensaje
                     key={item.msg.id}

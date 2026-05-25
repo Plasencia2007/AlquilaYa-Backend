@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,5 +49,17 @@ public class ConversacionController {
     public ResponseEntity<ConversacionDTO> obtener(@PathVariable Long id) {
         Conversacion c = conversacionService.verificarAcceso(id, CurrentUserProvider.get());
         return ResponseEntity.ok(ConversacionDTO.from(c));
+    }
+
+    /**
+     * Soft-delete por participante: la conversación se oculta solo en la lista
+     * del caller. Los mensajes permanecen en BD para auditoría. Si la contraparte
+     * envía un mensaje nuevo, vuelve a aparecer.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> ocultar(@PathVariable Long id) {
+        conversacionService.ocultarParaUsuario(id, CurrentUserProvider.get());
+        return ResponseEntity.noContent().build();
     }
 }

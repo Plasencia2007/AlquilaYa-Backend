@@ -62,4 +62,10 @@ export const conversationService = {
   marcarLeida: async (conversacionId: number | string): Promise<void> => {
     await api.patch(`${BASE}/${conversacionId}/marcar-leida`);
   },
+
+  // Soft-delete por participante: oculta la conversación solo para el caller.
+  // Si la contraparte envía un mensaje nuevo, reaparece automáticamente.
+  eliminar: async (conversacionId: number | string): Promise<void> => {
+    await api.delete(`${BASE}/${conversacionId}`);
+  },
 };

@@ -14,4 +14,12 @@ public class ArrendadorInfoResponse {
     private String telefono;
     private String nombreComercial;
     private Double calificacion;
+
+    // ===== Campos premium (card rediseño) =====
+    /** URL de la foto de perfil del arrendador (Usuario.fotoUrl). */
+    private String avatar;
+    /** Verificado = Usuario.estado == ACTIVE. */
+    private Boolean verificado;
+    /** Tiempo de respuesta promedio en minutos. Nullable mientras no haya métrica. */
+    private Integer tiempoRespuestaPromedio;
 }

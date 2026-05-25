@@ -107,6 +107,24 @@ export interface Propiedad {
     lat: number;
     lng: number;
   };
+
+  // ----- Campos premium (rediseño card) — todos opcionales -----
+  /** URL del avatar del arrendador (catálogo público). */
+  arrendadorAvatar?: string;
+  /** Si el arrendador está verificado por la plataforma. */
+  arrendadorVerificado?: boolean;
+  /** Fecha de creación de la propiedad en ISO 8601. */
+  fechaCreacion?: string;
+  /** Fecha de última actualización en ISO 8601. */
+  ultimaActualizacion?: string;
+  /** Fecha desde la cual está disponible (ISO `yyyy-MM-dd`). */
+  disponibleDesde?: string;
+  /** Contador de vistas (públicas) de la propiedad. */
+  vistas?: number;
+  /** Tiempo promedio de respuesta del arrendador en minutos. */
+  tiempoRespuestaArrendador?: number;
+  /** Reglas de la casa (valores del catálogo REGLA). */
+  reglas?: string[];
 }
 
 // =============================================================================
@@ -153,6 +171,18 @@ export interface PropiedadBackend {
   numResenas?: number;
   fechaCreacion?: string;
   fechaActualizacion?: string;
+
+  // ----- Campos premium (rediseño card) — todos opcionales -----
+  /** URL del avatar del arrendador (catálogo público). */
+  arrendadorAvatar?: string;
+  /** Si el arrendador está verificado por la plataforma. */
+  arrendadorVerificado?: boolean;
+  /** Alias de `fechaActualizacion` cuando el backend lo expone con este nombre. */
+  ultimaActualizacion?: string;
+  /** Contador de vistas (públicas) de la propiedad. */
+  vistas?: number;
+  /** Tiempo promedio de respuesta del arrendador en minutos. */
+  tiempoRespuestaArrendador?: number;
 }
 
 /** DTO retornado por GET /propiedades/{id}/completo. Las imágenes vienen como string[] (URLs). */
@@ -182,6 +212,20 @@ export interface PropiedadCompleta {
   arrendadorNombre?: string;
   arrendadorTelefono?: string;
   arrendadorCorreo?: string;
+
+  // ----- Campos premium (rediseño card / drawer) — todos opcionales -----
+  /** URL del avatar del arrendador. */
+  arrendadorAvatar?: string;
+  /** Si el arrendador está verificado por la plataforma. */
+  arrendadorVerificado?: boolean;
+  /** Fecha de creación de la propiedad en ISO 8601. */
+  fechaCreacion?: string;
+  /** Fecha de última actualización en ISO 8601. */
+  ultimaActualizacion?: string;
+  /** Contador de vistas (públicas) de la propiedad. */
+  vistas?: number;
+  /** Tiempo promedio de respuesta del arrendador en minutos. */
+  tiempoRespuestaArrendador?: number;
 }
 
 /** Payload aceptado por PUT /propiedades/{id} (todo opcional, parche superficial). */

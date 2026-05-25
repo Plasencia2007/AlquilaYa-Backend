@@ -116,6 +116,14 @@ public class Propiedad {
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 
+    /**
+     * Contador de vistas del detalle. Incrementado de forma asíncrona desde
+     * el endpoint público; no se debe actualizar de manera síncrona en cada GET.
+     */
+    @Builder.Default
+    @Column(name = "vistas", nullable = false)
+    private Long vistas = 0L;
+
     @PrePersist
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();
@@ -125,6 +133,7 @@ public class Propiedad {
         if (aprobadoPorAdmin == null) aprobadoPorAdmin = false;
         if (calificacion == null)     calificacion = 5.0;
         if (numResenas == null)       numResenas = 0;
+        if (vistas == null)           vistas = 0L;
     }
 
     @PreUpdate

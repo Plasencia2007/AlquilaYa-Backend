@@ -73,6 +73,8 @@ public class MensajeService {
         Mensaje saved = mensajeRepo.save(msg);
 
         conversacionService.actualizarTrasEnvio(c, req.getContenido(), now);
+        // Si el receptor había ocultado la conversación, que reaparezca en su lista.
+        conversacionService.desocultarParaContraparte(c.getId(), user.getPerfilId(), rolEmisor);
 
         MensajeDTO dto = MensajeDTO.from(saved);
         // Emitimos al userId de cada participante. Nota: tenemos los perfilIds; para el
@@ -161,13 +163,13 @@ public class MensajeService {
         int actualizados = mensajeRepo.marcarLeidos(c.getId(), user.getPerfilId(), LocalDateTime.now());
         if (actualizados > 0) {
             wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
-                    new EventoLectura(c.getId(), user.getPerfilId(), actualizados));
+                    new EventoLectura(c.getId(), user.getPerfilId(), user.getRol(), actualizados));
         }
         return actualizados;
     }
 
     // Evento simple de lectura (tipo interno serializable por Jackson).
-    public record EventoLectura(Long conversacionId, Long lectorPerfilId, int mensajes) {
+    public record EventoLectura(Long conversacionId, Long lectorPerfilId, String lectorRol, int mensajes) {
         public String getTipo() { return "MENSAJES_LEIDOS"; }
     }
 

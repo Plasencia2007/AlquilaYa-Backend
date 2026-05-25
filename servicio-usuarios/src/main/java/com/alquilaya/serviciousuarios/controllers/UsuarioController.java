@@ -7,6 +7,7 @@ import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
+import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -103,17 +105,54 @@ public class UsuarioController {
     public ResponseEntity<ArrendadorInfoResponse> obtenerInfoArrendador(@PathVariable Long perfilId) {
         Arrendador a = arrendadorRepository.findById(perfilId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el arrendador con ID " + perfilId));
+        return ResponseEntity.ok(mapArrendadorInfo(a));
+    }
+
+    /**
+     * Endpoint bulk para enriquecer listados de propiedades (card premium).
+     * Evita N+1 contra el endpoint single — una sola llamada por página.
+     * Devuelve solo los IDs encontrados; los faltantes se omiten silenciosamente
+     * (el caller debe degradar gracefully).
+     */
+    @PostMapping("/arrendadores/bulk")
+    public ResponseEntity<List<ArrendadorInfoResponse>> obtenerArrendadoresBulk(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        // Dedup para evitar trabajo redundante.
+        List<Long> idsUnicos = ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        log.debug("[BULK] Solicitud de info de {} arrendadores", idsUnicos.size());
+        List<Arrendador> arrendadores = arrendadorRepository.findAllById(idsUnicos);
+        List<ArrendadorInfoResponse> resp = new ArrayList<>(arrendadores.size());
+        for (Arrendador a : arrendadores) {
+            try {
+                resp.add(mapArrendadorInfo(a));
+            } catch (Exception ex) {
+                log.warn("[BULK] No se pudo mapear arrendador {}: {}", a.getId(), ex.getMessage());
+            }
+        }
+        return ResponseEntity.ok(resp);
+    }
+
+    private ArrendadorInfoResponse mapArrendadorInfo(Arrendador a) {
         Usuario u = a.getUsuario();
-        return ResponseEntity.ok(ArrendadorInfoResponse.builder()
+        boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        return ArrendadorInfoResponse.builder()
                 .id(a.getId())
-                .usuarioId(u.getId())
-                .nombre(u.getNombre())
-                .apellido(u.getApellido())
-                .correo(u.getCorreo())
-                .telefono(a.getTelefono() != null ? a.getTelefono() : u.getTelefono())
+                .usuarioId(u != null ? u.getId() : null)
+                .nombre(u != null ? u.getNombre() : null)
+                .apellido(u != null ? u.getApellido() : null)
+                .correo(u != null ? u.getCorreo() : null)
+                .telefono(a.getTelefono() != null ? a.getTelefono() : (u != null ? u.getTelefono() : null))
                 .nombreComercial(a.getNombreComercial())
                 .calificacion(a.getCalificacion())
-                .build());
+                .avatar(u != null ? u.getFotoUrl() : null)
+                .verificado(verificado)
+                // TODO: métrica real de tiempo de respuesta promedio del arrendador
+                // (requiere job/agregación sobre servicio-mensajeria). Por ahora null
+                // y la UI muestra "—".
+                .tiempoRespuestaPromedio(null)
+                .build();
     }
 
     @GetMapping("/estudiante/{perfilId}/info")

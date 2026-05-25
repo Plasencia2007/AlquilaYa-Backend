@@ -1,3 +1,5 @@
+import { ClientChrome } from '@/components/student/client-chrome';
+
 export default function PublicLayout({
   children,
 }: {
@@ -6,6 +8,7 @@ export default function PublicLayout({
   return (
     <>
       {children}
+      <ClientChrome />
     </>
   );
 }

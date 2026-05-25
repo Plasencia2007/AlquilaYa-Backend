@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Heart } from 'lucide-react';
 
 import { PropertyCard } from '@/components/student/property-card';
@@ -9,11 +9,27 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { favoriteService } from '@/services/favorite-service';
 import { notify } from '@/lib/notify';
+import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
 import type { Propiedad } from '@/types/propiedad';
 
 export default function StudentFavoritesPage() {
   const [favoritos, setFavoritos] = useState<Propiedad[]>([]);
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando');
+
+  const hiddenIds = useHiddenPropertiesStore((s) => s.hiddenIds);
+  const [hidratado, setHidratado] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+
+  useEffect(() => {
+    useHiddenPropertiesStore.persist.rehydrate()?.then(() => setHidratado(true));
+  }, []);
+
+  const visibles = useMemo(() => {
+    if (!hidratado || showHidden) return favoritos;
+    return favoritos.filter((p) => !hiddenIds.includes(p.id));
+  }, [favoritos, hiddenIds, showHidden, hidratado]);
+
+  const hiddenCount = favoritos.length - visibles.length;
 
   useEffect(() => {
     let cancelado = false;
@@ -66,11 +82,24 @@ export default function StudentFavoritesPage() {
       )}
 
       {estado === 'ok' && favoritos.length > 0 && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {favoritos.map((p) => (
-            <PropertyCard key={p.id} propiedad={p} variant="full" />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {visibles.map((p) => (
+              <PropertyCard key={p.id} propiedad={p} variant="full" />
+            ))}
+          </div>
+          {hiddenCount > 0 && !showHidden && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowHidden(true)}
+                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Mostrar {hiddenCount} oculta{hiddenCount === 1 ? '' : 's'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

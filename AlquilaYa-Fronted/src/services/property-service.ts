@@ -24,6 +24,17 @@ interface PropiedadPublicoDTO {
   imagenes?: string[];
   arrendadorId?: number;
   arrendadorNombre?: string;
+
+  // ----- Campos premium (rediseño card). Todos opcionales -----
+  reglas?: string[];
+  arrendadorAvatar?: string;
+  arrendadorVerificado?: boolean;
+  fechaCreacion?: string;
+  ultimaActualizacion?: string;
+  fechaActualizacion?: string;
+  disponibleDesde?: string;
+  vistas?: number;
+  tiempoRespuestaArrendador?: number;
 }
 
 function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
@@ -50,6 +61,16 @@ function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
       dto.latitud != null && dto.longitud != null
         ? { lat: dto.latitud, lng: dto.longitud }
         : undefined,
+
+    // ----- Campos premium (rediseño card) — opcionales, pasan tal cual del backend -----
+    reglas: dto.reglas,
+    arrendadorAvatar: dto.arrendadorAvatar,
+    arrendadorVerificado: dto.arrendadorVerificado,
+    fechaCreacion: dto.fechaCreacion,
+    ultimaActualizacion: dto.ultimaActualizacion ?? dto.fechaActualizacion,
+    disponibleDesde: dto.disponibleDesde,
+    vistas: dto.vistas,
+    tiempoRespuestaArrendador: dto.tiempoRespuestaArrendador,
   };
 }
 

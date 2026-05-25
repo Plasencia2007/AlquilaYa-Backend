@@ -46,6 +46,7 @@ export interface EventoLectura {
   tipo: 'MENSAJES_LEIDOS';
   conversacionId: number;
   lectorPerfilId: number;
+  lectorRol: RolEmisor;
   mensajes: number;
 }
 
@@ -53,6 +54,7 @@ export interface EventoTyping {
   tipo: 'TYPING';
   conversacionId: number;
   emisorPerfilId: number;
+  emisorRol: RolEmisor;
   escribiendo: boolean;
 }
 

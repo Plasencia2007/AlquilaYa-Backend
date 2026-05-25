@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
 import com.alquilaya.serviciopropiedades.dto.FavoritoResponseDTO;
+import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Favorito;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.repositories.FavoritoRepository;
@@ -52,17 +53,20 @@ public class FavoritoService {
         if (favoritos.isEmpty()) return List.of();
 
         List<Long> ids = favoritos.stream().map(Favorito::getPropiedadId).toList();
-        Map<Long, Propiedad> propiedadesPorId = propiedadRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(Propiedad::getId, Function.identity()));
+        List<Propiedad> propiedades = propiedadRepository.findAllById(ids);
+
+        // Batch enrich: una sola llamada Feign al servicio-usuarios para todos los
+        // arrendadores de los favoritos (anti N+1).
+        List<PropiedadPublicoDTO> dtos = propiedadService.toPublicoBatch(propiedades);
+        Map<Long, PropiedadPublicoDTO> dtoPorId = dtos.stream()
+                .collect(Collectors.toMap(PropiedadPublicoDTO::getId, Function.identity()));
 
         return favoritos.stream()
                 .map(f -> FavoritoResponseDTO.builder()
                         .id(f.getId())
                         .estudianteId(f.getEstudianteId())
                         .fechaCreacion(f.getFechaCreacion())
-                        .propiedad(propiedadesPorId.containsKey(f.getPropiedadId())
-                                ? propiedadService.toPublico(propiedadesPorId.get(f.getPropiedadId()))
-                                : null)
+                        .propiedad(dtoPorId.get(f.getPropiedadId()))
                         .build())
                 .toList();
     }

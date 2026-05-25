@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
 import type { Propiedad } from '@/types/propiedad';
 
 import { PropertyCard } from './property-card';
@@ -25,6 +26,17 @@ export function PropertyCarousel({ propiedades, className }: Props) {
   const [puedeAvanzar, setPuedeAvanzar] = useState(false);
   const [puedeRetroceder, setPuedeRetroceder] = useState(false);
 
+  // Filtro silencioso de propiedades ocultas (sin toggle en el carrusel).
+  const hiddenIds = useHiddenPropertiesStore((s) => s.hiddenIds);
+  const [hidratado, setHidratado] = useState(false);
+  useEffect(() => {
+    useHiddenPropertiesStore.persist.rehydrate()?.then(() => setHidratado(true));
+  }, []);
+  const visibles = useMemo(() => {
+    if (!hidratado) return propiedades;
+    return propiedades.filter((p) => !hiddenIds.includes(p.id));
+  }, [propiedades, hiddenIds, hidratado]);
+
   const sincronizar = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
@@ -42,7 +54,7 @@ export function PropertyCarousel({ propiedades, className }: Props) {
       el.removeEventListener('scroll', sincronizar);
       window.removeEventListener('resize', sincronizar);
     };
-  }, [sincronizar, propiedades.length]);
+  }, [sincronizar, visibles.length]);
 
   const desplazar = (direccion: 1 | -1) => {
     const el = trackRef.current;
@@ -51,7 +63,7 @@ export function PropertyCarousel({ propiedades, className }: Props) {
     el.scrollBy({ left: direccion * (cardWidth + 16), behavior: 'smooth' });
   };
 
-  if (propiedades.length === 0) return null;
+  if (visibles.length === 0) return null;
 
   return (
     <div className={cn('relative', className)}>
@@ -62,7 +74,7 @@ export function PropertyCarousel({ propiedades, className }: Props) {
           '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         )}
       >
-        {propiedades.map((p) => (
+        {visibles.map((p) => (
           <div
             key={p.id}
             className="snap-start shrink-0 w-[85vw] sm:w-[60vw] md:w-[380px]"

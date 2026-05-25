@@ -9,8 +9,11 @@ import com.alquilaya.servicio_mensajeria.dto.CrearConversacionRequest;
 import com.alquilaya.servicio_mensajeria.dto.PropiedadResumenDTO;
 import com.alquilaya.servicio_mensajeria.dto.UsuarioPerfilDTO;
 import com.alquilaya.servicio_mensajeria.entities.Conversacion;
+import com.alquilaya.servicio_mensajeria.entities.ConversacionOculta;
 import com.alquilaya.servicio_mensajeria.enums.EstadoConversacion;
 import com.alquilaya.servicio_mensajeria.enums.EstadoMensaje;
+import com.alquilaya.servicio_mensajeria.enums.RolEmisor;
+import com.alquilaya.servicio_mensajeria.repositories.ConversacionOcultaRepository;
 import com.alquilaya.servicio_mensajeria.repositories.ConversacionRepository;
 import com.alquilaya.servicio_mensajeria.repositories.MensajeRepository;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
@@ -41,6 +44,7 @@ import java.util.concurrent.CompletableFuture;
 public class ConversacionService {
 
     private final ConversacionRepository conversacionRepo;
+    private final ConversacionOcultaRepository ocultaRepo;
     private final MensajeRepository mensajeRepo;
     private final UsuariosClient usuariosClient;
     private final PropiedadesClient propiedadesClient;
@@ -145,8 +149,54 @@ public class ConversacionService {
         if (user == null || user.getPerfilId() == null) {
             return List.of();
         }
+        RolEmisor rol = rolEmisorDelUser(user);
+        // Si el rol del caller no es participante (p.ej. ADMIN), no hay lista personal.
+        if (rol == null) return List.of();
+        java.util.Set<Long> ocultas = new java.util.HashSet<>(
+                ocultaRepo.findConversacionIdsOcultasPara(user.getPerfilId(), rol));
         List<Conversacion> conversaciones = conversacionRepo.findDelParticipante(user.getPerfilId());
-        return conversaciones.stream().map(c -> toResumen(c, user)).toList();
+        return conversaciones.stream()
+                .filter(c -> !ocultas.contains(c.getId()))
+                .map(c -> toResumen(c, user))
+                .toList();
+    }
+
+    /**
+     * Marca la conversación como oculta para el caller (no afecta al otro participante).
+     * Idempotente: llamar dos veces no rompe nada.
+     */
+    @Transactional
+    public void ocultarParaUsuario(Long conversacionId, CurrentUser user) {
+        Conversacion c = verificarAcceso(conversacionId, user);
+        RolEmisor rol = rolEmisorDelUser(user);
+        if (rol == null) {
+            throw new AccessDeniedException("Solo los participantes pueden ocultar la conversación");
+        }
+        if (ocultaRepo.existsByConversacionIdAndPerfilIdAndRol(c.getId(), user.getPerfilId(), rol)) {
+            return;
+        }
+        ocultaRepo.save(ConversacionOculta.builder()
+                .conversacionId(c.getId())
+                .perfilId(user.getPerfilId())
+                .rol(rol)
+                .build());
+    }
+
+    /**
+     * Borra el "ocultamiento" del participante que NO es el emisor del mensaje,
+     * para que la conversación reaparezca en su lista al recibir un mensaje nuevo.
+     */
+    @Transactional
+    public void desocultarParaContraparte(Long conversacionId, Long emisorPerfilId, RolEmisor emisorRol) {
+        if (emisorRol == null || emisorPerfilId == null) return;
+        ocultaRepo.desocultarParaContraparte(conversacionId, emisorPerfilId, emisorRol);
+    }
+
+    private RolEmisor rolEmisorDelUser(CurrentUser user) {
+        if (user == null || user.getRol() == null) return null;
+        if ("ESTUDIANTE".equalsIgnoreCase(user.getRol())) return RolEmisor.ESTUDIANTE;
+        if ("ARRENDADOR".equalsIgnoreCase(user.getRol())) return RolEmisor.ARRENDADOR;
+        return null;
     }
 
     @Transactional(readOnly = true)

@@ -1,0 +1,334 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { BadgeCheck, ExternalLink, Loader2, X } from 'lucide-react';
+
+import { api } from '@/lib/api';
+import { cn } from '@/lib/cn';
+import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { useCompareStore } from '@/stores/compare-store';
+import type { PropiedadCompleta } from '@/types/propiedad';
+
+interface Props {
+  ids: string[];
+  open: boolean;
+  onClose: () => void;
+}
+
+/**
+ * Tabla comparativa. Trae cada propiedad en paralelo vía
+ * `GET /propiedades/{id}/completo`. La primera columna es etiqueta fija
+ * (sticky en mobile horizontal-scroll) y cada propiedad ocupa una columna.
+ */
+export function PropertyCompareView({ ids, open, onClose }: Props) {
+  const toggle = useCompareStore((s) => s.toggle);
+  const [datos, setDatos] = useState<PropiedadCompleta[] | null>(null);
+  const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando');
+
+  useEffect(() => {
+    if (!open || ids.length === 0) return;
+    let cancelado = false;
+    setEstado('cargando');
+    setDatos(null);
+
+    Promise.all(
+      ids.map((id) =>
+        api
+          .get<PropiedadCompleta>(`propiedades/${id}/completo`)
+          .then((r) => r.data),
+      ),
+    )
+      .then((items) => {
+        if (cancelado) return;
+        setDatos(items);
+        setEstado('ok');
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setEstado('error');
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [open, ids]);
+
+  // Intersección de servicios (presentes en TODAS las propiedades cargadas).
+  const serviciosComunes = useMemo(() => {
+    if (!datos || datos.length === 0) return new Set<string>();
+    const sets = datos.map(
+      (d) => new Set((d.serviciosIncluidos ?? []).map((s) => s.toUpperCase())),
+    );
+    const [primero, ...resto] = sets;
+    const inter = new Set<string>();
+    primero.forEach((s) => {
+      if (resto.every((other) => other.has(s))) inter.add(s);
+    });
+    return inter;
+  }, [datos]);
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className={cn(
+            'fixed inset-0 z-50 bg-black/70 backdrop-blur-sm',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+          )}
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            'fixed inset-0 z-50 flex flex-col bg-background md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[95vw] md:max-w-6xl md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:border-border md:shadow-2xl',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+          )}
+        >
+          <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
+            <div>
+              <DialogPrimitive.Title className="font-headline text-lg font-bold text-foreground sm:text-xl">
+                Comparar propiedades
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-xs text-muted-foreground sm:text-sm">
+                {ids.length} propiedad{ids.length === 1 ? '' : 'es'} seleccionada
+                {ids.length === 1 ? '' : 's'}
+              </DialogPrimitive.Description>
+            </div>
+            <DialogPrimitive.Close
+              aria-label="Cerrar comparación"
+              className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-5" />
+            </DialogPrimitive.Close>
+          </header>
+
+          <div className="flex-1 overflow-auto">
+            {estado === 'cargando' && (
+              <div className="flex h-64 items-center justify-center text-muted-foreground">
+                <Loader2 className="size-6 animate-spin" aria-hidden />
+                <span className="ml-2 text-sm">Cargando propiedades…</span>
+              </div>
+            )}
+
+            {estado === 'error' && (
+              <div className="flex h-64 flex-col items-center justify-center gap-2 px-6 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  No pudimos cargar la comparación
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Verifica tu conexión e inténtalo de nuevo.
+                </p>
+              </div>
+            )}
+
+            {estado === 'ok' && datos && (
+              <CompareTable
+                propiedades={datos}
+                serviciosComunes={serviciosComunes}
+                onQuitar={(id) => {
+                  toggle(id);
+                  // Si era la última, cerramos automáticamente
+                  if (ids.length <= 1) onClose();
+                }}
+              />
+            )}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+interface TablaProps {
+  propiedades: PropiedadCompleta[];
+  serviciosComunes: Set<string>;
+  onQuitar: (id: string) => void;
+}
+
+function CompareTable({ propiedades, serviciosComunes, onQuitar }: TablaProps) {
+  const filas: Array<{
+    label: string;
+    render: (p: PropiedadCompleta) => React.ReactNode;
+  }> = [
+    {
+      label: 'Precio',
+      render: (p) => (
+        <span className="text-base font-bold text-foreground">
+          S/ {Number(p.precio ?? 0).toLocaleString('es-PE')}
+        </span>
+      ),
+    },
+    {
+      label: 'Calificación',
+      render: (p) => {
+        const total = p.numResenas ?? 0;
+        if (total === 0)
+          return <span className="text-muted-foreground">Sin reseñas</span>;
+        return (
+          <span>
+            <span aria-hidden>★</span>{' '}
+            <span className="font-medium">{(p.calificacion ?? 0).toFixed(1)}</span>{' '}
+            <span className="text-muted-foreground">({total})</span>
+          </span>
+        );
+      },
+    },
+    {
+      label: 'Distancia a UPeU',
+      render: (p) => {
+        const coords =
+          p.latitud != null && p.longitud != null
+            ? { lat: p.latitud, lng: p.longitud }
+            : undefined;
+        return <span>{formatearDistancia(distanciaAUpeuKm(coords))}</span>;
+      },
+    },
+    {
+      label: 'Servicios',
+      render: (p) => {
+        const servicios = p.serviciosIncluidos ?? [];
+        if (servicios.length === 0)
+          return <span className="text-muted-foreground">—</span>;
+        return (
+          <ul className="flex flex-wrap gap-1.5">
+            {servicios.map((s) => {
+              const esComun = serviciosComunes.has(s.toUpperCase());
+              return (
+                <li
+                  key={s}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs',
+                    esComun
+                      ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  title={esComun ? 'Disponible en todas' : undefined}
+                >
+                  {esComun && <span aria-hidden>✓</span>}
+                  {s}
+                </li>
+              );
+            })}
+          </ul>
+        );
+      },
+    },
+    {
+      label: 'Arrendador',
+      render: (p) => (
+        <div className="flex items-center gap-1.5">
+          <span className="truncate">{p.arrendadorNombre ?? '—'}</span>
+          {p.arrendadorVerificado && (
+            <BadgeCheck
+              className="size-4 shrink-0 text-primary"
+              aria-label="Verificado"
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      label: 'Disponible desde',
+      render: (p) =>
+        p.disponibleDesde ? (
+          <span>{new Date(p.disponibleDesde).toLocaleDateString('es-PE')}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      label: 'Tiempo de respuesta',
+      render: (p) =>
+        typeof p.tiempoRespuestaArrendador === 'number' ? (
+          <span>{p.tiempoRespuestaArrendador} min</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ];
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse">
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              className="sticky left-0 z-10 w-[140px] bg-background px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:w-[180px] sm:px-4"
+            >
+              <span className="sr-only">Atributo</span>
+            </th>
+            {propiedades.map((p) => (
+              <th
+                key={p.id}
+                scope="col"
+                className="min-w-[70vw] border-l border-border bg-background px-3 py-3 align-top sm:min-w-[260px] sm:px-4"
+              >
+                <div className="space-y-2">
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-muted">
+                    {p.imagenes && p.imagenes[0] ? (
+                      <Image
+                        src={p.imagenes[0]}
+                        alt={p.titulo}
+                        fill
+                        sizes="(max-width: 768px) 70vw, 260px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full place-items-center text-xs text-muted-foreground">
+                        Sin imagen
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onQuitar(String(p.id))}
+                      aria-label={`Quitar ${p.titulo} de la comparación`}
+                      className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full bg-background/95 text-foreground shadow ring-1 ring-border transition hover:bg-background"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                  <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
+                    {p.titulo}
+                  </h3>
+                  <Link
+                    href={`/property/${p.id}`}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    Ver detalle
+                    <ExternalLink className="size-3" aria-hidden />
+                  </Link>
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((fila) => (
+            <tr key={fila.label} className="border-t border-border">
+              <th
+                scope="row"
+                className="sticky left-0 z-10 bg-background px-3 py-3 text-left text-xs font-semibold text-muted-foreground sm:px-4 sm:text-sm"
+              >
+                {fila.label}
+              </th>
+              {propiedades.map((p) => (
+                <td
+                  key={p.id}
+                  className="border-l border-border px-3 py-3 align-top text-sm text-foreground sm:px-4"
+                >
+                  {fila.render(p)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default PropertyCompareView;

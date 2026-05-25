@@ -12,6 +12,8 @@ interface HistoryState {
   entradas: HistorialEntry[];
   registrar: (propiedadId: string) => void;
   limpiar: () => void;
+  /** `true` si la propiedad fue visitada (existe en `entradas`). */
+  isViewed: (propiedadId: string) => boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface HistoryState {
  */
 export const useHistoryStore = create<HistoryState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       entradas: [],
 
       registrar: (propiedadId) =>
@@ -31,6 +33,8 @@ export const useHistoryStore = create<HistoryState>()(
         }),
 
       limpiar: () => set({ entradas: [] }),
+
+      isViewed: (propiedadId) => get().entradas.some((e) => e.propiedadId === propiedadId),
     }),
     {
       name: 'alquilaya-historial',
@@ -39,3 +43,10 @@ export const useHistoryStore = create<HistoryState>()(
     },
   ),
 );
+
+/**
+ * Alias en español del store de historial, usado por el rediseño de la
+ * cartilla de propiedad (badge "Ya la viste"). Exporta exactamente la misma
+ * instancia que `useHistoryStore` — NO duplicar estado.
+ */
+export const useHistorialStore = useHistoryStore;

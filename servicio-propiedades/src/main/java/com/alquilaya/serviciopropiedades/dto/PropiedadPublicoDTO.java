@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -34,4 +35,17 @@ public class PropiedadPublicoDTO {
     private List<String> imagenes;
     private Long arrendadorId;
     private String arrendadorNombre;
+
+    // ===== Campos premium (card rediseño) =====
+    private String arrendadorAvatar;
+    private Boolean arrendadorVerificado;
+    private LocalDateTime fechaCreacion;
+    @Builder.Default
+    private Long vistas = 0L;
+    private LocalDateTime ultimaActualizacion;
+    /**
+     * Tiempo de respuesta promedio del arrendador (en minutos). Nullable
+     * mientras no exista una métrica calculada; en UI se debe mostrar como "—".
+     */
+    private Integer tiempoRespuestaArrendador;
 }

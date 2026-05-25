@@ -5,20 +5,27 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  BadgeCheck,
   BedDouble,
   Building2,
   CalendarCheck,
+  CalendarDays,
+  Check,
+  Eye,
   MapPin,
   MessageCircle,
   Ruler,
+  Share2,
   ShowerHead,
   Star,
+  User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/shared/error-state';
 import { PropertyGallery } from '@/components/property/property-gallery';
+import { PropertyReviews } from '@/components/property/property-reviews';
 import { ServiceBadges } from '@/components/student/service-badges';
 import { FavoriteButton } from '@/components/student/favorite-button';
 import { ReservationFormDialog } from '@/components/student/reservation-form-dialog';
@@ -26,12 +33,25 @@ import { ContactLandlordDialog } from '@/components/student/contact-landlord-dia
 import { servicioPropiedades } from '@/services/property-service';
 import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
 import { useHistory } from '@/hooks/use-history';
+import { cn } from '@/lib/cn';
+import { REGLAS_CATALOGO } from '@/types/propiedad';
 import type { Propiedad } from '@/types/propiedad';
 
 const PropertiesMap = dynamic(() => import('@/components/shared/PropertiesMap'), {
   ssr: false,
   loading: () => <Skeleton className="h-[300px] w-full rounded-2xl" />,
 });
+
+const TIPO_LABEL: Record<string, string> = {
+  CUARTO_INDIVIDUAL: 'Cuarto individual',
+  CUARTO_COMPARTIDO: 'Cuarto compartido',
+  DEPARTAMENTO: 'Departamento',
+  SUITE: 'Suite',
+  MINI_DEPTO: 'Mini depto',
+  CUARTO: 'Cuarto',
+  ESTUDIO: 'Estudio',
+  CASA: 'Casa',
+};
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -41,6 +61,7 @@ export default function PropertyDetailPage({ params }: Props) {
   const { id } = use(params);
   const [propiedad, setPropiedad] = useState<Propiedad | null>(null);
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-encontrado' | 'error'>('cargando');
+  const [copiado, setCopiado] = useState(false);
   const { registrar } = useHistory();
 
   useEffect(() => {
@@ -65,10 +86,21 @@ export default function PropertyDetailPage({ params }: Props) {
     };
   }, [id, registrar]);
 
+  const compartir = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: propiedad?.titulo, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(url).catch(() => {});
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    }
+  };
+
   if (estado === 'cargando') {
     return (
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-28 sm:px-12">
-        <Skeleton className="aspect-[16/10] w-full rounded-2xl" />
+        <Skeleton className="aspect-[16/7] w-full rounded-2xl" />
         <div className="mt-6 space-y-3">
           <Skeleton className="h-8 w-2/3" />
           <Skeleton className="h-4 w-1/3" />
@@ -106,6 +138,7 @@ export default function PropertyDetailPage({ params }: Props) {
   }
 
   const distancia = distanciaAUpeuKm(propiedad.coordenadas);
+  const tipoLabel = TIPO_LABEL[propiedad.tipo] ?? propiedad.tipo;
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-24 pt-24 sm:px-12 md:pt-28">
@@ -120,9 +153,31 @@ export default function PropertyDetailPage({ params }: Props) {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
         <div className="space-y-8">
+          {/* Encabezado */}
           <header className="space-y-3">
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                      propiedad.disponible
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'size-1.5 rounded-full',
+                        propiedad.disponible ? 'bg-green-500' : 'bg-red-500',
+                      )}
+                    />
+                    {propiedad.disponible ? 'Disponible' : 'No disponible'}
+                  </span>
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    {tipoLabel}
+                  </span>
+                </div>
                 <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
                   {propiedad.titulo}
                 </h1>
@@ -135,7 +190,22 @@ export default function PropertyDetailPage({ params }: Props) {
                   )}
                 </p>
               </div>
-              <FavoriteButton propiedadId={propiedad.id} size="lg" />
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={compartir}
+                  aria-label="Compartir propiedad"
+                  className="flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {copiado ? (
+                    <Check className="size-4 text-green-500" aria-hidden />
+                  ) : (
+                    <Share2 className="size-4" aria-hidden />
+                  )}
+                </button>
+                <FavoriteButton propiedadId={propiedad.id} size="lg" />
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -146,34 +216,122 @@ export default function PropertyDetailPage({ params }: Props) {
                   ({propiedad.reseñas} reseñas)
                 </span>
               </span>
-              <span aria-hidden className="text-muted-foreground">·</span>
-              <span className="text-sm text-muted-foreground">
-                Publicado por <strong className="text-foreground">{propiedad.propietarioNombre}</strong>
-              </span>
+              {propiedad.propietarioNombre && (
+                <>
+                  <span aria-hidden className="text-muted-foreground">·</span>
+                  <span className="text-sm text-muted-foreground">
+                    Publicado por{' '}
+                    <strong className="text-foreground">{propiedad.propietarioNombre}</strong>
+                  </span>
+                </>
+              )}
             </div>
           </header>
 
+          {/* Stats */}
           <section className="grid grid-cols-2 gap-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-4">
             <Stat icon={BedDouble} value={`${propiedad.habitaciones}`} label="Habitación" />
             <Stat icon={ShowerHead} value={`${propiedad.baños}`} label="Baño" />
             <Stat icon={Ruler} value={`${propiedad.area} m²`} label="Área" />
-            <Stat icon={Building2} value={propiedad.tipo} label="Tipo" />
+            <Stat icon={Building2} value={tipoLabel} label="Tipo" />
           </section>
 
+          {/* Descripción */}
           <section className="space-y-3">
             <h2 className="font-headline text-xl font-bold">Sobre este cuarto</h2>
             <p className="text-sm leading-relaxed text-muted-foreground">{propiedad.descripcion}</p>
           </section>
 
-          <section className="space-y-3">
+          {/* Servicios */}
+          <section className="space-y-4">
             <h2 className="font-headline text-xl font-bold">Servicios incluidos</h2>
-            <ServiceBadges
-              servicios={propiedad.servicios}
-              max={propiedad.servicios.length}
-              variant="plain"
-            />
+            {propiedad.servicios.length > 0 ? (
+              <ServiceBadges
+                servicios={propiedad.servicios}
+                max={propiedad.servicios.length}
+                variant="plain"
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No especificados</p>
+            )}
           </section>
 
+          {/* Reglas */}
+          {propiedad.reglas && propiedad.reglas.length > 0 && (
+            <section className="space-y-4">
+              <h2 className="font-headline text-xl font-bold">Reglas de la casa</h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {propiedad.reglas.map((regla, i) => {
+                  const cat = REGLAS_CATALOGO.find(
+                    (r) => r.clave === regla || r.etiqueta === regla,
+                  );
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2.5"
+                    >
+                      <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+                      <span className="text-xs font-medium text-foreground">
+                        {cat?.etiqueta ?? regla}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Arrendador */}
+          <section className="space-y-4">
+            <h2 className="font-headline text-xl font-bold">Sobre el arrendador</h2>
+            <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {propiedad.arrendadorAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={propiedad.arrendadorAvatar}
+                    alt={propiedad.propietarioNombre}
+                    className="size-14 rounded-full object-cover"
+                  />
+                ) : (
+                  <User className="size-6" aria-hidden />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate font-bold text-foreground">
+                    {propiedad.propietarioNombre || 'Arrendador'}
+                  </span>
+                  {propiedad.arrendadorVerificado && (
+                    <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verificado" />
+                  )}
+                </div>
+                {propiedad.tiempoRespuestaArrendador != null && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Responde en ~{propiedad.tiempoRespuestaArrendador} min
+                  </p>
+                )}
+                {propiedad.fechaCreacion && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Publicó en{' '}
+                    {new Date(propiedad.fechaCreacion).toLocaleDateString('es-PE', {
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Reseñas */}
+          <PropertyReviews
+            propiedadId={propiedad.id}
+            calificacion={propiedad.calificacion}
+            totalResenas={propiedad.reseñas}
+          />
+
+          {/* Mapa */}
           {propiedad.coordenadas && (
             <section className="space-y-3">
               <h2 className="font-headline text-xl font-bold">Ubicación</h2>
@@ -184,6 +342,7 @@ export default function PropertyDetailPage({ params }: Props) {
           )}
         </div>
 
+        {/* Sidebar */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <p className="text-sm text-muted-foreground">Precio mensual</p>
@@ -216,6 +375,27 @@ export default function PropertyDetailPage({ params }: Props) {
                 </Button>
               }
             />
+
+            {(propiedad.disponibleDesde || propiedad.vistas != null) && (
+              <div className="mt-4 space-y-1.5 border-t border-border pt-4">
+                {propiedad.disponibleDesde && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+                    Disponible desde{' '}
+                    {new Date(propiedad.disponibleDesde).toLocaleDateString('es-PE', {
+                      day: 'numeric',
+                      month: 'long',
+                    })}
+                  </p>
+                )}
+                {propiedad.vistas != null && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Eye className="size-3.5 shrink-0" aria-hidden />
+                    {propiedad.vistas} vistas
+                  </p>
+                )}
+              </div>
+            )}
 
             <p className="mt-4 text-xs text-muted-foreground">
               Sin cargos hasta confirmar. La reserva se concreta al pagar el primer mes.

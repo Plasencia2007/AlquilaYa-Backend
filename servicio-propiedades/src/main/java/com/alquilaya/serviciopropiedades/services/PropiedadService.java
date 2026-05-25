@@ -14,13 +14,18 @@ import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -56,8 +61,16 @@ public class PropiedadService {
         }
     }
 
+    /**
+     * Construye el DTO público SIN enriquecer con datos del arrendador.
+     * Para listados, preferir {@link #toPublicoBatch(List)} para evitar N+1.
+     */
     public PropiedadPublicoDTO toPublico(Propiedad p) {
-        return PropiedadPublicoDTO.builder()
+        return toPublicoBuilder(p, null).build();
+    }
+
+    private PropiedadPublicoDTO.PropiedadPublicoDTOBuilder toPublicoBuilder(Propiedad p, ArrendadorInfoDTO info) {
+        PropiedadPublicoDTO.PropiedadPublicoDTOBuilder b = PropiedadPublicoDTO.builder()
                 .id(p.getId())
                 .titulo(p.getTitulo())
                 .descripcion(p.getDescripcion())
@@ -80,7 +93,61 @@ public class PropiedadService {
                 .estado(p.getEstado())
                 .imagenes(extraerUrlsImagenes(p))
                 .arrendadorId(p.getArrendadorId())
-                .build();
+                // Campos premium del card rediseñado
+                .fechaCreacion(p.getFechaCreacion())
+                .ultimaActualizacion(p.getFechaActualizacion())
+                .vistas(p.getVistas() != null ? p.getVistas() : 0L);
+
+        if (info != null) {
+            b.arrendadorNombre(componerNombre(info))
+             .arrendadorAvatar(info.getAvatar())
+             .arrendadorVerificado(info.getVerificado())
+             .tiempoRespuestaArrendador(info.getTiempoRespuestaPromedio());
+        }
+        return b;
+    }
+
+    /**
+     * Enriquece un listado de propiedades con datos del arrendador haciendo
+     * UNA SOLA llamada Feign bulk al servicio-usuarios (anti N+1).
+     * Si la llamada falla o devuelve datos parciales, los campos faltantes
+     * quedan en null — degradación silenciosa.
+     */
+    public List<PropiedadPublicoDTO> toPublicoBatch(List<Propiedad> propiedades) {
+        if (propiedades == null || propiedades.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, ArrendadorInfoDTO> infoPorId = cargarArrendadoresBulk(propiedades);
+        return propiedades.stream()
+                .map(p -> toPublicoBuilder(p, infoPorId.get(p.getArrendadorId())).build())
+                .toList();
+    }
+
+    private Map<Long, ArrendadorInfoDTO> cargarArrendadoresBulk(List<Propiedad> propiedades) {
+        List<Long> ids = propiedades.stream()
+                .map(Propiedad::getArrendadorId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) return Collections.emptyMap();
+
+        try {
+            List<ArrendadorInfoDTO> infos = usuariosClient.obtenerArrendadoresBulk(ids);
+            if (infos == null) return Collections.emptyMap();
+            Map<Long, ArrendadorInfoDTO> map = new HashMap<>(infos.size());
+            for (ArrendadorInfoDTO i : infos) {
+                if (i != null && i.getId() != null) {
+                    map.put(i.getId(), i);
+                }
+            }
+            log.debug("[BULK] Enriquecidos {}/{} arrendadores en una sola llamada Feign",
+                    map.size(), ids.size());
+            return map;
+        } catch (Exception e) {
+            log.warn("[BULK] No se pudo enriquecer arrendadores ({} ids): {}. Se devuelve listado sin enriquecer.",
+                    ids.size(), e.getMessage());
+            return Collections.emptyMap();
+        }
     }
 
     @TimeLimiter(name = "obtenerArrendadorCB")
@@ -141,13 +208,19 @@ public class PropiedadService {
                 .numResenas(p.getNumResenas())
                 .estado(p.getEstado())
                 .imagenes(extraerUrlsImagenes(p))
-                .arrendadorId(p.getArrendadorId());
+                .arrendadorId(p.getArrendadorId())
+                // Campos premium del card rediseñado
+                .fechaCreacion(p.getFechaCreacion())
+                .ultimaActualizacion(p.getFechaActualizacion())
+                .vistas(p.getVistas() != null ? p.getVistas() : 0L);
 
         if (info != null) {
-            b.arrendadorNombre((info.getNombre() != null ? info.getNombre() : "") +
-                    (info.getApellido() != null ? " " + info.getApellido() : ""))
+            b.arrendadorNombre(componerNombre(info))
              .arrendadorTelefono(info.getTelefono())
-             .arrendadorCorreo(info.getCorreo());
+             .arrendadorCorreo(info.getCorreo())
+             .arrendadorAvatar(info.getAvatar())
+             .arrendadorVerificado(info.getVerificado())
+             .tiempoRespuestaArrendador(info.getTiempoRespuestaPromedio());
         }
         return b.build();
     }
@@ -186,12 +259,44 @@ public class PropiedadService {
                 .fechaCreacion(p.getFechaCreacion());
 
         if (info != null) {
-            b.arrendadorNombre((info.getNombre() != null ? info.getNombre() : "") +
-                    (info.getApellido() != null ? " " + info.getApellido() : ""))
+            b.arrendadorNombre(componerNombre(info))
              .arrendadorTelefono(info.getTelefono())
              .arrendadorCorreo(info.getCorreo());
         }
         return b.build();
+    }
+
+    /**
+     * Incremento asíncrono del contador de vistas. Se ejecuta en un hilo
+     * separado (vía @EnableAsync en la app) para NO bloquear el GET del
+     * detalle. La query es un UPDATE atómico, no carga ni guarda la entidad.
+     * Si falla, se loguea y se ignora — la vista no se cuenta pero el GET
+     * sigue respondiendo OK.
+     *
+     * TODO (futuro): debounce por (usuarioId, propiedadId, ventana) para evitar
+     * inflar contadores con refresh; o mover a un evento Kafka consumido por
+     * un job batch que agrega cada N segundos.
+     */
+    @Async
+    public void incrementarVistasAsync(Long propiedadId) {
+        if (propiedadId == null) return;
+        try {
+            int filas = propiedadRepository.incrementarVistas(propiedadId);
+            if (filas == 0) {
+                log.debug("[VISTAS] Propiedad {} no encontrada al incrementar vistas", propiedadId);
+            }
+        } catch (Exception e) {
+            log.warn("[VISTAS] No se pudo incrementar vistas de propiedad {}: {}",
+                    propiedadId, e.getMessage());
+        }
+    }
+
+    private String componerNombre(ArrendadorInfoDTO info) {
+        if (info == null) return null;
+        String n = info.getNombre() != null ? info.getNombre() : "";
+        String a = info.getApellido() != null ? " " + info.getApellido() : "";
+        String full = (n + a).trim();
+        return full.isEmpty() ? null : full;
     }
 
     private List<String> extraerUrlsImagenes(Propiedad p) {
@@ -203,6 +308,6 @@ public class PropiedadService {
                         a.getOrden() != null ? a.getOrden() : 0,
                         b.getOrden() != null ? b.getOrden() : 0))
                 .map(PropiedadImagen::getUrl)
-                .toList();
+                .collect(Collectors.toList());
     }
 }

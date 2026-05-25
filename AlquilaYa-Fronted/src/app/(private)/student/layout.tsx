@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
 import { DashboardShell } from '@/components/student/dashboard-shell';
+import { ClientChrome } from '@/components/student/client-chrome';
 
 /**
  * Layout privado del estudiante:
@@ -51,5 +52,10 @@ export default function StudentDashboardLayout({
     );
   }
 
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <>
+      <DashboardShell>{children}</DashboardShell>
+      <ClientChrome />
+    </>
+  );
 }

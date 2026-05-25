@@ -54,14 +54,14 @@ public class ChatWebSocketController {
         if (user == null || user.getPerfilId() == null) return;
         // Solo participantes pueden notificar typing.
         var conv = mensajeService.verificarAccesoEnviar(conversacionId, user);
-        var evento = new TypingBroadcast(conversacionId, user.getPerfilId(),
+        var evento = new TypingBroadcast(conversacionId, user.getPerfilId(), user.getRol(),
                 payload != null && payload.escribiendo());
         // Reusa el destino de eventos del conv (ya consume el ChatWindow para mensajes leídos).
         mensajeService.broadcastEventoConversacion(conv, evento);
     }
 
     public record TypingEvent(boolean escribiendo) {}
-    public record TypingBroadcast(Long conversacionId, Long emisorPerfilId, boolean escribiendo) {
+    public record TypingBroadcast(Long conversacionId, Long emisorPerfilId, String emisorRol, boolean escribiendo) {
         public String getTipo() { return "TYPING"; }
     }
 

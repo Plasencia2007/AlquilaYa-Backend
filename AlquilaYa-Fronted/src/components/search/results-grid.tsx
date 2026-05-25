@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PropertyCard } from '@/components/student/property-card';
 import { SkeletonCard } from '@/components/shared/skeleton-card';
@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/shared/error-state';
 import { Button } from '@/components/ui/button';
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll';
 import { cn } from '@/lib/cn';
+import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
 import type { Propiedad } from '@/types/propiedad';
 
 interface Props {
@@ -38,6 +39,22 @@ export function ResultsGrid({
   useInfiniteScroll(sentinelRef, onCargarMas, {
     enabled: hasMore && !cargando && !cargandoMas && !error,
   });
+
+  // Hidratación + filtro de propiedades ocultas
+  const hiddenIds = useHiddenPropertiesStore((s) => s.hiddenIds);
+  const [hidratado, setHidratado] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+
+  useEffect(() => {
+    useHiddenPropertiesStore.persist.rehydrate()?.then(() => setHidratado(true));
+  }, []);
+
+  const visible = useMemo(() => {
+    if (!hidratado || showHidden) return items;
+    return items.filter((p) => !hiddenIds.includes(p.id));
+  }, [items, hiddenIds, showHidden, hidratado]);
+
+  const hiddenCount = items.length - visible.length;
 
   if (cargando && items.length === 0) {
     return (
@@ -73,16 +90,28 @@ export function ResultsGrid({
   return (
     <div className={className}>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((p) => (
+        {visible.map((p) => (
           <PropertyCard key={p.id} propiedad={p} variant="full" />
         ))}
         {cargandoMas &&
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`load-${i}`} />)}
       </div>
 
+      {hiddenCount > 0 && !showHidden && (
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowHidden(true)}
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Mostrar {hiddenCount} oculta{hiddenCount === 1 ? '' : 's'}
+          </button>
+        </div>
+      )}
+
       {hasMore && <div ref={sentinelRef} className="h-10" aria-hidden />}
 
-      {!hasMore && items.length > 0 && (
+      {!hasMore && visible.length > 0 && (
         <p className="mt-8 text-center text-sm text-muted-foreground">
           Estos son todos los cuartos que coinciden contigo.
         </p>

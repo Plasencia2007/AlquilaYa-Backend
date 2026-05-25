@@ -30,6 +30,7 @@ export function ChatWindow({
     error,
     otroEscribiendo,
     miPerfilId,
+    miRol,
     enviar,
     notificarTyping,
   } = useConversation(conversacionId);
@@ -111,7 +112,11 @@ export function ChatWindow({
         )}
 
         {mensajes.map((m) => (
-          <ChatMessage key={m.id} mensaje={m} esMio={m.emisorPerfilId === miPerfilId} />
+          <ChatMessage
+            key={m.id}
+            mensaje={m}
+            esMio={m.emisorPerfilId === miPerfilId && m.emisorRol === miRol}
+          />
         ))}
 
         {otroEscribiendo && (
