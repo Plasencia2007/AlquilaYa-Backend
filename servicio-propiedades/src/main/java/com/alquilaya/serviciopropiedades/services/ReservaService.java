@@ -11,6 +11,7 @@ import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
 import com.alquilaya.serviciopropiedades.kafka.ReservaEventProducer;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
+import com.alquilaya.serviciopropiedades.saga.service.SagaReservaPagoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class ReservaService {
     private final PropiedadRepository propiedadRepository;
     private final UsuariosClient usuariosClient;
     private final ReservaEventProducer reservaEventProducer;
+    private final SagaReservaPagoService sagaReservaPagoService;
 
     private static final EnumSet<EstadoReserva> ESTADOS_BLOQUEANTES =
             EnumSet.of(EstadoReserva.SOLICITADA, EstadoReserva.APROBADA, EstadoReserva.PAGADA);
@@ -96,6 +98,10 @@ public class ReservaService {
         r.setEstado(EstadoReserva.APROBADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_APROBADA", guardada, current);
+        // Ola 3 — Saga orquestada: al aprobarse la reserva se inicia el seguimiento del
+        // ciclo de pago para detectar inconsistencias (refund automático si llega un pago
+        // tardío sobre una reserva ya cancelada, o cancelación post-pago).
+        sagaReservaPagoService.iniciarSaga(guardada.getId());
         return guardada;
     }
 
@@ -141,9 +147,15 @@ public class ReservaService {
         if (!ESTADOS_BLOQUEANTES.contains(r.getEstado())) {
             throw new IllegalStateException("La reserva no se puede cancelar en estado " + r.getEstado());
         }
+        EstadoReserva estadoPrevio = r.getEstado();
         r.setEstado(EstadoReserva.CANCELADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_CANCELADA", guardada, current);
+        // Ola 3 — Si se cancela una reserva APROBADA (pago en curso) o PAGADA, hay
+        // que emitir REFUND_REQUERIDO al servicio-pagos para reembolsar en MP.
+        if (estadoPrevio == EstadoReserva.APROBADA || estadoPrevio == EstadoReserva.PAGADA) {
+            sagaReservaPagoService.manejarCancelacionReserva(guardada.getId());
+        }
         return guardada;
     }
 
@@ -155,7 +167,9 @@ public class ReservaService {
             throw new IllegalStateException("Solo se puede finalizar una reserva en estado PAGADA");
         }
         r.setEstado(EstadoReserva.FINALIZADA);
-        return reservaRepository.save(r);
+        Reserva guardada = reservaRepository.save(r);
+        emitirEvento("RESERVA_FINALIZADA", guardada, current);
+        return guardada;
     }
 
     public List<Reserva> listarDelEstudiante(Long estudianteId) {

@@ -29,6 +29,11 @@ spring:
   kafka:
     template:
       default-topic: propiedades-topic
+    consumer:
+      # Ola 2: este servicio consume pagos-topic; arrancamos desde el principio
+      # para no perder eventos en el primer arranque tras la migración.
+      # La idempotencia (processed_events) protege contra reprocesamiento.
+      auto-offset-reset: earliest
   servlet:
     multipart:
       max-file-size: 10MB

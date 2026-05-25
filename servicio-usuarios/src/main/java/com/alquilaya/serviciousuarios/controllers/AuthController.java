@@ -7,6 +7,7 @@ import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.services.GoogleAuthService;
+import com.alquilaya.serviciousuarios.services.JwtBlacklistService;
 import com.alquilaya.serviciousuarios.services.LoginAttemptService;
 import com.alquilaya.serviciousuarios.services.OtpService;
 import com.alquilaya.serviciousuarios.services.PasswordResetService;
@@ -35,6 +36,7 @@ public class AuthController {
     private final LoginAttemptService loginAttemptService;
     private final OtpService otpService;
     private final GoogleAuthService googleAuthService;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -210,6 +212,32 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "mensaje", "Contraseña actualizada correctamente. Ya puedes iniciar sesión."
         ));
+    }
+
+    /**
+     * Cierra la sesión revocando el JWT enviado en el header Authorization.
+     *
+     * <p>El token se agrega al blacklist Redis ({@code usuarios:blacklist:jwt:*})
+     * con TTL igual al tiempo restante hasta su expiración natural. A partir
+     * de este punto, cualquier request que llegue con ese token devolverá 401.</p>
+     *
+     * <p>Idempotente: si el token es inválido, ya expiró o ya estaba revocado,
+     * igual se devuelve 200 OK (no revela info al cliente).</p>
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest req) {
+        String header = req.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7);
+            try {
+                java.util.Date exp = jwtService.getExpiration(token);
+                jwtBlacklistService.blacklist(token, exp);
+            } catch (Exception e) {
+                // Token malformado / firma inválida / expirado: no revelamos detalles.
+                // El cliente igual recibe 200.
+            }
+        }
+        return ResponseEntity.ok(Map.of("mensaje", "Sesión cerrada correctamente."));
     }
 
     private Long obtenerPerfilId(Usuario usuario) {

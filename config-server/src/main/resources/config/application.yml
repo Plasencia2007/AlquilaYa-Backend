@@ -4,6 +4,22 @@ eureka:
       defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
 
 spring:
+  # Redis compartido entre microservicios. Aislamiento por prefijo de key
+  # (usuarios:*, gateway:*, propiedades:*, mensajeria:*, catalogos:*, pagos:*).
+  # Cliente Lettuce (default Spring Boot). Standalone, NO cluster/sentinel.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      connect-timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -22,8 +38,16 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       group-id: alquilaya-group
-      # Defensivo: si nadie ha leído, arrancar desde el último mensaje (no reprocesar history).
+      # Default global: 'latest' (defensivo para servicios sólo-productor como pagos).
+      # Consumers reales (propiedades, mensajeria, usuarios) lo sobreescriben a 'earliest'
+      # en su YAML para no perder mensajes en primer arranque tras la Ola 2.
       auto-offset-reset: latest
+      # Ola 2: idempotencia transaccional + commits manuales por record.
+      enable-auto-commit: false
+      isolation-level: read_committed
+    listener:
+      # commit por cada record procesado en el consumer (combinado con @Transactional + IdempotencyService)
+      ack-mode: RECORD
 
 server:
   # Permite completar requests en vuelo durante shutdown antes de cerrar el contexto.

@@ -139,6 +139,7 @@ public class DashboardServiceImpl implements DashboardService {
             case PAGADA -> "RESERVA_PAGADA";
             case FINALIZADA -> "RESERVA_FINALIZADA";
             case CANCELADA -> "RESERVA_CANCELADA";
+            case EXPIRADA -> "RESERVA_EXPIRADA";
         };
         String descripcion = switch (r.getEstado()) {
             case SOLICITADA -> "Nueva solicitud de reserva en " + titulo;
@@ -147,6 +148,7 @@ public class DashboardServiceImpl implements DashboardService {
             case PAGADA -> "Pago recibido por " + titulo;
             case FINALIZADA -> "Reserva finalizada en " + titulo;
             case CANCELADA -> "Reserva cancelada en " + titulo;
+            case EXPIRADA -> "Reserva expirada por falta de pago en " + titulo;
         };
         LocalDateTime fecha = r.getFechaActualizacion() != null ? r.getFechaActualizacion() : r.getFechaCreacion();
         return ActividadDTO.builder()

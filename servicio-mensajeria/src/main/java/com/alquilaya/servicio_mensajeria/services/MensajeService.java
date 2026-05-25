@@ -35,6 +35,7 @@ public class MensajeService {
     private final ConversacionService conversacionService;
     private final WebSocketNotificationService wsNotify;
     private final NotificacionService notificacionService;
+    private final RateLimiterService rateLimiterService;
 
     /**
      * Envía un mensaje en nombre del caller. Persiste + emite por WebSocket a los dos
@@ -49,6 +50,14 @@ public class MensajeService {
         }
         if (user == null || user.getPerfilId() == null) {
             throw new IllegalStateException("Usuario sin perfil");
+        }
+
+        // Rate limiting anti-spam: 60 mensajes por minuto por userId (no por perfilId,
+        // así un mismo usuario no esquiva el límite con múltiples conversaciones).
+        // Si Redis está caído, RateLimiterService permite el envío (graceful degradation).
+        if (!rateLimiterService.tryAcquire(user.getUserId())) {
+            throw new RateLimitExceededException(
+                    "Has enviado demasiados mensajes en poco tiempo. Espera un momento antes de continuar.");
         }
         // Admin puede leer pero NO emitir como "estudiante" o "arrendador".
         RolEmisor rolEmisor;

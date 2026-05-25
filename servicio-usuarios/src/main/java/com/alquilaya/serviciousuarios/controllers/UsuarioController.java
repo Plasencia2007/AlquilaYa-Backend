@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.dto.ActualizarUsuarioRequest;
 import com.alquilaya.serviciousuarios.dto.ArrendadorInfoResponse;
+import com.alquilaya.serviciousuarios.dto.ArrendadorPublicoResponse;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordRequest;
 import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
@@ -151,6 +152,46 @@ public class UsuarioController {
                 // TODO: métrica real de tiempo de respuesta promedio del arrendador
                 // (requiere job/agregación sobre servicio-mensajeria). Por ahora null
                 // y la UI muestra "—".
+                .tiempoRespuestaPromedio(null)
+                .build();
+    }
+
+    /**
+     * Variante PÚBLICA del bulk: no requiere autenticación.
+     * Devuelve {@link ArrendadorPublicoResponse} (sin correo ni telefono — PII excluida).
+     * Usado por servicio-propiedades para enriquecer listados a visitantes anónimos.
+     */
+    @PostMapping("/arrendadores/bulk-publico")
+    public ResponseEntity<List<ArrendadorPublicoResponse>> obtenerArrendadoresBulkPublico(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<Long> idsUnicos = ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        log.debug("[BULK-PUB] Solicitud pública de info de {} arrendadores", idsUnicos.size());
+        List<Arrendador> arrendadores = arrendadorRepository.findAllById(idsUnicos);
+        List<ArrendadorPublicoResponse> resp = new ArrayList<>(arrendadores.size());
+        for (Arrendador a : arrendadores) {
+            try {
+                resp.add(mapArrendadorPublico(a));
+            } catch (Exception ex) {
+                log.warn("[BULK-PUB] No se pudo mapear arrendador {}: {}", a.getId(), ex.getMessage());
+            }
+        }
+        return ResponseEntity.ok(resp);
+    }
+
+    private ArrendadorPublicoResponse mapArrendadorPublico(Arrendador a) {
+        Usuario u = a.getUsuario();
+        boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        return ArrendadorPublicoResponse.builder()
+                .id(a.getId())
+                .usuarioId(u != null ? u.getId() : null)
+                .nombre(u != null ? u.getNombre() : null)
+                .apellido(u != null ? u.getApellido() : null)
+                .nombreComercial(a.getNombreComercial())
+                .calificacion(a.getCalificacion())
+                .avatar(u != null ? u.getFotoUrl() : null)
+                .verificado(verificado)
                 .tiempoRespuestaPromedio(null)
                 .build();
     }

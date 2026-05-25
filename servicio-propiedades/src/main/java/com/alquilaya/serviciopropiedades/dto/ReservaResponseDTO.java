@@ -63,6 +63,7 @@ public class ReservaResponseDTO {
             case PAGADA -> "PAGADO";
             case FINALIZADA -> "PAGADO";
             case CANCELADA -> "CANCELADO";
+            case EXPIRADA -> "EXPIRADO";
         };
     }
 }

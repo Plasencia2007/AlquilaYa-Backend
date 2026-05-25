@@ -24,7 +24,12 @@ public class OtpVerification {
     @Column(nullable = false)
     private String telefono;
 
-    @Column(nullable = false, length = 6)
+    /**
+     * Hash BCrypt del código OTP (no texto plano).
+     * Se almacena hasheado para que un dump de BD no exponga códigos
+     * válidos durante la ventana de 5 min de vida del OTP.
+     */
+    @Column(nullable = false, length = 100)
     private String codigo;
 
     @Column(nullable = false)

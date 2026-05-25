@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.config;
 
+import com.alquilaya.serviciousuarios.services.JwtBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     protected void doFilterInternal(
@@ -39,6 +41,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7);
+
+        // Si el token está revocado (logout), rechazar antes de validar firma.
+        // Graceful degradation: si Redis cae, isBlacklisted devuelve false y
+        // se cae al comportamiento previo (no se valida revocación).
+        if (jwtBlacklistService.isBlacklisted(jwt)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    "{\"error\":\"Token revocado. Inicia sesión nuevamente.\"}");
+            return;
+        }
+
         try {
             userEmail = jwtService.extractUsername(jwt);
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -58,7 +72,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // En caso de token inválido o expirado, no seteamos el contexto
         }
-        
+
         filterChain.doFilter(request, response);
     }
 }

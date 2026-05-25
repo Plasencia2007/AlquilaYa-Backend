@@ -69,12 +69,19 @@ public class ChatWebSocketController {
      * Cualquier excepción en un handler WS se envía al cliente emisor
      * en su destino de error. @stomp/stompjs lo recibe como ERROR frame
      * o en el callback onStompError del cliente.
+     *
+     * Formato: {"tipo":"RATE_LIMIT_EXCEEDED|ERROR","error":"mensaje"}.
+     * El front discrimina por `tipo` para mostrar UX adecuada (toast vs banner).
      */
     @MessageExceptionHandler
     @SendTo("/user/queue/errors")
     public String handleError(Throwable t) {
         log.warn("Error en handler WS: {}", t.getMessage());
-        return "{\"error\":\"" + (t.getMessage() != null ? t.getMessage().replace("\"", "'") : "error") + "\"}";
+        String tipo = (t instanceof com.alquilaya.servicio_mensajeria.services.RateLimitExceededException)
+                ? "RATE_LIMIT_EXCEEDED"
+                : "ERROR";
+        String msg = t.getMessage() != null ? t.getMessage().replace("\"", "'") : "error";
+        return "{\"tipo\":\"" + tipo + "\",\"error\":\"" + msg + "\"}";
     }
 
     private CurrentUser extraer(Principal principal) {

@@ -37,6 +37,9 @@ public class SecurityConfig {
                         // Bulk para enriquecer listados de propiedades (card premium).
                         // Mismo nivel que el endpoint single: cualquier usuario autenticado.
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/arrendadores/bulk").authenticated()
+                        // Variante PÚBLICA del bulk: sin PII (correo/telefono excluidos).
+                        // Permite enriquecer cards en el listado público para visitantes anónimos.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/arrendadores/bulk-publico").permitAll()
                         .requestMatchers("/api/v1/usuarios/documentos/**").authenticated()
                         .requestMatchers(HttpMethod.GET,  "/api/v1/usuarios/{id}").authenticated()
                         .requestMatchers(HttpMethod.PUT,  "/api/v1/usuarios/{id}").authenticated()

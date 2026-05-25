@@ -10,16 +10,20 @@ public enum EstadoReserva {
     RECHAZADA,
     PAGADA,
     FINALIZADA,
-    CANCELADA;
+    CANCELADA,
+    EXPIRADA;
 
     // Transiciones permitidas. Los estados ausentes del mapa son terminales.
+    // EXPIRADA es terminal: se aplica a reservas APROBADAS que no se pagaron a tiempo
+    // (ver ReservaExpirationScheduler / saga de timeout de pago).
     private static final Map<EstadoReserva, Set<EstadoReserva>> TRANSICIONES = Map.of(
             SOLICITADA, EnumSet.of(APROBADA, RECHAZADA, CANCELADA),
-            APROBADA,   EnumSet.of(PAGADA, CANCELADA),
+            APROBADA,   EnumSet.of(PAGADA, CANCELADA, EXPIRADA),
             PAGADA,     EnumSet.of(FINALIZADA, CANCELADA),
             RECHAZADA,  EnumSet.noneOf(EstadoReserva.class),
             FINALIZADA, EnumSet.noneOf(EstadoReserva.class),
-            CANCELADA,  EnumSet.noneOf(EstadoReserva.class)
+            CANCELADA,  EnumSet.noneOf(EstadoReserva.class),
+            EXPIRADA,   EnumSet.noneOf(EstadoReserva.class)
     );
 
     public boolean puedeTransicionarA(EstadoReserva destino) {

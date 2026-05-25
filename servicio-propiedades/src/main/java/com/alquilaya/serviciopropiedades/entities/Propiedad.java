@@ -124,6 +124,10 @@ public class Propiedad {
     @Column(name = "vistas", nullable = false)
     private Long vistas = 0L;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @PrePersist
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();

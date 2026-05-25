@@ -33,8 +33,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(@NonNull MessageBrokerRegistry registry) {
-        // Simple broker in-memory — suficiente para una réplica. En múltiples réplicas,
-        // migrar a RabbitMQ/Redis STOMP relay (ver docs/arquitectura.md).
+        // Simple broker in-memory — suficiente para una réplica.
+        // TODO(deuda-técnica): para multi-instancia (escalado horizontal del servicio-mensajeria),
+        // migrar a un STOMP relay externo (RabbitMQ con plugin STOMP, o ActiveMQ).
+        // Redis Pub/Sub no es un STOMP broker completo — no resuelve user destinations
+        // ni preserva semántica de subscription IDs entre réplicas.
+        // Alternativa intermedia: sticky sessions en el LB + simple broker (limita escalado).
+        // Cambio fuera de alcance en este PR por riesgo alto (reescritura de auth/routing WS).
         registry.enableSimpleBroker("/topic", "/queue");
 
         // Mensajes del cliente al servidor llegan con este prefijo.

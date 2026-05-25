@@ -197,7 +197,7 @@ if (-not $SkipDocker) {
         exit 1
     }
 
-    $infra = @('postgres', 'mysql', 'zookeeper', 'kafka')
+    $infra = @('postgres', 'mysql', 'zookeeper', 'kafka', 'redis')
     if (-not $NoNgrok) { $infra += 'ngrok' }
 
     Push-Location $root

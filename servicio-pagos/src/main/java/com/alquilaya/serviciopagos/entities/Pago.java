@@ -9,7 +9,19 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "pagos")
+@Table(
+        name = "pagos",
+        indexes = {
+                @Index(name = "idx_pago_reserva", columnList = "reserva_id"),
+                @Index(name = "idx_pago_preferencia", columnList = "preferencia_id"),
+                @Index(name = "idx_pago_payment", columnList = "payment_id")
+        },
+        uniqueConstraints = {
+                // payment_id es NULLABLE; Postgres permite múltiples NULL en UNIQUE,
+                // así que esto NO rompe pagos PENDIENTES sin paymentId.
+                @UniqueConstraint(name = "uk_pago_payment_id", columnNames = "payment_id")
+        }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,16 +31,27 @@ public class Pago {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "reserva_id", nullable = false)
     private Long reservaId;
 
+    @Column(name = "preferencia_id")
     private String preferenciaId; // ID de Mercado Pago
-    private String paymentId;    // ID del pago final
+
+    @Column(name = "payment_id")
+    private String paymentId;    // ID del pago final (unique cuando no es null)
+
     private BigDecimal monto;
-    private String estado;      // PENDING, SUCCESS, FAILURE
-    
+    private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION
+
+    @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
+
+    @Column(name = "fecha_pago")
     private LocalDateTime fechaPago;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @PrePersist
     protected void onCreate() {

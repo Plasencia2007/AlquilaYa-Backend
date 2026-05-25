@@ -28,6 +28,11 @@ spring:
   kafka:
     template:
       default-topic: mensajeria-topic
+    consumer:
+      # Ola 2: consumer puro (reserva-events, pagos-topic, user-approval-events).
+      # Earliest para no perder eventos previos al arranque; idempotencia (processed_events)
+      # filtra duplicados en caso de reprocesamiento.
+      auto-offset-reset: earliest
 
 server:
   port: 8086

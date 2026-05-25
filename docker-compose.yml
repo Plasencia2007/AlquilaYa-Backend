@@ -60,6 +60,36 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: alquilaya-redis
+    restart: unless-stopped
+    # --requirepass: password obligatorio (sin esto el Redis quedaria abierto a la red de docker).
+    # --maxmemory + allkeys-lru: limita uso de RAM y aplica eviction LRU cuando se llena (cache-friendly).
+    # --appendonly yes: AOF habilitado para persistencia ante reinicios (perdida maxima ~1s con default).
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD no configurado en .env}"
+      - "--maxmemory"
+      - "512mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--appendonly"
+      - "yes"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      # Usamos -a con la password para que el PING autentique; si la auth falla, el healthcheck marca unhealthy.
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
   ngrok:
     image: ngrok/ngrok:3
     container_name: alquilaya-ngrok
@@ -73,6 +103,7 @@ services:
 volumes:
   postgres_data:
   mysql_data:
+  redis_data:
 
 networks:
   default:

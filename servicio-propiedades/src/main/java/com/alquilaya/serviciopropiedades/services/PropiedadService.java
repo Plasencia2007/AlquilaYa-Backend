@@ -131,8 +131,11 @@ public class PropiedadService {
                 .toList();
         if (ids.isEmpty()) return Collections.emptyMap();
 
+        boolean autenticado = hayUsuarioAutenticado();
         try {
-            List<ArrendadorInfoDTO> infos = usuariosClient.obtenerArrendadoresBulk(ids);
+            List<ArrendadorInfoDTO> infos = autenticado
+                    ? usuariosClient.obtenerArrendadoresBulk(ids)
+                    : usuariosClient.obtenerArrendadoresBulkPublico(ids);
             if (infos == null) return Collections.emptyMap();
             Map<Long, ArrendadorInfoDTO> map = new HashMap<>(infos.size());
             for (ArrendadorInfoDTO i : infos) {
@@ -140,14 +143,27 @@ public class PropiedadService {
                     map.put(i.getId(), i);
                 }
             }
-            log.debug("[BULK] Enriquecidos {}/{} arrendadores en una sola llamada Feign",
-                    map.size(), ids.size());
+            log.debug("[BULK] Enriquecidos {}/{} arrendadores en una sola llamada Feign ({})",
+                    map.size(), ids.size(), autenticado ? "privado" : "publico");
             return map;
         } catch (Exception e) {
-            log.warn("[BULK] No se pudo enriquecer arrendadores ({} ids): {}. Se devuelve listado sin enriquecer.",
-                    ids.size(), e.getMessage());
+            log.warn("[BULK] No se pudo enriquecer arrendadores ({} ids, {}): {}. Se devuelve listado sin enriquecer.",
+                    ids.size(), autenticado ? "privado" : "publico", e.getMessage());
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * Detecta si la request actual tiene un usuario autenticado.
+     * Si no hay JWT en el SecurityContext (visitante anónimo), el caller
+     * debe usar el endpoint público para evitar 403.
+     */
+    private boolean hayUsuarioAutenticado() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth != null
+                && auth.isAuthenticated()
+                && !(auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken);
     }
 
     @TimeLimiter(name = "obtenerArrendadorCB")

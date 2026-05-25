@@ -16,7 +16,18 @@
       "Read(//c/Users/jhons/AlquilaYa-Fronted/src/app/admin-master/**)",
       "Bash(npm install *)",
       "Bash(xargs head *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(./mvnw compile *)",
+      "Bash(./mvnw.cmd clean *)",
+      "Bash(mvn -pl servicio-propiedades -am compile -q)",
+      "PowerShell($out = & 'c:\\\\Users\\\\jhons\\\\AlquilaYa-Backend\\\\servicio-propiedades\\\\mvnw.cmd' -f 'c:\\\\Users\\\\jhons\\\\AlquilaYa-Backend\\\\servicio-propiedades\\\\pom.xml' clean compile -DskipTests 2>&1; $out | Select-Object -Last 80; \"EXIT=$LASTEXITCODE\")",
+      "Bash(./mvnw -q compile)",
+      "Write",
+      "Edit",
+      "Bash(mkdir:*)",
+      "Bash(./mvnw -DskipTests -q clean compile)",
+      "Bash(./mvnw -DfailIfNoTests=false -Dtest='OutboxSchedulerTest' test)",
+      "Bash(./mvnw -DfailIfNoTests=false -Dtest='ReservaEventConsumerTest' test)"
     ]
   }
 }

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -35,6 +36,8 @@ public class OtpService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final OtpVerificationRepository otpRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final OtpRateLimitService otpRateLimitService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${notification.service.url:http://localhost:8081}")
@@ -44,11 +47,16 @@ public class OtpService {
     private String notificationApiKey;
 
     public void generarYEnviarOtp(String telefono) {
+        // Antes de generar un nuevo OTP verificamos el lockout por brute force.
+        otpRateLimitService.verificarLockout(telefono);
+
         String codigo = String.format("%06d", RANDOM.nextInt(1_000_000));
 
         OtpVerification otp = OtpVerification.builder()
                 .telefono(telefono)
-                .codigo(codigo)
+                // Persistimos el HASH, no el código en claro. El código viaja
+                // solo al usuario por WhatsApp.
+                .codigo(passwordEncoder.encode(codigo))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(5))
                 .build();
         otpRepository.save(otp);
@@ -106,6 +114,9 @@ public class OtpService {
      * Lanza {@link IllegalArgumentException} (mapeada a 400) si se viola el límite.
      */
     public void reenviarOtp(String telefono) {
+        // También chequea lockout por brute force previo.
+        otpRateLimitService.verificarLockout(telefono);
+
         LocalDateTime ahora = LocalDateTime.now();
 
         // Cooldown: ¿hubo OTP en los últimos COOLDOWN_SEGUNDOS?
@@ -132,27 +143,40 @@ public class OtpService {
     public boolean verificarOtp(String telefono, String codigo) {
         String masked = LogMask.phone(telefono);
         log.debug("Verificando OTP para teléfono {}", masked);
+
+        // Rate limit Redis: bloquea brute force antes de tocar la BD.
+        otpRateLimitService.verificarLockout(telefono);
+
         return otpRepository.findFirstByTelefonoOrderByFechaCreacionDesc(telefono)
                 .map(otp -> {
                     if (otp.isExpirado()) {
                         log.warn("OTP expirado para {}", masked);
+                        // OTP expirado no es un intento de brute force, no incrementamos.
                         return false;
                     }
                     if (otp.isUtilizado()) {
                         log.warn("OTP ya utilizado para {}", masked);
                         return false;
                     }
-                    if (otp.getCodigo().equals(codigo)) {
+                    // Comparación BCrypt contra el hash persistido.
+                    if (passwordEncoder.matches(codigo, otp.getCodigo())) {
                         otp.setUtilizado(true);
                         otpRepository.save(otp);
                         log.info("OTP verificado para {}", masked);
+                        // Limpia contadores tras éxito.
+                        otpRateLimitService.limpiar(telefono);
                         return true;
                     }
                     log.warn("OTP incorrecto para {}", masked);
+                    // Sí cuenta como intento fallido — puede activar lockout (lanza 429).
+                    otpRateLimitService.registrarFallo(telefono);
                     return false;
                 })
                 .orElseGet(() -> {
                     log.warn("Sin registro de OTP para {}", masked);
+                    // Sin OTP previo: igual contamos como fallo para evitar
+                    // sondeo de números de teléfono.
+                    otpRateLimitService.registrarFallo(telefono);
                     return false;
                 });
     }

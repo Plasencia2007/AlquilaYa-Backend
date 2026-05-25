@@ -69,6 +69,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), req, null);
     }
 
+    @ExceptionHandler(com.alquilaya.servicio_mensajeria.services.RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimit(
+            com.alquilaya.servicio_mensajeria.services.RateLimitExceededException ex,
+            HttpServletRequest req) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), req, null);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(AccessDeniedException ex, HttpServletRequest req) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, null);

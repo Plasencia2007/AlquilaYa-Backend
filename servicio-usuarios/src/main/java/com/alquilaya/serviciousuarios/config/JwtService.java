@@ -104,6 +104,11 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    /** Versión pública de {@link #extractExpiration(String)}, usada por el logout. */
+    public Date getExpiration(String token) {
+        return extractExpiration(token);
+    }
+
     private Claims extractAllClaims(String token) {
         return Jwts
                 .parserBuilder()

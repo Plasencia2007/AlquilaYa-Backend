@@ -50,6 +50,33 @@ services:
     networks:
       - alquilaya-prod-network
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: alquilaya-redis
+    restart: unless-stopped
+    # En prod NO exponemos el puerto al host; solo accesible desde la red interna del compose.
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD}"
+      - "--maxmemory"
+      - "512mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--appendonly"
+      - "yes"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - alquilaya-prod-network
+
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: alquilaya-kafka
@@ -310,6 +337,7 @@ services:
 volumes:
   postgres_data:
   mysql_data:
+  redis_data:
   whatsapp_auth:
 
 networks:

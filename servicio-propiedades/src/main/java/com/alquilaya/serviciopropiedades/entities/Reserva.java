@@ -56,6 +56,10 @@ public class Reserva {
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @PrePersist
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();

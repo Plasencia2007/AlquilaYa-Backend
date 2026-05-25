@@ -10,6 +10,10 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const KafkaConsumer = require('./KafkaConsumer');
+const logger = require('./src/lib/logger');
+const {
+    recordAudit, getAudit, getLastSuccess, pingWithTimeout, isConnected: isRedisConnected,
+} = require('./src/lib/redisClient');
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 8081;
@@ -18,7 +22,7 @@ const port = process.env.PORT ? Number(process.env.PORT) : 8081;
 // si falta, el servicio arranca pero rechaza todo request autenticado.
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 if (!INTERNAL_API_KEY) {
-    console.warn('⚠️  INTERNAL_API_KEY no configurado. Los endpoints de envío rechazarán todas las llamadas.');
+    logger.warn('INTERNAL_API_KEY no configurado. Los endpoints de envio rechazaran todas las llamadas.');
 }
 
 // Formato E.164 Perú: +51 + 9 dígitos.
@@ -60,6 +64,16 @@ function normalizarTelefono(raw) {
     return String(raw).replace(/\s+/g, '').replace(/^\+/, '');
 }
 
+// Estado en memoria para /health.
+let isReady = false;
+let lastSuccessAt = null;
+let kafkaConnected = false;
+let kafkaConsumerRef = null;
+
+function markSuccess() {
+    lastSuccessAt = new Date().toISOString();
+}
+
 // WhatsApp Client
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -69,39 +83,36 @@ const client = new Client({
     }
 });
 
-let isReady = false;
-
 client.on('qr', (qr) => {
-    console.log('\n==================================================================');
-    console.log('ESCANEAME PARA VINCULAR ALQUILAYA WHATSAPP:');
-    console.log('==================================================================\n');
+    logger.info('Escanea el QR para vincular AlquilaYa WhatsApp');
     qrcode.generate(qr, { small: true });
-    console.log('\n==================================================================\n');
 });
 
 client.on('ready', async () => {
-    console.log('WhatsApp Client is READY!');
+    logger.info('WhatsApp Client READY');
     isReady = true;
 
-    const kafkaConsumer = new KafkaConsumer(client);
+    kafkaConsumerRef = new KafkaConsumer(client, {
+        onStateChange: (connected) => { kafkaConnected = connected; },
+    });
     try {
-        await kafkaConsumer.start();
-        console.log('Kafka Consumer started successfully');
+        await kafkaConsumerRef.start();
+        logger.info('Kafka Consumer started successfully');
     } catch (err) {
-        console.error('Error starting Kafka Consumer:', err.message);
+        logger.error('Error starting Kafka Consumer', { error: err && err.message });
     }
 });
 
 client.on('authenticated', () => {
-    console.log('WhatsApp Authenticated!');
+    logger.info('WhatsApp Authenticated');
 });
 
 client.on('auth_failure', (msg) => {
-    console.error('AUTHENTICATION FAILURE', msg);
+    logger.error('WhatsApp AUTHENTICATION FAILURE', { message: msg });
 });
 
 client.on('disconnected', (reason) => {
-    console.log('WhatsApp Client was logged out', reason);
+    logger.warn('WhatsApp Client logged out', { reason });
     isReady = false;
     client.initialize();
 });
@@ -123,13 +134,13 @@ app.post('/api/v1/notifications/whatsapp/send-otp', sendLimiter, requireApiKey, 
         return res.status(400).json({ error: 'Código inválido (4 a 6 dígitos)' });
     }
 
+    const numeroLimpio = normalizarTelefono(telefono);
+    const maskedPhone = String(telefono).replace(/\d(?=\d{4})/g, '*');
     try {
-        const numeroLimpio = normalizarTelefono(telefono);
-        // Verificar que el numero tenga WhatsApp ANTES de intentar enviar.
-        // getNumberId devuelve null si no esta registrado en WhatsApp.
         const numberId = await client.getNumberId(numeroLimpio);
         if (!numberId) {
-            console.warn(`Numero sin WhatsApp: ${numeroLimpio}`);
+            logger.warn('Numero sin WhatsApp', { phone: maskedPhone, eventType: 'OTP' });
+            await recordAudit(numeroLimpio, { event: 'OTP', success: false, errorIfAny: 'No WhatsApp account' });
             return res.status(400).json({
                 error: 'Este número no tiene WhatsApp activo. Verifica el número o usa otro con WhatsApp.'
             });
@@ -137,10 +148,13 @@ app.post('/api/v1/notifications/whatsapp/send-otp', sendLimiter, requireApiKey, 
 
         const message = `*AlquilaYa* 🏠\n\nTu código de verificación es: *${codigo}*\n\nNo compartas este código con nadie. Expira en 5 minutos.`;
         await client.sendMessage(numberId._serialized, message);
-        console.log('OTP enviado');
+        logger.info('OTP enviado', { phone: maskedPhone, eventType: 'OTP' });
+        markSuccess();
+        await recordAudit(numeroLimpio, { event: 'OTP', success: true });
         res.json({ success: true });
     } catch (error) {
-        console.error('Error sending WhatsApp OTP:', error && error.message);
+        logger.error('Error sending WhatsApp OTP', { phone: maskedPhone, error: error && error.message });
+        await recordAudit(numeroLimpio, { event: 'OTP', success: false, errorIfAny: error && error.message });
         res.status(500).json({ error: 'Failed to send WhatsApp message' });
     }
 });
@@ -158,26 +172,90 @@ app.post('/api/v1/notifications/whatsapp/send-message', sendLimiter, requireApiK
         return res.status(400).json({ error: 'Mensaje inválido (1–4096 caracteres)' });
     }
 
+    const numeroLimpio = normalizarTelefono(telefono);
+    const maskedPhone = String(telefono).replace(/\d(?=\d{4})/g, '*');
     try {
-        const numeroLimpio = normalizarTelefono(telefono);
         const numberId = await client.getNumberId(numeroLimpio);
         if (!numberId) {
-            console.warn(`Numero sin WhatsApp: ${numeroLimpio}`);
+            logger.warn('Numero sin WhatsApp', { phone: maskedPhone, eventType: 'MESSAGE' });
+            await recordAudit(numeroLimpio, { event: 'MESSAGE', success: false, errorIfAny: 'No WhatsApp account' });
             return res.status(400).json({ error: 'El número destino no tiene WhatsApp activo' });
         }
         await client.sendMessage(numberId._serialized, mensaje);
+        logger.info('Mensaje WhatsApp enviado', { phone: maskedPhone, eventType: 'MESSAGE' });
+        markSuccess();
+        await recordAudit(numeroLimpio, { event: 'MESSAGE', success: true });
         res.json({ success: true });
     } catch (error) {
-        console.error('Error sending WhatsApp message:', error && error.message);
+        logger.error('Error sending WhatsApp message', { phone: maskedPhone, error: error && error.message });
+        await recordAudit(numeroLimpio, { event: 'MESSAGE', success: false, errorIfAny: error && error.message });
         res.status(500).json({ error: 'Failed to send WhatsApp message' });
     }
 });
 
-// Status: público (usado como healthcheck por otros servicios).
+// Status: público (usado como healthcheck por otros servicios). Retro-compatible.
 app.get('/api/v1/notifications/status', (req, res) => {
     res.json({ ready: isReady });
 });
 
-app.listen(port, () => {
-    console.log(`Notification Service running on port ${port}`);
+// Audit trail: ultimos eventos por telefono. Protegido por x-api-key.
+app.get('/api/v1/notifications/audit/:phone', requireApiKey, async (req, res) => {
+    const rawPhone = req.params.phone || '';
+    if (!PHONE_REGEX.test(rawPhone)) {
+        return res.status(400).json({ error: 'Teléfono inválido (formato esperado +51XXXXXXXXX)' });
+    }
+    const phoneKey = normalizarTelefono(rawPhone);
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    try {
+        const events = await getAudit(phoneKey, limit);
+        res.json({ phone: phoneKey, count: events.length, events });
+    } catch (err) {
+        logger.error('Error leyendo audit', { error: err && err.message });
+        res.status(500).json({ error: 'No se pudo obtener el audit trail' });
+    }
 });
+
+// Healthcheck enriquecido. 200 si OK, 503 si critico (whatsapp o kafka caidos).
+app.get('/health', async (req, res) => {
+    const [redisOk, lastSuccessRedis] = await Promise.all([
+        pingWithTimeout(1000),
+        getLastSuccess(),
+    ]);
+
+    const effectiveLastSuccess = lastSuccessAt
+        || (lastSuccessRedis && lastSuccessRedis.timestamp)
+        || null;
+
+    const body = {
+        ready: isReady, // mantenemos campo legacy
+        whatsapp: {
+            connected: isReady,
+            lastSuccessAt: effectiveLastSuccess,
+        },
+        kafka: {
+            connected: !!kafkaConnected,
+        },
+        redis: {
+            connected: redisOk && isRedisConnected(),
+        },
+        timestamp: new Date().toISOString(),
+    };
+
+    const critical = body.whatsapp.connected && body.kafka.connected;
+    res.status(critical ? 200 : 503).json(body);
+});
+
+const server = app.listen(port, () => {
+    logger.info('Notification Service running', { port });
+});
+
+// Graceful shutdown
+async function shutdown(signal) {
+    logger.info('Shutting down', { signal });
+    server.close(() => {});
+    try { if (kafkaConsumerRef) await kafkaConsumerRef.stop(); } catch { /* noop */ }
+    try { await client.destroy(); } catch { /* noop */ }
+    process.exit(0);
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

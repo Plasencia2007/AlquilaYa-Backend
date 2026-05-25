@@ -135,6 +135,14 @@ public class GlobalExceptionHandler {
                 "Demasiadas solicitudes concurrentes hacia el servicio dependiente. Reintenta en breve.", req, null);
     }
 
+    @ExceptionHandler(com.alquilaya.serviciousuarios.services.OtpRateLimitService.OtpLockoutException.class)
+    public ResponseEntity<ErrorResponse> handleOtpLockout(
+            com.alquilaya.serviciousuarios.services.OtpRateLimitService.OtpLockoutException ex,
+            HttpServletRequest req) {
+        log.warn("Lockout OTP: {}", ex.getMessage());
+        return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), req, null);
+    }
+
     @ExceptionHandler(java.util.concurrent.TimeoutException.class)
     public ResponseEntity<ErrorResponse> handleTimeout(java.util.concurrent.TimeoutException ex, HttpServletRequest req) {
         log.warn("Timeout llamando a servicio dependiente: {}", ex.getMessage());

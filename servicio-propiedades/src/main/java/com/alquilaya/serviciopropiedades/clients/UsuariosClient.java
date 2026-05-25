@@ -23,7 +23,16 @@ public interface UsuariosClient {
     /**
      * Bulk de arrendadores para enriquecer listados de propiedades (card premium).
      * Una sola llamada por página → evita N+1 sobre 20 items.
+     * Requiere JWT del caller (lo propaga FeignConfig).
      */
     @PostMapping("/api/v1/usuarios/arrendadores/bulk")
     List<ArrendadorInfoDTO> obtenerArrendadoresBulk(@RequestBody List<Long> ids);
+
+    /**
+     * Variante PÚBLICA del bulk: no requiere JWT. Devuelve los mismos campos
+     * pero con correo/telefono en null (PII excluida en el servidor).
+     * Usar cuando el caller original es anónimo (no hay JWT en el SecurityContext).
+     */
+    @PostMapping("/api/v1/usuarios/arrendadores/bulk-publico")
+    List<ArrendadorInfoDTO> obtenerArrendadoresBulkPublico(@RequestBody List<Long> ids);
 }

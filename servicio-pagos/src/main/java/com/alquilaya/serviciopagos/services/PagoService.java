@@ -4,6 +4,7 @@ import com.alquilaya.serviciopagos.clients.ReservasClient;
 import com.alquilaya.serviciopagos.dto.ReservaDetalleDTO;
 import com.alquilaya.serviciopagos.entities.Pago;
 import com.alquilaya.serviciopagos.exceptions.WebhookInvalidoException;
+import com.alquilaya.serviciopagos.outbox.publisher.OutboxPublisher;
 import com.alquilaya.serviciopagos.repositories.PagoRepository;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.client.preference.PreferenceBackUrlsRequest;
@@ -19,33 +20,50 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PagoService {
 
     private final PagoRepository pagoRepository;
     private final ReservasClient reservasClient;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxPublisher outboxPublisher;
+    /** Opcional: si Redis está down/no configurado, hacemos fallback graceful. */
+    private final StringRedisTemplate redisTemplate;
+
+    public PagoService(PagoRepository pagoRepository,
+                       ReservasClient reservasClient,
+                       OutboxPublisher outboxPublisher,
+                       @Autowired(required = false) StringRedisTemplate redisTemplate) {
+        this.pagoRepository = pagoRepository;
+        this.reservasClient = reservasClient;
+        this.outboxPublisher = outboxPublisher;
+        this.redisTemplate = redisTemplate;
+    }
 
     @Value("${mercadopago.back-urls.success}")
     private String urlSuccess;
@@ -61,6 +79,13 @@ public class PagoService {
 
     @Value("${mercadopago.webhook-secret:}")
     private String webhookSecret;
+
+    /** Si true, la firma HMAC del webhook es OBLIGATORIA. Default true (prod). */
+    @Value("${mercadopago.webhook.required-signature:true}")
+    private boolean webhookSignatureRequired;
+
+    private static final String REDIS_LOCK_PREFIX = "pagos:webhook:lock:";
+    private static final Duration REDIS_LOCK_TTL = Duration.ofSeconds(30);
 
     @TimeLimiter(name = "obtenerReservaCB")
     @CircuitBreaker(name = "obtenerReservaCB", fallbackMethod = "fallbackObtenerReserva")
@@ -120,11 +145,11 @@ public class PagoService {
             }
 
             ReservaDetalleDTO reserva = obtenerReservaResiliente(reservaId).join();
-            
+
             // Validar campos críticos para Mercado Pago
-            String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty()) 
+            String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty())
                     ? reserva.getEstudianteNombre() : "Estudiante AlquilaYa";
-            String emailPagador = (reserva.getEstudianteCorreo() != null && !reserva.getEstudianteCorreo().isEmpty()) 
+            String emailPagador = (reserva.getEstudianteCorreo() != null && !reserva.getEstudianteCorreo().isEmpty())
                     ? reserva.getEstudianteCorreo() : "estudiante@test.com";
 
             PreferenceItemRequest itemRequest = PreferenceItemRequest.builder()
@@ -174,10 +199,8 @@ public class PagoService {
             return preference.getInitPoint();
 
         } catch (IllegalStateException | CallNotPermittedException | BulkheadFullException e) {
-            // Excepciones de Resilience4j: que las maneje GlobalExceptionHandler
             throw e;
         } catch (java.util.concurrent.CompletionException e) {
-            // CompletableFuture.join() envuelve excepciones; desempaquetar para que el handler las atrape
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             if (cause instanceof IllegalStateException ise) throw ise;
             if (cause instanceof CallNotPermittedException cne) throw cne;
@@ -193,6 +216,7 @@ public class PagoService {
         }
     }
 
+    @Transactional
     public void procesarWebhook(String xSignature, String xRequestId, String dataIdQuery,
                                 Map<String, Object> notification) {
         String type = (String) notification.get("type");
@@ -208,41 +232,74 @@ public class PagoService {
         }
         String paymentIdStr = data.get("id").toString();
 
-        // 1. Validar firma HMAC (si hay secret configurado)
+        // 1. Validar firma HMAC (obligatoria en prod).
         verificarFirma(xSignature, xRequestId, dataIdQuery != null ? dataIdQuery : paymentIdStr);
 
-        // 2. Idempotencia: si ya procesamos este paymentId, salir silenciosamente.
-        if (pagoRepository.findByPaymentId(paymentIdStr).isPresent()) {
-            log.info("↩️ Webhook duplicado ignorado. paymentId={}", paymentIdStr);
+        // 2. Lock distribuido en Redis para idempotencia atómica.
+        //    Si otro proceso ya tiene el lock o el pago ya fue procesado → salir 200 OK.
+        String lockKey = REDIS_LOCK_PREFIX + paymentIdStr;
+        String lockValue = UUID.randomUUID().toString();
+        boolean lockAcquired = adquirirLockRedis(lockKey, lockValue);
+        boolean redisDisponible = (lockAcquired || redisTemplate != null);
+
+        if (redisTemplate != null && !lockAcquired) {
+            // Lock detentado por otro proceso → idempotente, no procesamos.
+            log.info("🔒 Webhook concurrente detectado para paymentId={} (lock no adquirido). Ignorando.", paymentIdStr);
             return;
         }
 
-        // 3. Consultar el pago real contra la API de Mercado Pago (source of truth).
-        Payment payment;
         try {
-            payment = new PaymentClient().get(Long.parseLong(paymentIdStr));
-        } catch (Exception e) {
-            log.error("No se pudo consultar el Payment {} en Mercado Pago: {}", paymentIdStr, e.getMessage());
-            throw new WebhookInvalidoException("No se pudo verificar el pago con Mercado Pago");
+            // Fallback graceful o doble-check post-lock: si el pago ya está procesado, salir.
+            if (pagoRepository.findByPaymentId(paymentIdStr).isPresent()) {
+                log.info("↩️ Webhook duplicado ignorado. paymentId={}", paymentIdStr);
+                return;
+            }
+
+            // 3. Consultar el pago real contra la API de Mercado Pago (source of truth).
+            Payment payment;
+            try {
+                payment = new PaymentClient().get(Long.parseLong(paymentIdStr));
+            } catch (Exception e) {
+                log.error("No se pudo consultar el Payment {} en Mercado Pago: {}", paymentIdStr, e.getMessage());
+                throw new WebhookInvalidoException("No se pudo verificar el pago con Mercado Pago");
+            }
+
+            String status = payment.getStatus();
+            String reservaIdStr = payment.getExternalReference();
+            if (reservaIdStr == null) {
+                throw new WebhookInvalidoException("Payment sin externalReference");
+            }
+            Long reservaId = Long.parseLong(reservaIdStr);
+
+            Pago pagoPendiente = pagoRepository
+                    .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
+                    .orElseThrow(() -> new WebhookInvalidoException(
+                            "No existe pago PENDIENTE para la reserva " + reservaId));
+
+            switch (status == null ? "" : status) {
+                case "approved" -> manejarAprobado(pagoPendiente, payment, paymentIdStr, reservaId, reservaIdStr);
+                case "rejected" -> manejarRechazado(pagoPendiente, paymentIdStr, reservaId, reservaIdStr);
+                case "pending", "in_process", "in_mediation" ->
+                        manejarPendiente(pagoPendiente, paymentIdStr, reservaId, status);
+                default -> log.info(
+                        "Pago con estado no manejado (status={}), se ignora. paymentId={}", status, paymentIdStr);
+            }
+
+        } finally {
+            // 4. Liberar lock (solo si lo adquirimos).
+            if (lockAcquired) {
+                liberarLockRedis(lockKey, lockValue);
+            }
+            // Suprimir warning de variable no usada (mantener intención del check redisDisponible)
+            if (!redisDisponible) {
+                log.trace("Redis no disponible en este flujo");
+            }
         }
+    }
 
-        if (!"approved".equals(payment.getStatus())) {
-            log.info("Pago no aprobado (status={}), se ignora. paymentId={}", payment.getStatus(), paymentIdStr);
-            return;
-        }
-
-        String reservaIdStr = payment.getExternalReference();
-        if (reservaIdStr == null) {
-            throw new WebhookInvalidoException("Payment sin externalReference");
-        }
-        Long reservaId = Long.parseLong(reservaIdStr);
-
-        Pago pagoPendiente = pagoRepository
-                .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
-                .orElseThrow(() -> new WebhookInvalidoException(
-                        "No existe pago PENDIENTE para la reserva " + reservaId));
-
-        // 4. Validar que el monto pagado coincide con el esperado (tolerancia de 0.01 PEN por redondeo).
+    private void manejarAprobado(Pago pagoPendiente, Payment payment, String paymentIdStr,
+                                 Long reservaId, String reservaIdStr) {
+        // Validar que el monto pagado coincide con el esperado (tolerancia de 0.01 PEN).
         BigDecimal montoEsperado = pagoPendiente.getMonto();
         BigDecimal montoReal = payment.getTransactionAmount() != null
                 ? BigDecimal.valueOf(payment.getTransactionAmount().doubleValue())
@@ -259,22 +316,125 @@ public class PagoService {
         pagoPendiente.setEstado("PAGADO");
         pagoPendiente.setPaymentId(paymentIdStr);
         pagoPendiente.setFechaPago(LocalDateTime.now());
-        pagoRepository.save(pagoPendiente);
+        Pago guardado = pagoRepository.save(pagoPendiente);
 
         log.info("💰 Pago confirmado. reservaId={} paymentId={} monto={}",
                 reservaId, paymentIdStr, montoReal);
-        kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaIdStr);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pagoId", guardado.getId());
+        payload.put("reservaId", reservaId);
+        payload.put("monto", guardado.getMonto());
+        payload.put("moneda", "PEN");
+        payload.put("paymentId", paymentIdStr);
+        payload.put("fechaPago", guardado.getFechaPago() != null
+                ? guardado.getFechaPago().toInstant(ZoneOffset.UTC).toString()
+                : null);
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "PAGO_EXITOSO",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    private void manejarRechazado(Pago pagoPendiente, String paymentIdStr,
+                                  Long reservaId, String reservaIdStr) {
+        pagoPendiente.setEstado("RECHAZADO");
+        pagoPendiente.setPaymentId(paymentIdStr);
+        pagoPendiente.setFechaPago(LocalDateTime.now());
+        Pago guardado = pagoRepository.save(pagoPendiente);
+        log.warn("❌ Pago RECHAZADO. reservaId={} paymentId={}", reservaId, paymentIdStr);
+        // Emitir evento para que propiedades libere el slot. NO enviamos PAGO_EXITOSO.
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pagoId", guardado.getId());
+        payload.put("reservaId", reservaId);
+        payload.put("monto", guardado.getMonto());
+        payload.put("moneda", "PEN");
+        payload.put("paymentId", paymentIdStr);
+        payload.put("motivo", "REJECTED_BY_MP");
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "PAGO_FALLIDO",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    private void manejarPendiente(Pago pagoPendiente, String paymentIdStr,
+                                  Long reservaId, String status) {
+        pagoPendiente.setEstado("PENDIENTE_REVISION");
+        pagoPendiente.setPaymentId(paymentIdStr);
+        Pago guardado = pagoRepository.save(pagoPendiente);
+        log.info("⏳ Pago en estado pendiente de revisión ({}). reservaId={} paymentId={}",
+                status, reservaId, paymentIdStr);
+        // Ola 2: emitir PAGO_EN_REVISION para que mensajería notifique al estudiante.
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pagoId", guardado.getId());
+        payload.put("reservaId", reservaId);
+        payload.put("estadoMp", status);
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "PAGO_EN_REVISION",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    /**
+     * Intenta adquirir un lock con SET NX EX en Redis.
+     * Retorna true si el lock fue adquirido por nosotros.
+     * Si Redis no está disponible, retorna false y deja que el flujo continúe
+     * con el check no-atómico tradicional (graceful degradation).
+     */
+    private boolean adquirirLockRedis(String key, String value) {
+        if (redisTemplate == null) {
+            log.warn("⚠️ Redis no configurado: idempotencia degradada al check de BD (no atómico).");
+            return false;
+        }
+        try {
+            Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, value, REDIS_LOCK_TTL);
+            return Boolean.TRUE.equals(ok);
+        } catch (Exception e) {
+            log.warn("⚠️ Redis no disponible al adquirir lock '{}': {}. Fallback a check de BD.",
+                    key, e.getMessage());
+            return false;
+        }
+    }
+
+    private void liberarLockRedis(String key, String expectedValue) {
+        if (redisTemplate == null) return;
+        try {
+            // Borra solo si el valor coincide (evita borrar lock de otro proceso si nos pasamos del TTL).
+            String current = redisTemplate.opsForValue().get(key);
+            if (expectedValue.equals(current)) {
+                redisTemplate.delete(key);
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Error liberando lock Redis '{}': {}", key, e.getMessage());
+        }
     }
 
     /**
      * Verifica la firma HMAC-SHA256 del webhook según el formato de Mercado Pago.
      * Header "x-signature" tiene forma "ts=<epoch>,v1=<sha256hex>". El manifest es:
      *   id:{data.id};request-id:{x-request-id};ts:{ts};
-     * Si no hay secret configurado, se omite la validación (solo para desarrollo).
+     *
+     * Comportamiento según {@code mercadopago.webhook.required-signature}:
+     *  - true  (default/prod): si el secret está vacío o la firma no matchea → 4xx.
+     *  - false (dev/local):   si el secret está vacío, se omite (warning).
      */
     private void verificarFirma(String xSignature, String xRequestId, String dataId) {
         if (webhookSecret == null || webhookSecret.isBlank()) {
-            log.warn("⚠️ MP_WEBHOOK_SECRET vacío: firma del webhook NO validada (OK en dev, NO en prod)");
+            if (webhookSignatureRequired) {
+                log.error("MP_WEBHOOK_SECRET vacío y la firma es OBLIGATORIA. Rechazando webhook.");
+                throw new WebhookInvalidoException(
+                        "Firma de webhook obligatoria pero secret no configurado");
+            }
+            log.warn("⚠️ MP_WEBHOOK_SECRET vacío: firma NO validada (perfil dev/local).");
             return;
         }
         if (xSignature == null || xSignature.isBlank()) {
@@ -317,17 +477,40 @@ public class PagoService {
         return result == 0;
     }
 
+    @Transactional
     public void simularPagoExitoso(Long reservaId) {
         log.info("🧪 SIMULACIÓN: Disparando pago exitoso para Reserva ID: {}", reservaId);
 
-        pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE").ifPresent(p -> {
-            p.setEstado("PAGADO");
-            p.setPaymentId("SIM-123456");
-            p.setFechaPago(LocalDateTime.now());
-            pagoRepository.save(p);
-        });
+        Pago guardado = pagoRepository.findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
+                .map(p -> {
+                    p.setEstado("PAGADO");
+                    p.setPaymentId("SIM-" + reservaId + "-" + System.currentTimeMillis());
+                    p.setFechaPago(LocalDateTime.now());
+                    return pagoRepository.save(p);
+                })
+                .orElse(null);
 
-        kafkaTemplate.send("pagos-topic", "PAGO_EXITOSO:" + reservaId);
-        log.info("✅ Evento PAGO_EXITOSO enviado a Kafka para Reserva ID: {}", reservaId);
+        if (guardado == null) {
+            log.warn("simularPagoExitoso: no se encontró pago PENDIENTE para reservaId={}", reservaId);
+            return;
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pagoId", guardado.getId());
+        payload.put("reservaId", reservaId);
+        payload.put("monto", guardado.getMonto());
+        payload.put("moneda", "PEN");
+        payload.put("paymentId", guardado.getPaymentId());
+        payload.put("fechaPago", guardado.getFechaPago() != null
+                ? guardado.getFechaPago().toInstant(ZoneOffset.UTC).toString()
+                : null);
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "PAGO_EXITOSO",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+        log.info("✅ Evento PAGO_EXITOSO encolado en outbox para Reserva ID: {}", reservaId);
     }
 }

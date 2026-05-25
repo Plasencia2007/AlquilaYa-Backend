@@ -1,6 +1,12 @@
 spring:
   application:
     name: servicio-pagos
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      connect-timeout: 2000ms
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_PAGOS:alquilaya_pagos}
     username: ${POSTGRES_USER:postgres}
@@ -30,6 +36,11 @@ mercadopago:
   access-token: ${MP_ACCESS_TOKEN:APP_USR-7136516795802077-042223-488b9c01408d8fa97435b78322f9b606-3353029523}
   public-key: ${MP_PUBLIC_KEY:APP_USR-685a7b24-b7fd-4f99-b76a-278df847f1d2}
   webhook-secret: ${MP_WEBHOOK_SECRET:}
+  webhook:
+    # En producción la firma HMAC del webhook es OBLIGATORIA.
+    # Si el secret está vacío o la firma no coincide → 401/403 y NO se procesa.
+    # Solo se relaja en perfiles dev/local (ver bloques --- abajo).
+    required-signature: ${MP_WEBHOOK_REQUIRED_SIGNATURE:true}
   back-urls:
     success: ${MP_BACK_URL_SUCCESS:http://localhost:3000/pago/exito}
     failure: ${MP_BACK_URL_FAILURE:http://localhost:3000/pago/fallo}
@@ -125,3 +136,22 @@ resilience4j:
         limitForPeriod: 10
         limitRefreshPeriod: 1s
         timeoutDuration: 5s
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+mercadopago:
+  webhook:
+    required-signature: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+mercadopago:
+  webhook:
+    required-signature: false
+

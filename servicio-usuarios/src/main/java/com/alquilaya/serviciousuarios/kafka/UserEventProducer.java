@@ -1,36 +1,68 @@
 package com.alquilaya.serviciousuarios.kafka;
 
+import com.alquilaya.serviciousuarios.outbox.publisher.OutboxPublisher;
 import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Productor de eventos del agregado {@code Usuario}.
+ *
+ * <p>Tras Ola 2, ninguno de estos métodos llama directamente a Kafka: persisten
+ * en la tabla {@code outbox_events} dentro de la transacción del caller y el
+ * {@code OutboxScheduler} drena hacia Kafka. Las firmas públicas se mantienen
+ * para no romper callers existentes.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class UserEventProducer {
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private static final String TOPIC = "user-approval-events";
+    private static final String TOPIC_APPROVAL = "user-approval-events";
     private static final String TOPIC_SECURITY = "user-security-events";
 
-    public void emitirEventoAprobacion(Long usuarioId, String correo, String nombre, String telefono) {
-        String mensaje = String.format(
-                "{\"tipo\":\"APROBACION\", \"usuarioId\":%d, \"correo\":\"%s\", \"nombre\":\"%s\", \"telefono\":\"%s\"}",
-                usuarioId, correo, nombre, telefono);
+    private static final String AGGREGATE_USUARIO = "Usuario";
 
-        log.info("📤 Emitiendo evento de aprobación para usuario {} ({})", usuarioId, LogMask.email(correo));
-        kafkaTemplate.send(TOPIC, mensaje);
+    private final OutboxPublisher outboxPublisher;
+
+    public void emitirEventoAprobacion(Long usuarioId, String correo, String nombre, String telefono) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("usuarioId", usuarioId);
+        payload.put("correo", correo);
+        payload.put("nombre", nombre);
+        payload.put("telefono", telefono);
+
+        log.info("📤 Persistiendo en outbox USER_APROBADO usuario={} ({})", usuarioId, LogMask.email(correo));
+        outboxPublisher.publicar(
+                TOPIC_APPROVAL,
+                "USER_APROBADO",
+                AGGREGATE_USUARIO,
+                String.valueOf(usuarioId),
+                payload,
+                MDC.get("correlationId"));
     }
 
     public void emitirEventoRechazo(Long usuarioId, String correo, String nombre, String telefono, String motivo) {
-        String mensaje = String.format(
-                "{\"tipo\":\"RECHAZO\", \"usuarioId\":%d, \"correo\":\"%s\", \"nombre\":\"%s\", \"telefono\":\"%s\", \"motivo\":\"%s\"}",
-                usuarioId, correo, nombre, telefono, motivo);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("usuarioId", usuarioId);
+        payload.put("correo", correo);
+        payload.put("nombre", nombre);
+        payload.put("telefono", telefono);
+        payload.put("motivo", motivo);
 
-        log.info("📤 Emitiendo evento de rechazo para usuario {} ({})", usuarioId, LogMask.email(correo));
-        kafkaTemplate.send(TOPIC, mensaje);
+        log.info("📤 Persistiendo en outbox USER_RECHAZADO usuario={} ({})", usuarioId, LogMask.email(correo));
+        outboxPublisher.publicar(
+                TOPIC_APPROVAL,
+                "USER_RECHAZADO",
+                AGGREGATE_USUARIO,
+                String.valueOf(usuarioId),
+                payload,
+                MDC.get("correlationId"));
     }
 
     /**
@@ -38,14 +70,20 @@ public class UserEventProducer {
      * fallidos de login. Consume servicio-mensajeria → notif WhatsApp/in-app.
      */
     public void emitirAlertaIntentosFallidos(Long usuarioId, String correo, String telefono, String ip) {
-        String mensaje = String.format(
-                "{\"tipo\":\"INTENTOS_FALLIDOS\", \"usuarioId\":%d, \"correo\":\"%s\", \"telefono\":\"%s\", \"ip\":\"%s\"}",
-                usuarioId == null ? 0L : usuarioId,
-                correo == null ? "" : correo,
-                telefono == null ? "" : telefono,
-                ip == null ? "" : ip);
+        Long idSafe = usuarioId == null ? 0L : usuarioId;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("usuarioId", idSafe);
+        payload.put("correo", correo == null ? "" : correo);
+        payload.put("telefono", telefono == null ? "" : telefono);
+        payload.put("ip", ip == null ? "" : ip);
 
-        log.info("📤 Emitiendo alerta intentos fallidos para {} (ip={})", LogMask.email(correo), ip);
-        kafkaTemplate.send(TOPIC_SECURITY, mensaje);
+        log.info("📤 Persistiendo en outbox USER_INTENTOS_FALLIDOS {} (ip={})", LogMask.email(correo), ip);
+        outboxPublisher.publicar(
+                TOPIC_SECURITY,
+                "USER_INTENTOS_FALLIDOS",
+                AGGREGATE_USUARIO,
+                String.valueOf(idSafe),
+                payload,
+                MDC.get("correlationId"));
     }
 }

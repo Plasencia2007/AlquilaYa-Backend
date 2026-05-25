@@ -30,4 +30,11 @@ public class UsuariosClientFallback implements UsuariosClient {
                 ids == null ? 0 : ids.size());
         return Collections.emptyList();
     }
+
+    @Override
+    public List<ArrendadorInfoDTO> obtenerArrendadoresBulkPublico(List<Long> ids) {
+        log.warn("[FEIGN FALLBACK] servicio-usuarios no disponible. No se puede obtener arrendadores bulk-publico (n={})",
+                ids == null ? 0 : ids.size());
+        return Collections.emptyList();
+    }
 }

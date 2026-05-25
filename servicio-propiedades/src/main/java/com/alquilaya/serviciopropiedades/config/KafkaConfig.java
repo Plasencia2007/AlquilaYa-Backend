@@ -23,4 +23,17 @@ public class KafkaConfig {
                 .replicas(1)
                 .build();
     }
+
+    /**
+     * Dead-letter queue para eventos del topic `pagos-topic` que fallen al
+     * procesarse en {@code PagoEventListener}. Los mensajes se publican con
+     * headers original-topic, error-message y failure-timestamp.
+     */
+    @Bean
+    public NewTopic pagosDlqTopic() {
+        return TopicBuilder.name("pagos-topic-dlq")
+                .partitions(1)
+                .replicas(1)
+                .build();
+    }
 }
