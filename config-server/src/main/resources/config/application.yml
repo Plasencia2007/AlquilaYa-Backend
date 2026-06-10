@@ -48,6 +48,12 @@ spring:
     listener:
       # commit por cada record procesado en el consumer (combinado con @Transactional + IdempotencyService)
       ack-mode: RECORD
+      # Trazabilidad distribuida: crea spans en el consumo de mensajes y propaga el traceId
+      # (combinado con micrometer-tracing). Permite seguir un evento Kafka entre servicios.
+      observation-enabled: true
+    template:
+      # Propaga el traceId al publicar mensajes (lado productor).
+      observation-enabled: true
 
 server:
   # Permite completar requests en vuelo durante shutdown antes de cerrar el contexto.
@@ -68,3 +74,13 @@ management:
       enabled: true
     ratelimiters:
       enabled: true
+  # ---- Trazabilidad distribuida (Micrometer Tracing + Zipkin) ----
+  tracing:
+    sampling:
+      # Dev: traza el 100% de las peticiones. En produccion bajar (p.ej. 0.1).
+      probability: ${TRACING_SAMPLING:1.0}
+  zipkin:
+    tracing:
+      # Exporta los spans al servidor Zipkin (docker-compose). Si Zipkin no corre,
+      # el traceId/spanId sigue apareciendo en los logs igual.
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}

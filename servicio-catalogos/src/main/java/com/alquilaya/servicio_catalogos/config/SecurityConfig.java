@@ -24,6 +24,8 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Documentacion Swagger / OpenAPI: acceso libre
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .requestMatchers("/api/v1/catalogos/filtros/activos").permitAll()
                         .requestMatchers("/api/v1/catalogos/filtros/tipo/**").permitAll()
                         .requestMatchers("/api/v1/catalogos/admin/**").hasRole("ADMIN")

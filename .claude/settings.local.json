@@ -27,7 +27,17 @@
       "Bash(mkdir:*)",
       "Bash(./mvnw -DskipTests -q clean compile)",
       "Bash(./mvnw -DfailIfNoTests=false -Dtest='OutboxSchedulerTest' test)",
-      "Bash(./mvnw -DfailIfNoTests=false -Dtest='ReservaEventConsumerTest' test)"
+      "Bash(./mvnw -DfailIfNoTests=false -Dtest='ReservaEventConsumerTest' test)",
+      "Bash(\"C:/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1080,1100 --screenshot=\"slide-cors.png\" --default-background-color=00000000 \"file:///c:/Users/jhons/Documents/Proyectos/AlquilaYa-Backend/scripts/slide-cors.html\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(ls -la slide-cors.png)",
+      "Bash(\"C:/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1080,1120 --screenshot=\"C:\\\\Users\\\\jhons\\\\Documents\\\\Proyectos\\\\AlquilaYa-Backend\\\\scripts\\\\slide-cors.png\" --default-background-color=00000000 \"file:///c:/Users/jhons/Documents/Proyectos/AlquilaYa-Backend/scripts/slide-cors.html\")",
+      "Bash(sed 's|src/main/java/com/alquilaya/api_gateway/||')",
+      "Read(//c/Users/jhons/Documents/Proyectos/config-server/src/main/resources/config/**)",
+      "PowerShell($j = \\(Get-Command java -ErrorAction SilentlyContinue\\).Source; if\\($j\\){ Write-Output \"java: $j\"; java -version } ; Write-Output \"JAVA_HOME=$env:JAVA_HOME\"; Get-ChildItem \"C:\\\\Program Files\\\\Java\",\"C:\\\\Program Files\\\\Eclipse Adoptium\",\"$env:LOCALAPPDATA\\\\Programs\" -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Program Files\",\"C:\\\\Program Files \\(x86\\)\",\"$env:USERPROFILE\" -Filter \"java.exe\" -Recurse -ErrorAction SilentlyContinue -Depth 5 | Select-Object -First 10 FullName)",
+      "PowerShell($env:JAVA_HOME=\"C:\\\\Program Files\\\\JetBrains\\\\IntelliJ IDEA 2026.1.3\\\\jbr\"; & \"$env:JAVA_HOME\\\\bin\\\\java.exe\" -version)",
+      "PowerShell($env:JAVA_HOME=\"C:\\\\Program Files\\\\JetBrains\\\\IntelliJ IDEA 2026.1.3\\\\jbr\"; Set-Location \"c:\\\\Users\\\\jhons\\\\Documents\\\\Proyectos\\\\AlquilaYa-Backend\\\\servicio-catalogos\"; & .\\\\mvnw.cmd -q compile 2>&1 | Select-Object -Last 40)"
     ]
   }
 }

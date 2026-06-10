@@ -90,6 +90,20 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
 
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: alquilaya-zipkin
+    # UI y API de trazas distribuidas. Los microservicios exportan spans a :9411.
+    # Abrir http://localhost:9411 para ver el grafo de una peticion entre servicios.
+    ports:
+      - "9411:9411"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9411/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   ngrok:
     image: ngrok/ngrok:3
     container_name: alquilaya-ngrok

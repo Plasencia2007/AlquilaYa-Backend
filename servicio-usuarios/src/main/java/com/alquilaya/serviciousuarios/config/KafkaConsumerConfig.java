@@ -34,6 +34,10 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+        // Trazabilidad distribuida: este factory es custom, asi que la propiedad global
+        // spring.kafka.listener.observation-enabled no lo alcanza; se activa aqui a mano
+        // para que el consumo de eventos genere spans y propague el traceId.
+        factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }
 }

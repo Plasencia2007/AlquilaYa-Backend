@@ -25,6 +25,8 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Documentacion Swagger / OpenAPI: acceso libre
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         // Webhook de MercadoPago: sin autenticación (llamado por MP externamente)
                         .requestMatchers("/api/v1/pagos/webhook").permitAll()
                         // Crear preferencia de pago: requiere usuario autenticado

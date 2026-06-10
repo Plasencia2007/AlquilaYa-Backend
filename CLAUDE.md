@@ -25,7 +25,7 @@ Sistema de alquiler de cuartos para estudiantes de **UPeU Lima**. Tres roles: `E
 
 ## Orden de arranque
 
-1. `docker compose up -d` — Postgres, MySQL, Kafka, ngrok
+1. `docker compose up -d` — Postgres, MySQL, Kafka, Redis, **Zipkin** (:9411), ngrok
 2. `discovery-server` — Eureka debe estar UP primero
 3. `config-server`
 4. `api-gateway`
@@ -97,6 +97,32 @@ Dev only: `POST /pagos/simular-exito/{reservaId}` (omite MercadoPago)
 
 **Chat:** `POST /mensajeria/conversaciones` (idempotente) → WS STOMP → `/app/chat.enviar/{id}` → `/user/queue/conversacion.{id}`
 
+## Documentación de APIs (Swagger / OpenAPI)
+
+Cada microservicio expone su doc vía **springdoc-openapi** (`springdoc-openapi-starter-webmvc-ui` 2.8.9). UI en `/swagger-ui.html`, spec JSON en `/v3/api-docs`. Incluye esquema de seguridad **Bearer JWT** (botón *Authorize* en la UI) configurado en `OpenApiConfig` de cada servicio.
+
+> Como el gateway es la variante Servlet MVC, **no agrega** las specs: cada Swagger se accede **directo en el puerto del servicio**, no por el `:8080`.
+
+| Servicio | Swagger UI |
+|----------|-----------|
+| servicio-propiedades | http://localhost:8082/swagger-ui.html |
+| servicio-pagos       | http://localhost:8084/swagger-ui.html |
+| servicio-catalogos   | http://localhost:8085/swagger-ui.html |
+| servicio-mensajeria  | http://localhost:8086/swagger-ui.html |
+| servicio-usuarios    | puerto aleatorio → ver Eureka :8761 |
+
+Las rutas `/swagger-ui/**` y `/v3/api-docs/**` están en `permitAll()` dentro del `SecurityConfig` de cada servicio.
+
+## Trazabilidad distribuida (Micrometer Tracing + Zipkin)
+
+Gateway y los 5 servicios de dominio incluyen `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave`. Cada log lleva `[servicio, traceId, spanId]` (patrón auto-configurado por Spring Boot), y el **traceId se propaga** automáticamente por:
+- **REST/Feign** entre servicios (cabecera de propagación B3)
+- **Kafka** (`spring.kafka.listener.observation-enabled` y `template.observation-enabled` en `application.yml`; el factory custom de usuarios lo activa en `KafkaConsumerConfig`)
+
+Config común en `config-server/.../config/application.yml`: `management.tracing.sampling.probability` (default `1.0` en dev, var `TRACING_SAMPLING`) y `management.zipkin.tracing.endpoint` (var `ZIPKIN_ENDPOINT`, default `http://localhost:9411/api/v2/spans`).
+
+**Ver trazas:** http://localhost:9411 (Zipkin UI). Una petición que cruce gateway → propiedades → pagos → Kafka aparece como un solo árbol de spans. Si Zipkin no corre, el `traceId` sigue en los logs para correlacionar manualmente.
+
 ## Base de datos
 
 FKs entre esquemas no están enforced en BD; se mantienen vía Feign y Kafka.
@@ -122,4 +148,4 @@ FKs entre esquemas no están enforced en BD; se mantienen vía Feign y Kafka.
 - JWT secret → vault (HashiCorp Vault / AWS Secrets Manager)
 - Migrar gateway a variante reactiva (habilitar proxy WebSocket)
 - Reemplazar ngrok por dominio real con TLS
-- Observabilidad: OpenTelemetry, logs y métricas centralizados
+- Observabilidad: trazabilidad distribuida ya implementada (Micrometer Tracing + Zipkin); falta **centralizar logs** (ELK/Loki) y un dashboard de métricas (Grafana sobre el endpoint Prometheus)
