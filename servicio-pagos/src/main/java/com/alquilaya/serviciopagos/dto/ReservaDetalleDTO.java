@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 @Data
 public class ReservaDetalleDTO {
     private Long id;
+    private Long estudianteId;
     private Long propiedadId;
     private String propiedadTitulo;
     private String estudianteNombre;

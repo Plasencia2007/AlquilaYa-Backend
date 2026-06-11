@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
 import com.alquilaya.serviciopropiedades.dto.FavoritoResponseDTO;
+import com.alquilaya.serviciopropiedades.dto.FavoritosPageDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Favorito;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
@@ -9,6 +10,8 @@ import com.alquilaya.serviciopropiedades.repositories.FavoritoRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,28 +50,50 @@ public class FavoritoService {
         return true;
     }
 
-    public List<FavoritoResponseDTO> listarMis(CurrentUser current) {
+    public FavoritosPageDTO listarMis(CurrentUser current, int page, int size) {
         Long estudianteId = validarEstudiante(current);
-        List<Favorito> favoritos = favoritoRepository.findByEstudianteIdOrderByFechaCreacionDesc(estudianteId);
-        if (favoritos.isEmpty()) return List.of();
+        Page<Favorito> favoritos = favoritoRepository
+                .findByEstudianteIdOrderByFechaCreacionDesc(estudianteId, PageRequest.of(page, size));
 
-        List<Long> ids = favoritos.stream().map(Favorito::getPropiedadId).toList();
-        List<Propiedad> propiedades = propiedadRepository.findAllById(ids);
+        List<FavoritoResponseDTO> content;
+        if (favoritos.isEmpty()) {
+            content = List.of();
+        } else {
+            List<Long> ids = favoritos.stream().map(Favorito::getPropiedadId).toList();
+            List<Propiedad> propiedades = propiedadRepository.findAllById(ids);
 
-        // Batch enrich: una sola llamada Feign al servicio-usuarios para todos los
-        // arrendadores de los favoritos (anti N+1).
-        List<PropiedadPublicoDTO> dtos = propiedadService.toPublicoBatch(propiedades);
-        Map<Long, PropiedadPublicoDTO> dtoPorId = dtos.stream()
-                .collect(Collectors.toMap(PropiedadPublicoDTO::getId, Function.identity()));
+            // Batch enrich: una sola llamada Feign al servicio-usuarios para todos los
+            // arrendadores de la página (anti N+1).
+            List<PropiedadPublicoDTO> dtos = propiedadService.toPublicoBatch(propiedades);
+            Map<Long, PropiedadPublicoDTO> dtoPorId = dtos.stream()
+                    .collect(Collectors.toMap(PropiedadPublicoDTO::getId, Function.identity()));
 
-        return favoritos.stream()
-                .map(f -> FavoritoResponseDTO.builder()
-                        .id(f.getId())
-                        .estudianteId(f.getEstudianteId())
-                        .fechaCreacion(f.getFechaCreacion())
-                        .propiedad(dtoPorId.get(f.getPropiedadId()))
-                        .build())
-                .toList();
+            content = favoritos.stream()
+                    .map(f -> FavoritoResponseDTO.builder()
+                            .id(f.getId())
+                            .estudianteId(f.getEstudianteId())
+                            .fechaCreacion(f.getFechaCreacion())
+                            .propiedad(dtoPorId.get(f.getPropiedadId()))
+                            .build())
+                    .toList();
+        }
+
+        return FavoritosPageDTO.builder()
+                .content(content)
+                .page(favoritos.getNumber())
+                .size(favoritos.getSize())
+                .totalElements(favoritos.getTotalElements())
+                .hasNext(favoritos.hasNext())
+                .build();
+    }
+
+    /**
+     * Solo los IDs de propiedad favoritas del estudiante. Sin enriquecimiento
+     * (sin Feign): se usa para hidratar el estado de corazones en el frontend.
+     */
+    public List<Long> listarIds(CurrentUser current) {
+        Long estudianteId = validarEstudiante(current);
+        return favoritoRepository.findPropiedadIdsByEstudianteId(estudianteId);
     }
 
     public boolean esFavorito(Long propiedadId, CurrentUser current) {
@@ -76,17 +101,25 @@ public class FavoritoService {
         return favoritoRepository.existsByEstudianteIdAndPropiedadId(estudianteId, propiedadId);
     }
 
-    public Favorito obtenerPorId(Long id) {
-        return favoritoRepository.findById(id)
+    public Favorito obtenerPorId(Long id, CurrentUser current) {
+        Long estudianteId = validarEstudiante(current);
+        Favorito fav = favoritoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("No existe el favorito " + id));
+        if (!estudianteId.equals(fav.getEstudianteId())) {
+            throw new IllegalStateException("No puedes ver un favorito que no es tuyo");
+        }
+        return fav;
     }
 
     @Transactional
-    public void eliminarFavorito(Long id) {
-        if (!favoritoRepository.existsById(id)) {
-            throw new IllegalArgumentException("No existe el favorito " + id);
+    public void eliminarFavorito(Long id, CurrentUser current) {
+        Long estudianteId = validarEstudiante(current);
+        Favorito fav = favoritoRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("No existe el favorito " + id));
+        if (!estudianteId.equals(fav.getEstudianteId())) {
+            throw new IllegalStateException("No puedes eliminar un favorito que no es tuyo");
         }
-        favoritoRepository.deleteById(id);
+        favoritoRepository.delete(fav);
     }
 
     private Long validarEstudiante(CurrentUser current) {

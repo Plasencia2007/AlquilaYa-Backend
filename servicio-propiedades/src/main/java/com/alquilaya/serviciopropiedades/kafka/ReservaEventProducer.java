@@ -34,7 +34,8 @@ public class ReservaEventProducer {
             "RESERVA_PAGADA",
             "RESERVA_CANCELADA",
             "RESERVA_FINALIZADA",
-            "RESERVA_EXPIRADA"
+            "RESERVA_EXPIRADA",
+            "RESERVA_PAGO_PENDIENTE"
     );
 
     private final OutboxPublisher outboxPublisher;

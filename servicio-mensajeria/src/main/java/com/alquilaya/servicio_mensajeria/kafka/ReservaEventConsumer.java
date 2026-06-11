@@ -117,6 +117,11 @@ public class ReservaEventConsumer {
                     "Tu estadía terminó",
                     "¿Cómo fue tu experiencia? Deja una reseña al arrendador.",
                     "/student/reservations", payload);
+            case "RESERVA_PAGO_PENDIENTE" -> notificarEstudiante(estudiantePerfilId, reservaId,
+                    TipoNotificacion.RECORDATORIO_PAGO,
+                    "Tu reserva está por expirar",
+                    "Aún no has pagado tu reserva aprobada. Complétala pronto para no perder el cuarto.",
+                    "/student/reservations", payload);
             default -> log.debug("[NOTIF] reserva-events eventType desconocido: {}", eventType);
         }
     }

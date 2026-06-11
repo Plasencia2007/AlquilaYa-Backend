@@ -14,4 +14,6 @@ public class EstudianteInfoResponse {
     private String telefono;
     private String universidad;
     private String carrera;
+    /** true si todos los documentos requeridos del estudiante están APROBADOS. */
+    private boolean verificado;
 }

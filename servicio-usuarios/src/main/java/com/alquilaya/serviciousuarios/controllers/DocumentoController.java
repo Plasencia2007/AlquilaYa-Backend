@@ -26,10 +26,9 @@ public class DocumentoController {
 
     @GetMapping("/tipos-requeridos")
     public ResponseEntity<List<TipoDocumentoConfigDTO>> getTiposRequeridos() {
-        return ResponseEntity.ok(List.of(
-            new TipoDocumentoConfigDTO("DNI_FRONTAL", "DNI Parte Frontal", "Foto del frente de tu DNI"),
-            new TipoDocumentoConfigDTO("DNI_REVERSO", "DNI Parte Posterior", "Foto del reverso de tu DNI")
-        ));
+        return ResponseEntity.ok(TipoDocumento.requeridos().stream()
+                .map(t -> new TipoDocumentoConfigDTO(t.name(), t.getTitulo(), t.getDescripcion()))
+                .toList());
     }
 
     @PostMapping("/upload")

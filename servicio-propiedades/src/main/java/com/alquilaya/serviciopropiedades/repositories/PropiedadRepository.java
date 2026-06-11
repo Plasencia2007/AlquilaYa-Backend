@@ -46,6 +46,7 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
               AND (:disponible IS NULL OR p.estaDisponible = :disponible)
               AND (:distanciaMax IS NULL OR p.distanciaMetros IS NULL OR p.distanciaMetros <= :distanciaMax)
               AND (:servicios IS NULL OR s IN :servicios)
+              AND (:zona IS NULL OR LOWER(p.direccion) LIKE LOWER(CONCAT('%', :zona, '%')))
             """)
     List<Propiedad> buscar(
             @Param("precioMin") BigDecimal precioMin,
@@ -54,6 +55,7 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             @Param("periodo") String periodo,
             @Param("disponible") Boolean disponible,
             @Param("distanciaMax") Integer distanciaMax,
-            @Param("servicios") List<String> servicios
+            @Param("servicios") List<String> servicios,
+            @Param("zona") String zona
     );
 }

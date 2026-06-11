@@ -279,7 +279,7 @@ public class PropiedadController {
     @GetMapping("/buscar")
     @Cacheable(
         value = "propiedades:listado",
-        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios)"
+        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona)"
     )
     public ResponseEntity<List<PropiedadPublicoDTO>> buscar(
             @RequestParam(required = false) BigDecimal precioMin,
@@ -288,9 +288,10 @@ public class PropiedadController {
             @RequestParam(required = false) String periodo,
             @RequestParam(required = false) Boolean disponible,
             @RequestParam(required = false) Integer distanciaMax,
-            @RequestParam(required = false) List<String> servicios
+            @RequestParam(required = false) List<String> servicios,
+            @RequestParam(required = false) String zona
     ) {
-        List<Propiedad> resultados = propiedadService.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios);
+        List<Propiedad> resultados = propiedadService.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona);
         // Batch enrich: una sola llamada Feign al servicio-usuarios por página
         // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
         List<PropiedadPublicoDTO> dto = propiedadService.toPublicoBatch(resultados);

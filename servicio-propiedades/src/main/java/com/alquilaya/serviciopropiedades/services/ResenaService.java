@@ -59,6 +59,10 @@ public class ResenaService {
             throw new IllegalStateException("Solo puedes reseñar propiedades donde tu reserva esté FINALIZADA");
         }
 
+        if (resenaPropRepo.existsByEstudianteIdAndPropiedadId(estudianteId, req.getPropiedadId())) {
+            throw new IllegalStateException("Ya has reseñado esta propiedad");
+        }
+
         ResenaPropiedad resena = ResenaPropiedad.builder()
                 .propiedadId(req.getPropiedadId())
                 .estudianteId(estudianteId)
@@ -101,6 +105,10 @@ public class ResenaService {
                         estudianteId, p.getId(), EstadoReserva.FINALIZADA));
         if (!puedeResenar) {
             throw new IllegalStateException("Solo puedes reseñar arrendadores con los que hayas tenido una reserva FINALIZADA");
+        }
+
+        if (resenaArrRepo.existsByEstudianteIdAndArrendadorId(estudianteId, req.getArrendadorId())) {
+            throw new IllegalStateException("Ya has reseñado a este arrendador");
         }
 
         ResenaArrendador resena = ResenaArrendador.builder()

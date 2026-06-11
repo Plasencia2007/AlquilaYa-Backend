@@ -53,6 +53,14 @@ public class Reserva {
     @Column(columnDefinition = "TEXT")
     private String motivoRechazo;
 
+    /**
+     * True una vez enviado el recordatorio de pago (reserva APROBADA cercana a
+     * expirar). Evita recordatorios duplicados. Nullable para que ddl-auto pueda
+     * agregar la columna sobre filas existentes.
+     */
+    @Builder.Default
+    private Boolean recordatorioPagoEnviado = false;
+
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 

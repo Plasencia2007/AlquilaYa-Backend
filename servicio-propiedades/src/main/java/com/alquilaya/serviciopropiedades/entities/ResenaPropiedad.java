@@ -11,7 +11,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "resenas_propiedad", indexes = {
+@Table(name = "resenas_propiedad", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_resena_prop_estudiante_propiedad", columnNames = {"estudianteId", "propiedadId"})
+}, indexes = {
         @Index(name = "idx_resena_prop_propiedad", columnList = "propiedadId"),
         @Index(name = "idx_resena_prop_estudiante", columnList = "estudianteId")
 })

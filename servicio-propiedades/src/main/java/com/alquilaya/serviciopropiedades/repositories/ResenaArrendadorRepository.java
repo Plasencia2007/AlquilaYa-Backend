@@ -16,4 +16,6 @@ public interface ResenaArrendadorRepository extends JpaRepository<ResenaArrendad
     Double promedioRating(@Param("arrendadorId") Long arrendadorId);
 
     long countByArrendadorIdAndVisibleTrue(Long arrendadorId);
+
+    boolean existsByEstudianteIdAndArrendadorId(Long estudianteId, Long arrendadorId);
 }

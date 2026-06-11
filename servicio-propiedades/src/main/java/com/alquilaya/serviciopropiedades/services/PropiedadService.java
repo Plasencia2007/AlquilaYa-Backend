@@ -38,7 +38,7 @@ public class PropiedadService {
 
     public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, String tipo,
                                    String periodo, Boolean disponible, Integer distanciaMax,
-                                   List<String> servicios) {
+                                   List<String> servicios, String zona) {
         if (precioMin != null && precioMin.signum() < 0) {
             throw new IllegalArgumentException("precioMin no puede ser negativo");
         }
@@ -52,7 +52,9 @@ public class PropiedadService {
             throw new IllegalArgumentException("distanciaMax no puede ser negativa");
         }
         List<String> filtroServicios = (servicios == null || servicios.isEmpty()) ? null : servicios;
-        return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, filtroServicios);
+        String filtroZona = (zona == null || zona.isBlank()) ? null : zona.trim();
+        return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax,
+                filtroServicios, filtroZona);
     }
 
     public void calcularYSetearDistancia(Propiedad p) {

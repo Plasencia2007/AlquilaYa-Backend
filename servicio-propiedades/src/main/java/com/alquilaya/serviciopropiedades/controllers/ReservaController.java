@@ -58,7 +58,7 @@ public class ReservaController {
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ReservaResponseDTO> obtenerPorId(@PathVariable Long id) {
-        Reserva r = reservaService.obtenerPorId(id);
+        Reserva r = reservaService.obtenerPropia(id, CurrentUserProvider.get());
         return ResponseEntity.ok(toResponseDTO(r));
     }
 

@@ -16,4 +16,6 @@ public interface ResenaPropiedadRepository extends JpaRepository<ResenaPropiedad
     Double promedioRating(@Param("propiedadId") Long propiedadId);
 
     long countByPropiedadIdAndVisibleTrue(Long propiedadId);
+
+    boolean existsByEstudianteIdAndPropiedadId(Long estudianteId, Long propiedadId);
 }

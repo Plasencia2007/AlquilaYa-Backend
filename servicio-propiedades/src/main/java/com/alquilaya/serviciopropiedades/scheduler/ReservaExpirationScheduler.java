@@ -5,9 +5,9 @@ import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
 import com.alquilaya.serviciopropiedades.kafka.ReservaEventProducer;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import com.alquilaya.serviciopropiedades.saga.service.SagaReservaPagoService;
+import com.alquilaya.serviciopropiedades.services.ConfiguracionReservaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,9 +49,7 @@ public class ReservaExpirationScheduler {
 
     private final ReservaRepository reservaRepository;
     private final ReservaExpirationService reservaExpirationService;
-
-    @Value("${app.reserva.expiracion-horas:24}")
-    private long expiracionHoras;
+    private final ConfiguracionReservaService configuracionReservaService;
 
     /**
      * Cada hora en punto. Para entornos de bajo tráfico se puede relajar a
@@ -59,7 +57,9 @@ public class ReservaExpirationScheduler {
      */
     @Scheduled(cron = "${app.reserva.expiracion-cron:0 0 */1 * * *}")
     public void expirarReservasAprobadas() {
-        long horas = expiracionHoras > 0 ? expiracionHoras : 24L;
+        // Plazo leído de BD en cada ejecución: un cambio desde el panel admin
+        // aplica sin reiniciar el servicio.
+        long horas = configuracionReservaService.getExpiracionHoras();
         LocalDateTime corte = LocalDateTime.now().minusHours(horas);
 
         List<Reserva> candidatas = reservaRepository.findReservasAprobadasParaExpirar(corte);
@@ -78,7 +78,7 @@ public class ReservaExpirationScheduler {
             Long id = r.getId();
             if (id == null) continue;
             try {
-                Long expiradaId = reservaExpirationService.expirarUna(id, expiracionHoras);
+                Long expiradaId = reservaExpirationService.expirarUna(id, horas);
                 if (expiradaId != null) {
                     expiradas.add(expiradaId);
                 }

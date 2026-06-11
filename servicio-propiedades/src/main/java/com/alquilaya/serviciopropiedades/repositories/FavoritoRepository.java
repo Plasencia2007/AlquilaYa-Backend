@@ -1,6 +1,8 @@
 package com.alquilaya.serviciopropiedades.repositories;
 
 import com.alquilaya.serviciopropiedades.entities.Favorito;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +14,11 @@ import java.util.Optional;
 @Repository
 public interface FavoritoRepository extends JpaRepository<Favorito, Long> {
     List<Favorito> findByEstudianteIdOrderByFechaCreacionDesc(Long estudianteId);
+
+    Page<Favorito> findByEstudianteIdOrderByFechaCreacionDesc(Long estudianteId, Pageable pageable);
+
+    @Query("SELECT f.propiedadId FROM Favorito f WHERE f.estudianteId = :estudianteId")
+    List<Long> findPropiedadIdsByEstudianteId(Long estudianteId);
 
     Optional<Favorito> findByEstudianteIdAndPropiedadId(Long estudianteId, Long propiedadId);
 

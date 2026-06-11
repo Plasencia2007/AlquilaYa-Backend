@@ -3,6 +3,7 @@ package com.alquilaya.serviciopropiedades.repositories;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -38,4 +39,39 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
               AND r.fechaActualizacion < :corte
             """)
     List<Reserva> findReservasAprobadasParaExpirar(@Param("corte") LocalDateTime corte);
+
+    /**
+     * Devuelve reservas PAGADA cuya estadía ya terminó (fechaFin anterior a hoy).
+     * Usado por {@code ReservaFinalizacionScheduler} para cerrar el ciclo
+     * automáticamente (PAGADA → FINALIZADA) y habilitar las reseñas.
+     */
+    @Query("""
+            SELECT r FROM Reserva r
+            WHERE r.estado = com.alquilaya.serviciopropiedades.enums.EstadoReserva.PAGADA
+              AND r.fechaFin < :hoy
+            """)
+    List<Reserva> findPagadasParaFinalizar(@Param("hoy") LocalDate hoy);
+
+    /**
+     * Reservas APROBADA, aún sin recordatorio de pago, cuya aprobación
+     * ({@code fechaActualizacion}) es anterior al corte. Usado por
+     * {@code ReservaRecordatorioScheduler} para avisar antes de que expiren.
+     */
+    @Query("""
+            SELECT r FROM Reserva r
+            WHERE r.estado = com.alquilaya.serviciopropiedades.enums.EstadoReserva.APROBADA
+              AND (r.recordatorioPagoEnviado IS NULL OR r.recordatorioPagoEnviado = false)
+              AND r.fechaActualizacion < :corte
+            """)
+    List<Reserva> findAprobadasParaRecordatorio(@Param("corte") LocalDateTime corte);
+
+    /**
+     * Marca el recordatorio como enviado vía bulk update: evita el {@code @PreUpdate}
+     * de la entidad, que reiniciaría {@code fechaActualizacion} (y con ella el reloj
+     * de expiración). Sin {@code clearAutomatically} para no descartar el evento de
+     * outbox que se persiste en la misma transacción.
+     */
+    @Modifying
+    @Query("UPDATE Reserva r SET r.recordatorioPagoEnviado = true WHERE r.id = :id")
+    int marcarRecordatorioPagoEnviado(@Param("id") Long id);
 }

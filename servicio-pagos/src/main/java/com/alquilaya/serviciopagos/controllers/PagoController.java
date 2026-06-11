@@ -1,8 +1,10 @@
 package com.alquilaya.serviciopagos.controllers;
 
+import com.alquilaya.serviciopagos.config.CurrentUser;
 import com.alquilaya.serviciopagos.services.PagoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
@@ -14,8 +16,9 @@ public class PagoController {
     private final PagoService pagoService;
 
     @PostMapping("/preferencia/{reservaId}")
-    public ResponseEntity<Map<String, String>> crearPreferencia(@PathVariable Long reservaId) {
-        String initPoint = pagoService.crearPreferencia(reservaId);
+    public ResponseEntity<Map<String, String>> crearPreferencia(@PathVariable Long reservaId,
+            @AuthenticationPrincipal CurrentUser current) {
+        String initPoint = pagoService.crearPreferencia(reservaId, current);
         return ResponseEntity.ok(Map.of("url", initPoint));
     }
 

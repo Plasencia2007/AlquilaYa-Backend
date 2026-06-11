@@ -159,3 +159,20 @@ resilience4j:
 jwt:
   secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
   expiration: ${JWT_EXPIRATION:7200000}
+
+# Reglas de negocio de reservas
+app:
+  reserva:
+    # Horas que una reserva APROBADA espera el pago antes de pasar a EXPIRADA
+    # (libera el cuarto automáticamente). Configurable sin recompilar.
+    expiracion-horas: ${RESERVA_EXPIRACION_HORAS:24}
+    # Cron del job que expira reservas sin pago. Default: cada hora en punto.
+    expiracion-cron: ${RESERVA_EXPIRACION_CRON:0 0 */1 * * *}
+    # Cron del job que finaliza reservas PAGADA con estadía vencida
+    # (PAGADA -> FINALIZADA, habilita reseñas). Default: diario a las 00:30.
+    finalizacion-cron: ${RESERVA_FINALIZACION_CRON:0 30 0 * * *}
+    # Recordatorio de pago antes de expirar: se avisa al consumir esta fracción
+    # del plazo (0.5 = a mitad del tiempo). Entre 0 y 1.
+    recordatorio-fraccion: ${RESERVA_RECORDATORIO_FRACCION:0.5}
+    # Cron del job de recordatorios. Default: cada 30 minutos.
+    recordatorio-cron: ${RESERVA_RECORDATORIO_CRON:0 */30 * * * *}

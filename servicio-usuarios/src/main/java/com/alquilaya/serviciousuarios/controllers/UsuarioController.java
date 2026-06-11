@@ -210,6 +210,7 @@ public class UsuarioController {
                 .telefono(u.getTelefono())
                 .universidad(e.getUniversidad())
                 .carrera(e.getCarrera())
+                .verificado(e.isVerificado())
                 .build());
     }
 }

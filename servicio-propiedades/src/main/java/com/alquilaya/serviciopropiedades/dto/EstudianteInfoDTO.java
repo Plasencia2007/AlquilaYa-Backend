@@ -16,4 +16,6 @@ public class EstudianteInfoDTO {
     private String telefono;
     private String universidad;
     private String carrera;
+    /** Wrapper a propósito: null (servicio antiguo o caído) se trata como no verificable. */
+    private Boolean verificado;
 }

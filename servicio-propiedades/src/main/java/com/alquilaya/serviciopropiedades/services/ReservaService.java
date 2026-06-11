@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -50,6 +51,18 @@ public class ReservaService {
         if (!req.getFechaFin().isAfter(req.getFechaInicio())) {
             throw new IllegalArgumentException(
                     "La fecha de fin debe ser al menos un día después de la fecha de inicio");
+        }
+
+        // Fail-safe: el estudiante debe tener sus documentos aprobados. Se valida
+        // ANTES del lock pesimista para no retener el row-lock durante la llamada HTTP.
+        EstudianteInfoDTO estudiante = usuariosClient.obtenerEstudiante(current.getPerfilId());
+        if (estudiante == null) {
+            throw new IllegalStateException(
+                    "No pudimos validar tu estado de verificación en este momento. Inténtalo de nuevo en unos minutos.");
+        }
+        if (!Boolean.TRUE.equals(estudiante.getVerificado())) {
+            throw new IllegalStateException(
+                    "Debes verificar tu identidad antes de reservar. Sube tu DNI en Perfil > Verificación.");
         }
 
         // Lock pesimista: serializa creaciones concurrentes sobre la misma propiedad
@@ -172,6 +185,72 @@ public class ReservaService {
         return guardada;
     }
 
+    /**
+     * Finaliza automáticamente una reserva PAGADA cuya estadía ya terminó.
+     * Acción del sistema (no la dispara el arrendador), por eso no valida
+     * ownership. Idempotente: si la reserva ya no está PAGADA o la fecha aún no
+     * venció, no hace nada. La usa {@code ReservaFinalizacionScheduler}.
+     *
+     * @return true si transicionó a FINALIZADA.
+     */
+    @Transactional
+    public boolean finalizarVencida(Long reservaId) {
+        Reserva r = obtenerPorId(reservaId);
+        if (r.getEstado() != EstadoReserva.PAGADA) {
+            return false;
+        }
+        if (r.getFechaFin() == null || !r.getFechaFin().isBefore(LocalDate.now())) {
+            return false;
+        }
+        if (!r.getEstado().puedeTransicionarA(EstadoReserva.FINALIZADA)) {
+            return false;
+        }
+        r.setEstado(EstadoReserva.FINALIZADA);
+        Reserva guardada = reservaRepository.save(r);
+        // Emisión directa sin enriquecimiento Feign: el scheduler corre sin
+        // request context, así que el header Authorization no se propagaría.
+        // El consumidor de notificaciones solo necesita estudianteId + reservaId.
+        Map<String, Object> extra = new HashMap<>();
+        extra.put("propiedadId", guardada.getPropiedadId());
+        extra.put("estudianteId", guardada.getEstudianteId());
+        extra.put("arrendadorId", guardada.getArrendadorId());
+        extra.put("estado", guardada.getEstado().name());
+        extra.put("montoTotal", guardada.getMontoTotal());
+        reservaEventProducer.emitir("RESERVA_FINALIZADA", guardada.getId(), extra);
+        log.info("[FINALIZACION] Reserva {} FINALIZADA automáticamente (fechaFin={})",
+                guardada.getId(), guardada.getFechaFin());
+        return true;
+    }
+
+    /**
+     * Emite un recordatorio de pago para una reserva APROBADA cercana a expirar.
+     * Acción del sistema (sin request context), por eso emite sin enriquecimiento
+     * Feign. Idempotente: si ya no está APROBADA o ya se recordó, no hace nada.
+     * Marca el flag con bulk update para NO reiniciar {@code fechaActualizacion}
+     * (que es el reloj de expiración).
+     *
+     * @return true si se emitió el recordatorio.
+     */
+    @Transactional
+    public boolean enviarRecordatorioPago(Long reservaId) {
+        Reserva r = obtenerPorId(reservaId);
+        if (r.getEstado() != EstadoReserva.APROBADA) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(r.getRecordatorioPagoEnviado())) {
+            return false;
+        }
+        Map<String, Object> extra = new HashMap<>();
+        extra.put("propiedadId", r.getPropiedadId());
+        extra.put("estudianteId", r.getEstudianteId());
+        extra.put("arrendadorId", r.getArrendadorId());
+        extra.put("estado", r.getEstado().name());
+        reservaEventProducer.emitir("RESERVA_PAGO_PENDIENTE", r.getId(), extra);
+        reservaRepository.marcarRecordatorioPagoEnviado(r.getId());
+        log.info("[RECORDATORIO] Recordatorio de pago emitido para reserva {}", r.getId());
+        return true;
+    }
+
     public List<Reserva> listarDelEstudiante(Long estudianteId) {
         return reservaRepository.findByEstudianteIdOrderByFechaCreacionDesc(estudianteId);
     }
@@ -189,6 +268,32 @@ public class ReservaService {
     public Reserva obtenerPorId(Long id) {
         return reservaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("No existe la reserva " + id));
+    }
+
+    /**
+     * Obtiene una reserva validando que el solicitante sea un participante
+     * (estudiante o arrendador dueño) o un ADMIN. Evita IDOR en GET /reservas/{id}.
+     */
+    public Reserva obtenerPropia(Long id, CurrentUser current) {
+        Reserva r = obtenerPorId(id);
+        validarParticipante(r, current);
+        return r;
+    }
+
+    private void validarParticipante(Reserva r, CurrentUser current) {
+        if (current == null || current.getPerfilId() == null) {
+            throw new IllegalStateException("Sin perfilId en contexto");
+        }
+        if ("ADMIN".equalsIgnoreCase(current.getRol())) {
+            return;
+        }
+        boolean esEstudianteDueno = "ESTUDIANTE".equalsIgnoreCase(current.getRol())
+                && current.getPerfilId().equals(r.getEstudianteId());
+        boolean esArrendadorDueno = "ARRENDADOR".equalsIgnoreCase(current.getRol())
+                && current.getPerfilId().equals(r.getArrendadorId());
+        if (!esEstudianteDueno && !esArrendadorDueno) {
+            throw new IllegalStateException("No tienes permiso para ver esta reserva");
+        }
     }
 
     public String obtenerTituloPropiedad(Long propiedadId) {

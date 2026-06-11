@@ -1,7 +1,7 @@
 package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
-import com.alquilaya.serviciopropiedades.dto.FavoritoResponseDTO;
+import com.alquilaya.serviciopropiedades.dto.FavoritosPageDTO;
 import com.alquilaya.serviciopropiedades.entities.Favorito;
 import com.alquilaya.serviciopropiedades.services.FavoritoService;
 import lombok.RequiredArgsConstructor;
@@ -32,14 +32,22 @@ public class FavoritoController {
 
     @GetMapping("/mis")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<FavoritoResponseDTO>> misFavoritos() {
-        return ResponseEntity.ok(favoritoService.listarMis(CurrentUserProvider.get()));
+    public ResponseEntity<FavoritosPageDTO> misFavoritos(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        return ResponseEntity.ok(favoritoService.listarMis(CurrentUserProvider.get(), page, size));
+    }
+
+    @GetMapping("/ids")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<Long>> misIds() {
+        return ResponseEntity.ok(favoritoService.listarIds(CurrentUserProvider.get()));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Favorito> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(favoritoService.obtenerPorId(id));
+        return ResponseEntity.ok(favoritoService.obtenerPorId(id, CurrentUserProvider.get()));
     }
 
     @GetMapping("/check/{propiedadId}")
@@ -53,7 +61,7 @@ public class FavoritoController {
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-        favoritoService.eliminarFavorito(id);
+        favoritoService.eliminarFavorito(id, CurrentUserProvider.get());
         return ResponseEntity.noContent().build();
     }
 }

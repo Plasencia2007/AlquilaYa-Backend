@@ -1,6 +1,7 @@
 package com.alquilaya.serviciopagos.services;
 
 import com.alquilaya.serviciopagos.clients.ReservasClient;
+import com.alquilaya.serviciopagos.config.CurrentUser;
 import com.alquilaya.serviciopagos.dto.ReservaDetalleDTO;
 import com.alquilaya.serviciopagos.entities.Pago;
 import com.alquilaya.serviciopagos.exceptions.WebhookInvalidoException;
@@ -135,7 +136,7 @@ public class PagoService {
         throw new IllegalStateException("El servicio de pagos externos (Mercado Pago) no está disponible temporalmente.");
     }
 
-    public String crearPreferencia(Long reservaId) {
+    public String crearPreferencia(Long reservaId, CurrentUser current) {
         try {
             log.info("Iniciando creación de preferencia para Reserva ID: {}", reservaId);
 
@@ -145,6 +146,13 @@ public class PagoService {
             }
 
             ReservaDetalleDTO reserva = obtenerReservaResiliente(reservaId).join();
+
+            // Defensa anti-IDOR: solo el estudiante dueño puede generar el link de pago.
+            if (current == null || current.getPerfilId() == null
+                    || reserva.getEstudianteId() == null
+                    || !current.getPerfilId().equals(reserva.getEstudianteId())) {
+                throw new IllegalStateException("No puedes pagar una reserva que no es tuya");
+            }
 
             // Validar campos críticos para Mercado Pago
             String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty())
