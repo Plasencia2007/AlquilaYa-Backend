@@ -32,10 +32,10 @@ export function useFavorites() {
 
     let cancelado = false;
     favoriteService
-      .listar()
-      .then((favoritos) => {
+      .listarIds()
+      .then((ids) => {
         if (cancelado) return;
-        setIds(favoritos.map((p) => p.id));
+        setIds(ids);
       })
       .catch(() => {
         if (cancelado) return;

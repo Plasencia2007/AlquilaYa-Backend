@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Heart, Home, MessageCircle, Search, User } from 'lucide-react';
+import { Heart, History, Home, MessageCircle, Search, User } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 
@@ -10,6 +10,7 @@ const tabs = [
   { href: '/student', label: 'Inicio', icon: Home },
   { href: '/search', label: 'Buscar', icon: Search },
   { href: '/student/favorites', label: 'Favoritos', icon: Heart },
+  { href: '/student/history', label: 'Historial', icon: History },
   { href: '/student/messages', label: 'Mensajes', icon: MessageCircle },
   { href: '/student/profile', label: 'Cuenta', icon: User },
 ];

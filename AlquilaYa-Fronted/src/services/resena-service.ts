@@ -6,6 +6,29 @@ export interface Resena {
   comentario: string;
   fechaCreacion: string;
   autorNombre?: string;
+  /** perfilId del estudiante autor — sirve para saber si "ya reseñé". */
+  estudianteId?: number;
+}
+
+/** Forma real que devuelve el backend (ResenaResponseDTO / entidad). */
+interface ResenaBackendDTO {
+  id: number;
+  rating: number;
+  comentario?: string | null;
+  fechaCreacion: string;
+  estudianteNombre?: string | null;
+  estudianteId?: number;
+}
+
+function fromBackend(dto: ResenaBackendDTO): Resena {
+  return {
+    id: dto.id,
+    calificacion: dto.rating ?? 0,
+    comentario: dto.comentario ?? '',
+    fechaCreacion: dto.fechaCreacion,
+    autorNombre: dto.estudianteNombre ?? undefined,
+    estudianteId: dto.estudianteId,
+  };
 }
 
 export const resenaService = {
@@ -14,12 +37,12 @@ export const resenaService = {
     calificacion: number,
     comentario: string,
   ): Promise<Resena> => {
-    const { data } = await api.post<Resena>('/resenas/propiedad', {
+    const { data } = await api.post<ResenaBackendDTO>('/resenas/propiedad', {
       propiedadId: Number(propiedadId),
-      calificacion,
+      rating: calificacion,
       comentario,
     });
-    return data;
+    return fromBackend(data);
   },
 
   crearResenaArrendador: async (
@@ -27,21 +50,21 @@ export const resenaService = {
     calificacion: number,
     comentario: string,
   ): Promise<Resena> => {
-    const { data } = await api.post<Resena>('/resenas/arrendador', {
+    const { data } = await api.post<ResenaBackendDTO>('/resenas/arrendador', {
       arrendadorId: Number(arrendadorId),
-      calificacion,
+      rating: calificacion,
       comentario,
     });
-    return data;
+    return fromBackend(data);
   },
 
   getResenasPorPropiedad: async (propiedadId: string | number): Promise<Resena[]> => {
-    const { data } = await api.get<Resena[]>(`/resenas/propiedad/${propiedadId}`);
-    return data;
+    const { data } = await api.get<ResenaBackendDTO[]>(`/resenas/propiedad/${propiedadId}`);
+    return data.map(fromBackend);
   },
 
   getResenasPorArrendador: async (arrendadorId: string | number): Promise<Resena[]> => {
-    const { data } = await api.get<Resena[]>(`/resenas/arrendador/${arrendadorId}`);
-    return data;
+    const { data } = await api.get<ResenaBackendDTO[]>(`/resenas/arrendador/${arrendadorId}`);
+    return data.map(fromBackend);
   },
 };

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { addMonths, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
-import { CalendarDays, Users } from 'lucide-react';
+import { CalendarDays, ShieldCheck, Users } from 'lucide-react';
 
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
+import { useVerificationStatus } from '@/hooks/use-verification-status';
 import { reservationService } from '@/services/reservation-service';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
@@ -52,7 +54,10 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
   const { estaAutenticado, usuario } = useAuth();
   const { open: abrirAuth } = useAuthModal();
 
+  const { verificado, cargando: cargandoVerif, aplicable } = useVerificationStatus();
+
   const [open, setOpen] = useState(false);
+  const [requiereVerificacion, setRequiereVerificacion] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [fechaInicio, setFechaInicio] = useState<Date | undefined>();
   const [meses, setMeses] = useState<number>(1);
@@ -62,6 +67,7 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
 
   useEffect(() => {
     if (!open) {
+      setRequiereVerificacion(false);
       setFechaInicio(undefined);
       setMeses(1);
       setOcupantes(1);
@@ -85,6 +91,9 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
       notify.warning('Solo los estudiantes pueden reservar');
       return;
     }
+    if (aplicable && !cargandoVerif && !verificado) {
+      setRequiereVerificacion(true);
+    }
     setOpen(true);
   };
 
@@ -105,6 +114,14 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
       setOpen(false);
       router.push('/student/reservations');
     } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const msg = String(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '',
+      );
+      if (status === 409 && /verificar|verificaci/i.test(msg)) {
+        setRequiereVerificacion(true);
+        return;
+      }
       notify.error(err, 'No pudimos crear la reserva');
     } finally {
       setEnviando(false);
@@ -121,12 +138,37 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
         </DialogTrigger>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="font-headline text-xl font-bold">Reservar cuarto</DialogTitle>
+            <DialogTitle className="font-headline text-xl font-bold">
+              {requiereVerificacion ? 'Verifica tu identidad' : 'Reservar cuarto'}
+            </DialogTitle>
             <DialogDescription>
-              Solicita una visita o reserva directa para {propiedad.titulo}.
+              {requiereVerificacion
+                ? 'Es un paso único para mantener segura la comunidad.'
+                : `Solicita una visita o reserva directa para ${propiedad.titulo}.`}
             </DialogDescription>
           </DialogHeader>
 
+          {requiereVerificacion ? (
+            <div className="flex flex-col items-center gap-4 py-6 text-center">
+              <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
+                <ShieldCheck className="size-8 text-primary" />
+              </div>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Para reservar necesitas verificar tu identidad: sube las dos caras de tu DNI y
+                espera la aprobación (menos de 24h hábiles).
+              </p>
+              <Button asChild size="lg" className="h-12 rounded-full px-8 text-sm font-bold">
+                <Link href="/student/profile?tab=verificacion">Ir a verificación</Link>
+              </Button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Ahora no
+              </button>
+            </div>
+          ) : (
           <form onSubmit={onSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase tracking-wider">Fecha de entrada</Label>
@@ -264,6 +306,7 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
               Sin cargos hasta confirmar. La reserva se concreta al pagar el primer mes.
             </p>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </>

@@ -1,134 +1,55 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Heart } from 'lucide-react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Heart, Loader2 } from 'lucide-react';
 
-import { PropertyCard } from '@/components/student/property-card';
-import { SkeletonCardGrid } from '@/components/shared/skeleton-card';
 import { EmptyState } from '@/components/shared/empty-state';
-import { ErrorState } from '@/components/shared/error-state';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
-import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
-import { favoriteService } from '@/services/favorite-service';
-import { notify } from '@/lib/notify';
-import type { Propiedad } from '@/types/propiedad';
 
+/**
+ * La pantalla real de favoritos vive en /student/favorites.
+ * Esta ruta pública solo redirige según sesión/rol, o invita a loguearse.
+ */
 export default function FavoritesPage() {
-  const { estaAutenticado, cargando: cargandoAuth } = useAuth();
+  const router = useRouter();
+  const { usuario, estaAutenticado, cargando } = useAuth();
   const { open: abrirAuthModal } = useAuthModal();
 
-  const [favoritos, setFavoritos] = useState<Propiedad[]>([]);
-  const [estado, setEstado] = useState<'idle' | 'cargando' | 'ok' | 'error'>('idle');
-
-  const hiddenIds = useHiddenPropertiesStore((s) => s.hiddenIds);
-  const [hidratado, setHidratado] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
-
   useEffect(() => {
-    useHiddenPropertiesStore.persist.rehydrate()?.then(() => setHidratado(true));
-  }, []);
-
-  const visibles = useMemo(() => {
-    if (!hidratado || showHidden) return favoritos;
-    return favoritos.filter((p) => !hiddenIds.includes(p.id));
-  }, [favoritos, hiddenIds, showHidden, hidratado]);
-
-  const hiddenCount = favoritos.length - visibles.length;
-
-  useEffect(() => {
-    if (cargandoAuth) return;
-    if (!estaAutenticado) {
-      setEstado('idle');
-      return;
+    if (cargando || !estaAutenticado) return;
+    if (usuario?.rol === 'ESTUDIANTE') {
+      router.replace('/student/favorites');
+    } else if (usuario?.rol === 'ARRENDADOR') {
+      router.replace('/landlord/dashboard');
+    } else if (usuario?.rol === 'ADMIN') {
+      router.replace('/admin-master');
+    } else {
+      router.replace('/');
     }
+  }, [cargando, estaAutenticado, usuario, router]);
 
-    let cancelado = false;
-    setEstado('cargando');
-    favoriteService
-      .listar()
-      .then((items) => {
-        if (cancelado) return;
-        setFavoritos(items);
-        setEstado('ok');
-      })
-      .catch((err) => {
-        if (cancelado) return;
-        notify.error(err, 'No pudimos cargar tus favoritos');
-        setEstado('error');
-      });
-
-    return () => {
-      cancelado = true;
-    };
-  }, [estaAutenticado, cargandoAuth]);
+  if (cargando || estaAutenticado) {
+    return (
+      <main className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-6 pb-24 pt-24 sm:px-12 md:pt-28">
-      <header className="mb-8 space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
-          Mis favoritos
-        </h1>
-        <p className="text-sm text-muted-foreground md:text-base">
-          Los cuartos que guardaste para revisar después.
-        </p>
-      </header>
-
-      {!cargandoAuth && !estaAutenticado && (
-        <EmptyState
-          icon={Heart}
-          title="Inicia sesión para ver tus favoritos"
-          description="Guarda los cuartos que te gusten y vuelve a ellos cuando quieras."
-          action={{
-            type: 'button',
-            label: 'Iniciar sesión',
-            onClick: () => abrirAuthModal('login'),
-          }}
-        />
-      )}
-
-      {(cargandoAuth || estado === 'cargando') && estaAutenticado && (
-        <SkeletonCardGrid count={6} />
-      )}
-
-      {estado === 'error' && (
-        <ErrorState
-          title="No pudimos cargar tus favoritos"
-          description="Inténtalo de nuevo en un momento."
-          retryLabel="Reintentar"
-          onRetry={() => window.location.reload()}
-        />
-      )}
-
-      {estado === 'ok' && favoritos.length === 0 && (
-        <EmptyState
-          icon={Heart}
-          title="Aún no tienes favoritos"
-          description="Explora cuartos y dale al corazón a los que te gusten."
-          action={{ type: 'link', label: 'Explorar cuartos', href: '/search' }}
-        />
-      )}
-
-      {estado === 'ok' && favoritos.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {visibles.map((p) => (
-              <PropertyCard key={p.id} propiedad={p} variant="full" />
-            ))}
-          </div>
-          {hiddenCount > 0 && !showHidden && (
-            <div className="mt-6 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowHidden(true)}
-                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                Mostrar {hiddenCount} oculta{hiddenCount === 1 ? '' : 's'}
-              </button>
-            </div>
-          )}
-        </>
-      )}
+      <EmptyState
+        icon={Heart}
+        title="Inicia sesión para ver tus favoritos"
+        description="Guarda los cuartos que te gusten y vuelve a ellos cuando quieras."
+        action={{
+          type: 'button',
+          label: 'Iniciar sesión',
+          onClick: () => abrirAuthModal('login'),
+        }}
+      />
     </main>
   );
 }

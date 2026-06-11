@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
-import { Modal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/modal';
 import { EditPropertyModal } from '@/components/landlord/edit-property-modal';
 import { propiedadService } from '@/services/landlord-property-service';
 import { useAuthStore } from '@/stores/auth-store';

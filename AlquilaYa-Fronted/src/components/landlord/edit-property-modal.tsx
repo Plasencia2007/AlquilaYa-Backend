@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/legacy-button';
 import { propiedadService } from '@/services/landlord-property-service';
 import {

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, ChevronDown, Loader2, MapPin } from 'lucide-react';
+import { CalendarDays, ChevronDown, Loader2, MapPin, Star } from 'lucide-react';
 import { pagoService } from '@/services/pago-service';
 
 import { Button } from '@/components/ui/button';
@@ -19,11 +19,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/cn';
+import { notify } from '@/lib/notify';
 import { metaEstadoReserva } from '@/lib/reservation-status';
 import { formatearFecha } from '@/lib/relative-time';
 import type { Reserva } from '@/types/reserva';
 
 import { ReservationTimeline } from './reservation-timeline';
+import { ReviewFormDialog } from './review-form-dialog';
 
 interface Props {
   reserva: Reserva;
@@ -44,7 +46,8 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
     try {
       const { init_point } = await pagoService.crearPreferencia(reserva.id);
       window.location.href = init_point;
-    } catch {
+    } catch (err) {
+      notify.error(err, 'No pudimos iniciar el pago. Inténtalo de nuevo.');
       setPagando(false);
     }
   };
@@ -174,6 +177,18 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                 )}
                 {pagando ? 'Redirigiendo...' : 'Pagar ahora'}
               </Button>
+            )}
+
+            {reserva.estado === 'FINALIZADA' && (
+              <ReviewFormDialog
+                reserva={reserva}
+                trigger={
+                  <Button size="sm" className="ml-auto h-8 gap-1.5 text-xs font-bold">
+                    <Star className="size-4" />
+                    Dejar reseña
+                  </Button>
+                }
+              />
             )}
           </div>
         </div>

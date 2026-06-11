@@ -6,7 +6,7 @@ import type { Filtros } from '@/schemas/search-schema';
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
 
-interface PropiedadPublicoDTO {
+export interface PropiedadPublicoDTO {
   id: number;
   titulo: string;
   descripcion?: string;
@@ -37,7 +37,7 @@ interface PropiedadPublicoDTO {
   tiempoRespuestaArrendador?: number;
 }
 
-function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
+export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
   return {
     id: String(dto.id),
     titulo: dto.titulo ?? '',

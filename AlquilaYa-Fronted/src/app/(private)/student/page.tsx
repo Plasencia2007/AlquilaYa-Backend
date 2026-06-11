@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useVerificationStatus } from '@/hooks/use-verification-status';
 import { useFavoritesStore } from '@/stores/favorites-store';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { servicioPropiedades } from '@/services/property-service';
@@ -30,6 +31,7 @@ import type { Reserva } from '@/types/reserva';
 
 export default function StudentDashboardPage() {
   const { usuario } = useAuth();
+  const { verificado } = useVerificationStatus();
   const totalFavoritos = useFavoritesStore((s) => s.ids.size);
   const noLeidasNotif = useNotificationsStore((s) => s.noLeidas);
 
@@ -71,9 +73,9 @@ export default function StudentDashboardPage() {
     {
       id: 'verificacion',
       titulo: 'Verifica tu identidad',
-      descripcion: 'Sube tu DNI y carné universitario.',
+      descripcion: 'Sube las dos caras de tu DNI.',
       href: '/student/profile?tab=verificacion',
-      completado: false,
+      completado: verificado,
     },
     {
       id: 'favoritos',

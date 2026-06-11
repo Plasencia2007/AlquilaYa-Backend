@@ -18,6 +18,8 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { MOCK_PROPIEDADES } from '@/mocks/propiedades';
+import { servicioPropiedades } from '@/services/property-service';
+import type { Propiedad } from '@/types/propiedad';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -38,6 +40,17 @@ const TIPO_LABELS: Record<TipoPropiedadFiltro, string> = {
   CASA: 'Casa',
 };
 
+function fallbackDestacados(): Propiedad[] {
+  return MOCK_PROPIEDADES.filter((p) => p.disponible)
+    .slice()
+    .sort((a, b) => {
+      const da = distanciaAUpeuKm(a.coordenadas) ?? Number.POSITIVE_INFINITY;
+      const db = distanciaAUpeuKm(b.coordenadas) ?? Number.POSITIVE_INFINITY;
+      return da - db;
+    })
+    .slice(0, 4);
+}
+
 export default function Home() {
   const { estaAutenticado, usuario, cargando } = useAuth();
   const { open: openAuthModal } = useAuthModal();
@@ -52,14 +65,29 @@ export default function Home() {
   const [zonaInput, setZonaInput] = useState('');
   const [tipoInput, setTipoInput] = useState<TipoPropiedadFiltro | ''>('');
 
-  const destacados = MOCK_PROPIEDADES.filter((p) => p.disponible)
-    .slice()
-    .sort((a, b) => {
-      const da = distanciaAUpeuKm(a.coordenadas) ?? Number.POSITIVE_INFINITY;
-      const db = distanciaAUpeuKm(b.coordenadas) ?? Number.POSITIVE_INFINITY;
-      return da - db;
-    })
-    .slice(0, 4);
+  const [destacados, setDestacados] = useState<Propiedad[]>([]);
+  const [cargandoDestacados, setCargandoDestacados] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    servicioPropiedades
+      .obtenerDestacadas(4)
+      .then((props) => {
+        if (cancelado) return;
+        // Si el backend aún no tiene propiedades publicadas, mostrar los mocks
+        // de muestra para que el Home nunca quede vacío.
+        setDestacados(props.length > 0 ? props : fallbackDestacados());
+      })
+      .catch(() => {
+        if (!cancelado) setDestacados(fallbackDestacados());
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoDestacados(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const requiereRedireccion = usuario && (usuario.rol === 'ARRENDADOR' || usuario.rol === 'ADMIN');
 
@@ -188,7 +216,19 @@ export default function Home() {
           </Link>
         </header>
 
-        <PropertyCarousel propiedades={destacados} />
+        {cargandoDestacados ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-3">
+                <div className="aspect-[4/3] animate-pulse rounded-2xl bg-muted" />
+                <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <PropertyCarousel propiedades={destacados} />
+        )}
       </section>
 
       {/* ── Tipos de usuario ── */}

@@ -18,6 +18,7 @@ const FILTROS: Array<{ value: FiltroEstado; label: string }> = [
   { value: 'SOLICITADA', label: 'Pendientes' },
   { value: 'APROBADA', label: 'Aprobadas' },
   { value: 'PAGADA', label: 'Confirmadas' },
+  { value: 'FINALIZADA', label: 'Finalizadas' },
   { value: 'RECHAZADA', label: 'Rechazadas' },
   { value: 'CANCELADA', label: 'Canceladas' },
 ];
