@@ -1,6 +1,8 @@
 package com.alquilaya.servicio_catalogos.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
@@ -39,13 +41,19 @@ public class RedisCacheConfig {
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
+        // LocalDateTime como ISO-8601 ("2026-06-14T21:51:11") y NO como array
+        // [2026,6,14,...]: el array colisiona con el tipado polimórfico al releer.
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         // Activamos tipado polimórfico para entidades JPA / DTOs serializados.
         // Restringido a paquetes del proyecto y java.* para no abrir vector de gadgets.
+        // As.PROPERTY (formato @class) round-trippea bien; el WRAPPER_ARRAY por
+        // defecto ["clase",valor] no podía releer el Map<enum,List> cacheado → 500.
         mapper.activateDefaultTyping(
                 BasicPolymorphicTypeValidator.builder()
                         .allowIfBaseType(Object.class)
                         .build(),
-                ObjectMapper.DefaultTyping.NON_FINAL);
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY);
 
         GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(mapper);
 

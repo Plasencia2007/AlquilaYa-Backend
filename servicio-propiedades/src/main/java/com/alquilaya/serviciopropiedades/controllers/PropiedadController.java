@@ -26,7 +26,6 @@ import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -277,11 +276,7 @@ public class PropiedadController {
      * Se invalida en create/update/delete/disponibilidad.
      */
     @GetMapping("/buscar")
-    @Cacheable(
-        value = "propiedades:listado",
-        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona)"
-    )
-    public ResponseEntity<List<PropiedadPublicoDTO>> buscar(
+    public List<PropiedadPublicoDTO> buscar(
             @RequestParam(required = false) BigDecimal precioMin,
             @RequestParam(required = false) BigDecimal precioMax,
             @RequestParam(required = false) String tipo,
@@ -291,11 +286,12 @@ public class PropiedadController {
             @RequestParam(required = false) List<String> servicios,
             @RequestParam(required = false) String zona
     ) {
-        List<Propiedad> resultados = propiedadService.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona);
-        // Batch enrich: una sola llamada Feign al servicio-usuarios por página
-        // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
-        List<PropiedadPublicoDTO> dto = propiedadService.toPublicoBatch(resultados);
-        return ResponseEntity.ok(dto);
+        // El @Cacheable vive en el servicio (devuelve un contenedor, no una List
+        // cruda, porque Redis no deserializa colecciones en la raíz). Aquí solo
+        // desenvolvemos para mantener el contrato HTTP (array JSON).
+        return propiedadService.buscarPublicoCacheado(
+                precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona
+        ).getPropiedades();
     }
 
     @GetMapping("/{id}/publico")

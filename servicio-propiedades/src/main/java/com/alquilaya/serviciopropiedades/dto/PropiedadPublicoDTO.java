@@ -1,16 +1,24 @@
 package com.alquilaya.serviciopropiedades.dto;
 
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+// @NoArgsConstructor + @AllArgsConstructor son necesarios además de @Builder:
+// el builder usa el all-args, y Jackson (al leer de la caché Redis) necesita el
+// constructor vacío + setters. Sin @NoArgsConstructor, Lombok genera solo el
+// all-args y la deserialización falla con "no Creators / default constructor".
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PropiedadPublicoDTO {
     private Long id;
     private String titulo;

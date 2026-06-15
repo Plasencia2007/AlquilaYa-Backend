@@ -710,11 +710,39 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
                 </div>
                 <h3 className="text-slate-900 font-black truncate">{doc.nombreUsuario} {doc.apellidoUsuario}</h3>
                 <p className="text-slate-400 text-xs mb-4">{doc.correoUsuario}</p>
+
+                {/* Previsualización del documento (clic para ampliar). */}
+                {doc.urlDocumento ? (
+                  <a
+                    href={doc.urlDocumento}
+                    target="_blank" rel="noopener noreferrer"
+                    className="group/img relative block mb-4 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-[16/10]"
+                  >
+                    <img
+                      src={doc.urlDocumento}
+                      alt={`${doc.tipoDocumento} de ${doc.nombreUsuario}`}
+                      loading="lazy"
+                      className="w-full h-full object-contain transition-transform group-hover/img:scale-105"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/20 transition-all">
+                      <span className="opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded-md">
+                        <ExternalLink size={11} /> Ampliar
+                      </span>
+                    </span>
+                  </a>
+                ) : (
+                  <div className="mb-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 aspect-[16/10] flex items-center justify-center">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Sin imagen</span>
+                  </div>
+                )}
+
                 <div className="space-y-2 pt-4 border-t border-slate-100">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-slate-400 font-medium">Enviado</span>
                     <span className="text-slate-700 font-bold">
-                      {new Date(doc.fechaSubida).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {doc.fechaSubida
+                        ? new Date(doc.fechaSubida).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : '---'}
                     </span>
                   </div>
                 </div>

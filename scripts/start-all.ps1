@@ -174,6 +174,43 @@ if ($missing.Count -gt 0) {
 }
 
 # ---------------------------------------------------------------------------
+# 0.5 Asegurar JAVA_HOME para las ventanas hijas (mvnw lo necesita).
+# Se lee del REGISTRO (User/Machine), no solo del entorno de este proceso:
+# si esta terminal se abrio antes de instalar el JDK, su entorno esta viejo y
+# las ventanas hijas heredarian un JAVA_HOME vacio -> "JAVA_HOME is not defined".
+# Si no hay nada en el registro, autodetecta un JDK 21 en Program Files.
+# ---------------------------------------------------------------------------
+Write-Host ""
+Write-Host "[0.5] JAVA_HOME" -ForegroundColor Yellow
+function Resolve-JavaHome {
+    $cands = @(
+        [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User'),
+        [Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine'),
+        $env:JAVA_HOME
+    )
+    foreach ($r in @("$env:ProgramFiles\Eclipse Adoptium", "$env:ProgramFiles\Microsoft", "$env:ProgramFiles\Java")) {
+        if (Test-Path $r) {
+            Get-ChildItem $r -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match 'jdk-?21' } |
+                ForEach-Object { $cands += $_.FullName }
+        }
+    }
+    foreach ($c in $cands) {
+        if ($c -and (Test-Path (Join-Path $c 'bin\java.exe'))) { return $c }
+    }
+    return $null
+}
+$javaHome = Resolve-JavaHome
+if (-not $javaHome) {
+    Write-Host "  ERROR: No se encontro un JDK 21. Instalalo con:" -ForegroundColor Red
+    Write-Host "    winget install EclipseAdoptium.Temurin.21.JDK" -ForegroundColor White
+    exit 1
+}
+$env:JAVA_HOME = $javaHome
+$env:Path = (Join-Path $javaHome 'bin') + ';' + $env:Path
+Write-Host "  JAVA_HOME = $javaHome" -ForegroundColor DarkGray
+
+# ---------------------------------------------------------------------------
 # 1. Infra Docker (postgres, mysql, kafka, [ngrok])
 # ---------------------------------------------------------------------------
 if (-not $SkipDocker) {

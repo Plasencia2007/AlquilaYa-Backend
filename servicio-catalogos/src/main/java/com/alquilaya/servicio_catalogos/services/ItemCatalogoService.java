@@ -19,9 +19,13 @@ public class ItemCatalogoService {
     private final ItemCatalogoRepository repository;
 
     @Cacheable(value = "filtrosActivos")
-    public Map<TipoItem, List<ItemCatalogo>> obtenerFiltrosActivos() {
+    public Map<String, List<ItemCatalogo>> obtenerFiltrosActivos() {
+        // Clave String (nombre del enum), no TipoItem: al releer de Redis el Map
+        // vuelve con claves String y, si el tipo declarado fuera Map<TipoItem,..>,
+        // Jackson intentaría castear String->Enum al serializar la respuesta (500).
+        // El frontend ya consume claves "SERVICIO"/"REGLA"/etc.
         return repository.findByActivoTrue().stream()
-                .collect(Collectors.groupingBy(ItemCatalogo::getTipo));
+                .collect(Collectors.groupingBy(item -> item.getTipo().name()));
     }
 
     public List<ItemCatalogo> listarPorTipo(TipoItem tipo) {

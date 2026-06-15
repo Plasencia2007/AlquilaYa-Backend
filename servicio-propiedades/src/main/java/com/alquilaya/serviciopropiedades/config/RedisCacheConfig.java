@@ -1,7 +1,5 @@
 package com.alquilaya.serviciopropiedades.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,14 +32,14 @@ public class RedisCacheConfig {
     public static final String CACHE_LISTADO = "propiedades:listado";
 
     private GenericJackson2JsonRedisSerializer jsonSerializer() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.activateDefaultTyping(
-                BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(Object.class)
-                        .build(),
-                ObjectMapper.DefaultTyping.NON_FINAL);
-        return new GenericJackson2JsonRedisSerializer(mapper);
+        // Partimos del serializer por defecto (su mapper interno ya trae el manejo
+        // de tipos polimórficos `@class` que SÍ hace round-trip de colecciones en la
+        // raíz, p.ej. List<PropiedadPublicoDTO>) y solo le añadimos el soporte de
+        // java.time. Construir el ObjectMapper a mano con activateDefaultTyping en
+        // formato WRAPPER_ARRAY rompía la lectura de listas cacheadas
+        // ("Unexpected token (START_ARRAY), expected VALUE_STRING ... type id").
+        return new GenericJackson2JsonRedisSerializer()
+                .configure(mapper -> mapper.registerModule(new JavaTimeModule()));
     }
 
     @Bean

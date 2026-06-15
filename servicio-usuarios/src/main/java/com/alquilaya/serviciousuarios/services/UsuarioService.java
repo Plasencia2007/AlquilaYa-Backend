@@ -10,6 +10,7 @@ import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.exceptions.CorreoYaRegistradoException;
+import com.alquilaya.serviciousuarios.exceptions.TelefonoYaRegistradoException;
 import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.util.LogMask;
@@ -60,6 +61,12 @@ public class UsuarioService {
     public Usuario registrarUsuario(RegisterRequest request) {
         if (usuarioRepository.existsByCorreo(request.getCorreo())) {
             throw new CorreoYaRegistradoException("El correo " + request.getCorreo() + " ya está registrado en AlquilaYa. Si ya tienes cuenta, intenta iniciar sesión.");
+        }
+
+        // El teléfono es la clave del OTP (login/verificación), debe ser único.
+        // Sin esto se crean cuentas duplicadas y findByTelefono lanza NonUniqueResultException al verificar.
+        if (request.getTelefono() != null && usuarioRepository.existsByTelefono(request.getTelefono())) {
+            throw new TelefonoYaRegistradoException("El teléfono " + request.getTelefono() + " ya está registrado en AlquilaYa. Si ya tienes cuenta, intenta iniciar sesión.");
         }
 
         Rol rol = Rol.valueOf(request.getRol().toUpperCase());

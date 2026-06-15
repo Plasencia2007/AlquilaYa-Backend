@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.controllers;
 
+import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
 import com.alquilaya.serviciousuarios.dto.TipoDocumentoConfigDTO;
 import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
@@ -55,7 +56,7 @@ public class DocumentoController {
 
     @GetMapping("/admin/pending")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_DOCUMENTOS')")
-    public ResponseEntity<List<DocumentoVerificacion>> getPendingDocuments() {
+    public ResponseEntity<List<DocumentoAdminDTO>> getPendingDocuments() {
         return ResponseEntity.ok(documentoService.listarPendientes());
     }
 

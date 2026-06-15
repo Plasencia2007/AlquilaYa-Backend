@@ -20,7 +20,7 @@ public class ItemCatalogoController {
     private final ItemCatalogoService service;
 
     @GetMapping("/filtros/activos")
-    public ResponseEntity<Map<TipoItem, List<ItemCatalogo>>> obtenerFiltrosActivos() {
+    public ResponseEntity<Map<String, List<ItemCatalogo>>> obtenerFiltrosActivos() {
         return ResponseEntity.ok(service.obtenerFiltrosActivos());
     }
 

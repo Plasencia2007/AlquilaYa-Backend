@@ -3,6 +3,7 @@ package com.alquilaya.serviciopropiedades.services;
 import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadAdminDTO;
+import com.alquilaya.serviciopropiedades.dto.PropiedadBusquedaResultado;
 import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
@@ -14,11 +15,13 @@ import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -52,9 +55,35 @@ public class PropiedadService {
             throw new IllegalArgumentException("distanciaMax no puede ser negativa");
         }
         List<String> filtroServicios = (servicios == null || servicios.isEmpty()) ? null : servicios;
-        String filtroZona = (zona == null || zona.isBlank()) ? null : zona.trim();
+        // El patrón LIKE (comodines + minúsculas) se arma aquí para que :zona viaje
+        // como String puro a la query (LOWER(p.direccion) LIKE :zona). Si se concatena
+        // dentro del HQL, Hibernate no infiere el tipo y PostgreSQL lo trata como bytea
+        // -> "function lower(bytea) does not exist".
+        String filtroZona = (zona == null || zona.isBlank())
+                ? null
+                : "%" + zona.trim().toLowerCase() + "%";
         return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax,
                 filtroServicios, filtroZona);
+    }
+
+    /**
+     * Búsqueda pública cacheada en Redis (5 min). El @Cacheable vive aquí (y no en
+     * el controller) porque devuelve un contenedor {@link PropiedadBusquedaResultado}:
+     * Redis no deserializa una List en la raíz. El controller desenvuelve para
+     * mantener el contrato HTTP (array). Se invalida con los @CacheEvict del
+     * controller sobre "propiedades:listado" en create/update/delete.
+     */
+    @Cacheable(
+        value = "propiedades:listado",
+        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona)"
+    )
+    public PropiedadBusquedaResultado buscarPublicoCacheado(
+            BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
+            Boolean disponible, Integer distanciaMax, List<String> servicios, String zona) {
+        List<Propiedad> resultados = buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona);
+        // Batch enrich: una sola llamada Feign al servicio-usuarios por página
+        // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
+        return new PropiedadBusquedaResultado(toPublicoBatch(resultados));
     }
 
     public void calcularYSetearDistancia(Propiedad p) {
@@ -84,8 +113,8 @@ public class PropiedadService {
                 .nroPiso(p.getNroPiso())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
-                .serviciosIncluidos(p.getServiciosIncluidos())
-                .reglas(p.getReglas())
+                .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())
                 .distanciaMetros(p.getDistanciaMetros())
@@ -216,8 +245,8 @@ public class PropiedadService {
                 .nroPiso(p.getNroPiso())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
-                .serviciosIncluidos(p.getServiciosIncluidos())
-                .reglas(p.getReglas())
+                .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())
                 .distanciaMetros(p.getDistanciaMetros())
@@ -263,8 +292,8 @@ public class PropiedadService {
                 .nroPiso(p.getNroPiso())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
-                .serviciosIncluidos(p.getServiciosIncluidos())
-                .reglas(p.getReglas())
+                .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())
                 .distanciaMetros(p.getDistanciaMetros())
@@ -309,6 +338,20 @@ public class PropiedadService {
         }
     }
 
+    /**
+     * Copia una colección de Hibernate (el {@code PersistentBag} de un
+     * {@code @ElementCollection}) a un {@link ArrayList} plano antes de meterla en
+     * un DTO. Imprescindible para los DTOs que se cachean en Redis: si se asigna el
+     * proxy de Hibernate directamente, {@code GenericJackson2JsonRedisSerializer}
+     * escribe el {@code @class} del PersistentBag y al releer de la caché —ya sin
+     * sesión— revienta con "failed to lazily initialize a collection - no Session".
+     */
+    private static List<String> copiaPlana(List<String> origen) {
+        return (origen == null || origen.isEmpty())
+                ? new ArrayList<>()
+                : new ArrayList<>(origen);
+    }
+
     private String componerNombre(ArrendadorInfoDTO info) {
         if (info == null) return null;
         String n = info.getNombre() != null ? info.getNombre() : "";
@@ -318,14 +361,19 @@ public class PropiedadService {
     }
 
     private List<String> extraerUrlsImagenes(Propiedad p) {
+        // Siempre ArrayList plano (no Collections.singletonList/emptyList): estos DTOs
+        // se cachean en Redis y las listas inmutables del JDK tampoco hacen round-trip
+        // limpio con el serializer por @class.
         if (p.getImagenes() == null || p.getImagenes().isEmpty()) {
-            return p.getImagenUrl() != null ? Collections.singletonList(p.getImagenUrl()) : Collections.emptyList();
+            List<String> unica = new ArrayList<>();
+            if (p.getImagenUrl() != null) unica.add(p.getImagenUrl());
+            return unica;
         }
         return p.getImagenes().stream()
                 .sorted((a, b) -> Integer.compare(
                         a.getOrden() != null ? a.getOrden() : 0,
                         b.getOrden() != null ? b.getOrden() : 0))
                 .map(PropiedadImagen::getUrl)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 }

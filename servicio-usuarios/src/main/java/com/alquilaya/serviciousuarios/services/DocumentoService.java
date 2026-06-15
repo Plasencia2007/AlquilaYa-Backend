@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.services;
 
+import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
@@ -62,8 +63,12 @@ public class DocumentoService {
         return documentoRepository.findByUsuario(usuario);
     }
 
-    public List<DocumentoVerificacion> listarPendientes() {
-        return documentoRepository.findByEstadoVerificacion(EstadoVerificacion.PENDIENTE);
+    @Transactional(readOnly = true)
+    public List<DocumentoAdminDTO> listarPendientes() {
+        return documentoRepository.findByEstadoVerificacionConUsuario(EstadoVerificacion.PENDIENTE)
+                .stream()
+                .map(DocumentoAdminDTO::desde)
+                .toList();
     }
 
     @Transactional
