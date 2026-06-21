@@ -9,8 +9,8 @@ export default function WIPPage() {
         <span className="material-symbols-outlined text-4xl">construction</span>
       </div>
       <Badge variant="surface" className="mb-4">Sección en desarrollo</Badge>
-      <h1 className="text-3xl font-black text-on-surface tracking-tighter mb-2">Estamos trabajando en esto</h1>
-      <p className="text-on-surface-variant max-w-sm mb-8">Esta sección estará disponible muy pronto para que gestiones tu negocio con mayor eficiencia.</p>
+      <h1 className="text-3xl font-black text-foreground tracking-tighter mb-2">Estamos trabajando en esto</h1>
+      <p className="text-muted-foreground max-w-sm mb-8">Esta sección estará disponible muy pronto para que gestiones tu negocio con mayor eficiencia.</p>
       <Button asChild variant="dark">
         <Link href="/landlord/dashboard">Volver al Resumen</Link>
       </Button>

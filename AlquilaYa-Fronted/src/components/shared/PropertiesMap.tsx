@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
-import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { Circle, Polygon, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L, { LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-import { UPEU_COORDS, distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { getCampusAnchor, distanciaAUpeuKm, formatearDistancia, type LatLng } from '@/lib/geo';
+import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import type { Propiedad } from '@/types/propiedad';
 import { cn } from '@/lib/cn';
 
@@ -32,23 +33,52 @@ interface Props {
   className?: string;
 }
 
-function FitBounds({ propiedades }: { propiedades: Propiedad[] }) {
+/** Vértices del polígono ({ lat, lng }) parseados a tuplas [lat, lng] de Leaflet. */
+function parsePoligono(json?: string | null): [number, number][] {
+  if (!json || !json.trim()) return [];
+  try {
+    const data: unknown = JSON.parse(json);
+    if (!Array.isArray(data)) return [];
+    return (data as Array<{ lat?: unknown; lng?: unknown }>)
+      .filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+      .map((p) => [p.lat as number, p.lng as number]);
+  } catch {
+    return [];
+  }
+}
+
+function FitBounds({
+  propiedades,
+  zonas,
+  center,
+}: {
+  propiedades: Propiedad[];
+  zonas: ZonaResolucion[];
+  center: LatLng;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    const puntos: [number, number][] = [[UPEU_COORDS.lat, UPEU_COORDS.lng]];
+    const puntos: [number, number][] = [[center.lat, center.lng]];
     for (const p of propiedades) {
       if (p.coordenadas) puntos.push([p.coordenadas.lat, p.coordenadas.lng]);
     }
-    if (puntos.length === 0) return;
+    // Incluir la extensión de cada zona para que la cobertura completa entre en cuadro.
+    for (const z of zonas) {
+      if (z.tipoLimite === 'CIRCULO' && z.latitud != null && z.longitud != null && z.radioKm) {
+        const dLat = z.radioKm / 111;
+        const dLng = z.radioKm / (111 * Math.cos((z.latitud * Math.PI) / 180));
+        puntos.push([z.latitud + dLat, z.longitud + dLng], [z.latitud - dLat, z.longitud - dLng]);
+      } else if (z.tipoLimite === 'POLIGONO') {
+        puntos.push(...parsePoligono(z.poligonoJson));
+      }
+    }
     if (puntos.length === 1) {
       map.setView(puntos[0], 13);
       return;
     }
-    const bounds = new LatLngBounds(puntos);
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
-    map.once('zoomend', () => { if (map.getZoom() < 13) map.setZoom(13); });
-  }, [propiedades, map]);
+    map.fitBounds(new LatLngBounds(puntos), { padding: [40, 40], maxZoom: 15 });
+  }, [propiedades, zonas, center, map]);
 
   return null;
 }
@@ -56,10 +86,38 @@ function FitBounds({ propiedades }: { propiedades: Propiedad[] }) {
 export default function PropertiesMap({ propiedades, className }: Props) {
   const propiedadesConCoords = propiedades.filter((p) => p.coordenadas);
 
+  const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
+  const [campus, setCampus] = useState<LatLng>(getCampusAnchor());
+
+  useEffect(() => {
+    let cancel = false;
+    universidadService
+      .listarZonasActivas()
+      .then((z) => { if (!cancel) setZonas(Array.isArray(z) ? z : []); })
+      .catch(() => {});
+    universidadService
+      .obtenerCampusPrincipal()
+      .then((c) => {
+        if (!cancel && c && c.latitud != null && c.longitud != null) {
+          setCampus({ lat: c.latitud, lng: c.longitud });
+        }
+      })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, []);
+
+  const zonaPath = {
+    fillColor: '#3b82f6',
+    fillOpacity: 0.1,
+    color: '#3b82f6',
+    weight: 1.5,
+    opacity: 0.65,
+  };
+
   return (
     <div className={cn('isolate', className)}>
       <MapContainer
-        center={[UPEU_COORDS.lat, UPEU_COORDS.lng]}
+        center={[campus.lat, campus.lng]}
         zoom={12}
         scrollWheelZoom
         className="h-full w-full"
@@ -69,22 +127,28 @@ export default function PropertiesMap({ propiedades, className }: Props) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <FitBounds propiedades={propiedadesConCoords} />
+        <FitBounds propiedades={propiedadesConCoords} zonas={zonas} center={campus} />
 
-        <Circle
-          center={[UPEU_COORDS.lat, UPEU_COORDS.lng]}
-          radius={1500}
-          pathOptions={{
-            fillColor: '#3b82f6',
-            fillOpacity: 0.12,
-            color: '#3b82f6',
-            weight: 1.5,
-            opacity: 0.5,
-            dashArray: '6 4',
-          }}
-        />
+        {/* Zonas de cobertura reales del catálogo (círculo o polígono) */}
+        {zonas.map((z) => {
+          if (z.tipoLimite === 'CIRCULO' && z.latitud != null && z.longitud != null && z.radioKm) {
+            return (
+              <Circle
+                key={z.id}
+                center={[z.latitud, z.longitud]}
+                radius={z.radioKm * 1000}
+                pathOptions={zonaPath}
+              />
+            );
+          }
+          const pts = parsePoligono(z.poligonoJson);
+          if (pts.length >= 3) {
+            return <Polygon key={z.id} positions={pts} pathOptions={zonaPath} />;
+          }
+          return null;
+        })}
 
-        <Marker position={[UPEU_COORDS.lat, UPEU_COORDS.lng]} icon={upeuIcon}>
+        <Marker position={[campus.lat, campus.lng]} icon={upeuIcon}>
           <Popup>
             <strong>Universidad Peruana Unión</strong>
             <br />

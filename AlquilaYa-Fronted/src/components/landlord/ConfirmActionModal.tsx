@@ -20,17 +20,17 @@ interface ConfirmActionModalProps {
 }
 
 const TONE_BUTTON: Record<NonNullable<ConfirmActionModalProps['tone']>, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700',
+  primary: 'bg-primary text-white hover:bg-primary',
   success: 'bg-green-600 text-white hover:bg-green-700',
   danger: 'bg-red-600 text-white hover:bg-red-700',
-  neutral: 'bg-on-surface text-surface hover:bg-on-surface/90',
+  neutral: 'bg-foreground text-background hover:bg-foreground/90',
 };
 
 const TONE_ACCENT: Record<NonNullable<ConfirmActionModalProps['tone']>, string> = {
-  primary: 'text-blue-500 bg-blue-500/10',
+  primary: 'text-primary bg-primary/10',
   success: 'text-green-600 bg-green-500/10',
   danger: 'text-red-600 bg-red-500/10',
-  neutral: 'text-on-surface bg-on-surface/10',
+  neutral: 'text-foreground bg-foreground/10',
 };
 
 const TONE_ICON: Record<NonNullable<ConfirmActionModalProps['tone']>, string> = {
@@ -90,7 +90,7 @@ export function ConfirmActionModal({
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => !isLoading && onCancel()}
       />
-      <div className="relative w-full max-w-md bg-surface-container-lowest rounded-3xl shadow-2xl border border-on-surface/5 p-6 sm:p-8 animate-scale-in">
+      <div className="relative w-full max-w-md bg-card rounded-3xl shadow-2xl border border-border p-6 sm:p-8 animate-scale-in">
         <div className="flex items-start gap-4">
           <div
             className={cn(
@@ -105,12 +105,12 @@ export function ConfirmActionModal({
           <div className="flex-1 min-w-0">
             <h2
               id="confirm-modal-title"
-              className="text-lg font-black text-on-surface tracking-tight"
+              className="text-lg font-black text-foreground tracking-tight"
             >
               {title}
             </h2>
             {description && (
-              <p className="text-[13px] text-on-surface-variant font-medium mt-1.5 leading-relaxed">
+              <p className="text-[13px] text-muted-foreground font-medium mt-1.5 leading-relaxed">
                 {description}
               </p>
             )}
@@ -121,7 +121,7 @@ export function ConfirmActionModal({
           <div className="mt-5">
             <label
               htmlFor="confirm-modal-reason"
-              className="block text-[10px] font-black uppercase tracking-widest text-on-surface-variant opacity-70 mb-2"
+              className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-70 mb-2"
             >
               Motivo
             </label>
@@ -133,13 +133,13 @@ export function ConfirmActionModal({
               placeholder={reasonPlaceholder}
               maxLength={300}
               disabled={isLoading}
-              className="w-full rounded-2xl bg-surface-container-low border border-on-surface/10 px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/10 transition-all resize-none"
+              className="w-full rounded-2xl bg-muted border border-border px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all resize-none"
             />
             <div className="flex justify-between mt-1.5">
-              <p className="text-[10px] text-on-surface-variant opacity-60">
+              <p className="text-[10px] text-muted-foreground opacity-60">
                 Mínimo 4 caracteres.
               </p>
-              <p className="text-[10px] text-on-surface-variant opacity-60">
+              <p className="text-[10px] text-muted-foreground opacity-60">
                 {reason.length}/300
               </p>
             </div>

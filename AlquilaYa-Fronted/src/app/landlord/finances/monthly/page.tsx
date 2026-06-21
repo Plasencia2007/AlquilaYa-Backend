@@ -20,7 +20,8 @@ interface FilaMensual {
   mes: string; // YYYY-MM
   etiqueta: string; // ej. "abr 2026"
   reservas: number;
-  total: number;
+  total: number; // ingreso del arrendador (montoTotal, sin comisión)
+  comision: number; // comisión de plataforma que pagó el estudiante (informativo)
 }
 
 const MESES = [
@@ -57,9 +58,10 @@ function agruparPorMes(reservas: Reserva[]): FilaMensual[] {
     if (Number.isNaN(d.getTime())) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const etiqueta = `${MESES[d.getMonth()]} ${d.getFullYear()}`;
-    const fila = mapa.get(key) ?? { mes: key, etiqueta, reservas: 0, total: 0 };
+    const fila = mapa.get(key) ?? { mes: key, etiqueta, reservas: 0, total: 0, comision: 0 };
     fila.reservas += 1;
     fila.total += Number(r.montoTotal ?? 0);
+    fila.comision += Number(r.comision ?? 0);
     mapa.set(key, fila);
   }
   return Array.from(mapa.values()).sort((a, b) => a.mes.localeCompare(b.mes));
@@ -93,28 +95,28 @@ export default function LandlordFinancesMonthlyPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">
             Ingresos mensuales
           </h1>
-          <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
+          <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             Reservas pagadas agrupadas por mes.
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
             Total general
           </p>
-          <p className="text-3xl font-black text-blue-500">{formatearMoneda(total)}</p>
+          <p className="text-3xl font-black text-primary">{formatearMoneda(total)}</p>
         </div>
       </header>
 
-      <Card className="bg-white/40 border border-on-surface/5 p-6">
-        <h3 className="text-[11px] font-black text-on-surface-variant uppercase tracking-widest mb-4">
+      <Card className="bg-white/40 border border-border p-6">
+        <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mb-4">
           Evolución de ingresos
         </h3>
         <div className="h-72 w-full">
           {filas.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-on-surface-variant">
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               {cargando ? 'Cargando…' : 'Aún no tienes ingresos registrados.'}
             </div>
           ) : (
@@ -127,35 +129,39 @@ export default function LandlordFinancesMonthlyPage() {
                   formatter={(v) => formatearMoneda(Number(v))}
                   labelStyle={{ fontWeight: 700 }}
                 />
-                <Bar dataKey="total" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="total" fill="#8f0304" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
       </Card>
 
-      <Card padding="none" className="bg-white/40 border border-on-surface/5 overflow-hidden">
+      <Card padding="none" className="bg-white/40 border border-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-on-surface/5 text-on-surface-variant text-[10px] uppercase tracking-widest">
+          <thead className="bg-muted text-muted-foreground text-[10px] uppercase tracking-widest">
             <tr>
               <th className="text-left px-6 py-3 font-black">Mes</th>
               <th className="text-right px-6 py-3 font-black">Reservas</th>
-              <th className="text-right px-6 py-3 font-black">Total</th>
+              <th className="text-right px-6 py-3 font-black">Comisión plataforma</th>
+              <th className="text-right px-6 py-3 font-black">Tu ingreso</th>
             </tr>
           </thead>
           <tbody>
             {filas.map((f) => (
-              <tr key={f.mes} className="border-t border-on-surface/5">
-                <td className="px-6 py-3 font-bold text-on-surface/80 capitalize">{f.etiqueta}</td>
+              <tr key={f.mes} className="border-t border-border">
+                <td className="px-6 py-3 font-bold text-foreground/80 capitalize">{f.etiqueta}</td>
                 <td className="px-6 py-3 text-right font-medium">{f.reservas}</td>
-                <td className="px-6 py-3 text-right font-black text-blue-600">
+                <td className="px-6 py-3 text-right font-medium text-muted-foreground">
+                  {f.comision > 0 ? formatearMoneda(f.comision) : '—'}
+                </td>
+                <td className="px-6 py-3 text-right font-black text-primary">
                   {formatearMoneda(f.total)}
                 </td>
               </tr>
             ))}
             {filas.length === 0 && !cargando && (
               <tr>
-                <td colSpan={3} className="px-6 py-6 text-center text-on-surface-variant">
+                <td colSpan={4} className="px-6 py-6 text-center text-muted-foreground">
                   Sin datos para mostrar.
                 </td>
               </tr>

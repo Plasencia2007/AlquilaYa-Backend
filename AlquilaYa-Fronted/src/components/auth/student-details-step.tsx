@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -10,15 +11,38 @@ import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
 import { studentDetailsSchema, type StudentDetailsFormData } from '@/schemas/auth-schema';
+import { universidadService, type Universidad } from '@/services/universidad-service';
+import { carreraService, type Carrera } from '@/services/carrera-service';
+
+const SELECT_CLASS =
+  'h-12 w-full rounded-xl border border-input bg-input px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60';
 
 export function StudentDetailsStep() {
   const { registrarse } = useAuth();
   const { personal, studentDetails, setStudentDetails, setStep } = useAuthModal();
 
+  const [universidades, setUniversidades] = useState<Universidad[]>([]);
+  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+
+  useEffect(() => {
+    let cancel = false;
+    Promise.allSettled([
+      universidadService.listarActivas(),
+      carreraService.listarActivas(),
+    ]).then(([u, c]) => {
+      if (cancel) return;
+      setUniversidades(u.status === 'fulfilled' && Array.isArray(u.value) ? u.value : []);
+      setCarreras(c.status === 'fulfilled' && Array.isArray(c.value) ? c.value : []);
+      setCargandoCatalogo(false);
+    });
+    return () => { cancel = true; };
+  }, []);
+
   const form = useForm<StudentDetailsFormData>({
     resolver: zodResolver(studentDetailsSchema),
     defaultValues: {
-      universidad: studentDetails?.universidad ?? 'Universidad Peruana Unión',
+      universidad: studentDetails?.universidad ?? '',
       codigoEstudiante: studentDetails?.codigoEstudiante ?? '',
       carrera: studentDetails?.carrera ?? '',
       ciclo: studentDetails?.ciclo ?? '',
@@ -70,7 +94,22 @@ export function StudentDetailsStep() {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input {...field} placeholder="Universidad" className="h-12 rounded-xl bg-input text-sm" />
+                  {cargandoCatalogo ? (
+                    <select disabled className={SELECT_CLASS}>
+                      <option>Cargando universidades…</option>
+                    </select>
+                  ) : universidades.length > 0 ? (
+                    <select {...field} className={SELECT_CLASS}>
+                      <option value="" disabled>Selecciona tu universidad</option>
+                      {universidades.map((u) => (
+                        <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select disabled className={SELECT_CLASS}>
+                      <option>No hay universidades en el catálogo</option>
+                    </select>
+                  )}
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
@@ -110,7 +149,22 @@ export function StudentDetailsStep() {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input {...field} placeholder="Carrera" className="h-12 rounded-xl bg-input text-sm" />
+                  {cargandoCatalogo ? (
+                    <select disabled className={SELECT_CLASS}>
+                      <option>Cargando carreras…</option>
+                    </select>
+                  ) : carreras.length > 0 ? (
+                    <select {...field} className={SELECT_CLASS}>
+                      <option value="" disabled>Selecciona tu carrera</option>
+                      {carreras.map((c) => (
+                        <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select disabled className={SELECT_CLASS}>
+                      <option>No hay carreras en el catálogo</option>
+                    </select>
+                  )}
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>

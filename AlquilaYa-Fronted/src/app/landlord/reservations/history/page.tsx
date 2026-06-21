@@ -34,14 +34,14 @@ function derivarEstadoContrato(reserva: Reserva): 'firmado' | 'expirado' {
 
 function CardSkeleton() {
   return (
-    <div className="rounded-[2.5rem] border border-on-surface/5 bg-surface-container-lowest p-0 overflow-hidden animate-pulse">
+    <div className="rounded-[2.5rem] border border-border bg-card p-0 overflow-hidden animate-pulse">
       <div className="flex">
-        <div className="w-44 h-40 bg-on-surface/5 hidden md:block" />
+        <div className="w-44 h-40 bg-muted hidden md:block" />
         <div className="flex-1 p-5 space-y-3">
-          <div className="h-4 w-1/2 bg-on-surface/5 rounded-full" />
-          <div className="h-3 w-1/3 bg-on-surface/5 rounded-full" />
+          <div className="h-4 w-1/2 bg-muted rounded-full" />
+          <div className="h-3 w-1/3 bg-muted rounded-full" />
           <div className="grid grid-cols-4 gap-3 pt-2">
-            {[1,2,3,4].map((i) => <div key={i} className="h-8 bg-on-surface/5 rounded-xl" />)}
+            {[1,2,3,4].map((i) => <div key={i} className="h-8 bg-muted rounded-xl" />)}
           </div>
         </div>
       </div>
@@ -106,10 +106,10 @@ export default function ReservationsHistoryPage() {
           <Badge variant="surface" className="mb-3">
             {seccion === 'historial' ? 'Historial' : 'Contratos'}
           </Badge>
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">
             {seccion === 'historial' ? 'Historial de reservas' : 'Mis Contratos'}
           </h1>
-          <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
+          <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             {seccion === 'historial'
               ? 'Reservas finalizadas, rechazadas o canceladas. Solo lectura.'
               : 'Gestión de documentos legales y acuerdos de alquiler.'}
@@ -127,7 +127,7 @@ export default function ReservationsHistoryPage() {
       </header>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-on-surface/10">
+      <div className="flex gap-2 border-b border-border">
         {SECCIONES.map((s) => (
           <button
             key={s.id}
@@ -136,8 +136,8 @@ export default function ReservationsHistoryPage() {
             className={
               'px-5 py-2.5 text-[12px] font-black uppercase tracking-wider transition-all rounded-t-xl ' +
               (seccion === s.id
-                ? 'bg-surface text-primary border-b-2 border-primary'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low')
+                ? 'bg-background text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted')
             }
           >
             {s.label}
@@ -154,7 +154,7 @@ export default function ReservationsHistoryPage() {
       {/* ── Tab Historial ──────────────────────────────────── */}
       {seccion === 'historial' && (
         <>
-          <div className="rounded-3xl border border-on-surface/5 bg-surface-container-lowest p-5 space-y-4">
+          <div className="rounded-3xl border border-border bg-card p-5 space-y-4">
             <div className="flex flex-wrap gap-2">
               {FILTROS_ESTADO.map((f) => {
                 const total = f.id === 'TODOS' ? historico.length : historico.filter((r) => r.estado === f.id).length;
@@ -167,12 +167,12 @@ export default function ReservationsHistoryPage() {
                     className={
                       'inline-flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all ' +
                       (activo
-                        ? 'bg-on-surface text-surface'
-                        : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container')
+                        ? 'bg-foreground text-background'
+                        : 'bg-muted text-muted-foreground hover:bg-muted')
                     }
                   >
                     {f.label}
-                    <span className={'rounded-full px-2 py-0.5 text-[9px] font-black ' + (activo ? 'bg-surface/25 text-surface' : 'bg-on-surface/5')}>
+                    <span className={'rounded-full px-2 py-0.5 text-[9px] font-black ' + (activo ? 'bg-background/25 text-background' : 'bg-muted')}>
                       {total}
                     </span>
                   </button>
@@ -182,12 +182,12 @@ export default function ReservationsHistoryPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               <label className="block">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-on-surface-variant opacity-70 mb-1.5">Desde</span>
-                <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full rounded-2xl bg-surface-container-low border border-on-surface/10 px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all" />
+                <span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-70 mb-1.5">Desde</span>
+                <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full rounded-2xl bg-muted border border-border px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all" />
               </label>
               <label className="block">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-on-surface-variant opacity-70 mb-1.5">Hasta</span>
-                <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full rounded-2xl bg-surface-container-low border border-on-surface/10 px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all" />
+                <span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-70 mb-1.5">Hasta</span>
+                <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full rounded-2xl bg-muted border border-border px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all" />
               </label>
               <div className="flex items-end">
                 <Button type="button" variant="ghost" size="sm" onClick={() => { setFiltro('TODOS'); setDesde(''); setHasta(''); }} className="w-full">
@@ -200,12 +200,12 @@ export default function ReservationsHistoryPage() {
           {loading && <div className="space-y-4"><CardSkeleton /><CardSkeleton /></div>}
 
           {!loading && filtradas.length === 0 && !error && (
-            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-on-surface/10 bg-surface-container-lowest">
-              <div className="w-16 h-16 rounded-full bg-on-surface/5 text-on-surface-variant flex items-center justify-center mb-5">
+            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-border bg-card">
+              <div className="w-16 h-16 rounded-full bg-muted text-muted-foreground flex items-center justify-center mb-5">
                 <span className="material-symbols-outlined text-3xl">history</span>
               </div>
-              <h2 className="text-xl font-black text-on-surface tracking-tight">Sin registros en el historial</h2>
-              <p className="text-on-surface-variant text-sm font-medium mt-1 max-w-sm">Cuando una reserva concluya, aparecerá en esta lista.</p>
+              <h2 className="text-xl font-black text-foreground tracking-tight">Sin registros en el historial</h2>
+              <p className="text-muted-foreground text-sm font-medium mt-1 max-w-sm">Cuando una reserva concluya, aparecerá en esta lista.</p>
             </div>
           )}
 
@@ -218,9 +218,9 @@ export default function ReservationsHistoryPage() {
               </div>
               {totalPaginas > 1 && (
                 <div className="flex items-center justify-between gap-3 pt-2">
-                  <p className="text-[11px] text-on-surface-variant font-medium">
-                    Página <span className="font-black text-on-surface">{pagina + 1}</span> de{' '}
-                    <span className="font-black text-on-surface">{totalPaginas}</span> · {filtradas.length} registros
+                  <p className="text-[11px] text-muted-foreground font-medium">
+                    Página <span className="font-black text-foreground">{pagina + 1}</span> de{' '}
+                    <span className="font-black text-foreground">{totalPaginas}</span> · {filtradas.length} registros
                   </p>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" disabled={pagina === 0} onClick={() => setPagina((p) => Math.max(0, p - 1))} leftIcon={<span className="material-symbols-outlined text-[16px]">chevron_left</span>}>Anterior</Button>
@@ -238,49 +238,49 @@ export default function ReservationsHistoryPage() {
         <>
           {loading && (
             <div className="p-8 space-y-3">
-              <div className="h-6 w-1/3 bg-on-surface/5 rounded-full animate-pulse" />
-              <div className="h-4 w-1/2 bg-on-surface/5 rounded-full animate-pulse" />
+              <div className="h-6 w-1/3 bg-muted rounded-full animate-pulse" />
+              <div className="h-4 w-1/2 bg-muted rounded-full animate-pulse" />
             </div>
           )}
 
           {!loading && contratos.length === 0 && !error && (
-            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-on-surface/10 bg-surface-container-lowest">
+            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-border bg-card">
               <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-5">
                 <span className="material-symbols-outlined text-3xl">description</span>
               </div>
-              <h2 className="text-xl font-black text-on-surface tracking-tight">Aún no hay contratos</h2>
-              <p className="text-on-surface-variant text-sm font-medium mt-1 max-w-sm">Cuando una reserva se pague o finalice, su contrato aparecerá aquí.</p>
+              <h2 className="text-xl font-black text-foreground tracking-tight">Aún no hay contratos</h2>
+              <p className="text-muted-foreground text-sm font-medium mt-1 max-w-sm">Cuando una reserva se pague o finalice, su contrato aparecerá aquí.</p>
             </div>
           )}
 
           {!loading && contratos.length > 0 && (
-            <Card variant="glass" padding="none" className="overflow-hidden border border-on-surface/5">
+            <Card variant="glass" padding="none" className="overflow-hidden border border-border">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-on-surface/5 border-b border-on-surface/10">
+                    <tr className="bg-muted border-b border-border">
                       {['Estudiante', 'Cuarto', 'Periodo', 'Estado', ''].map((h) => (
-                        <th key={h} className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60 last:text-right">{h}</th>
+                        <th key={h} className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60 last:text-right">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-on-surface/5">
+                  <tbody className="divide-y divide-border">
                     {contratos.map((reserva) => {
                       const estado = derivarEstadoContrato(reserva);
                       return (
-                        <tr key={reserva.id} className="hover:bg-on-surface/5 transition-colors">
+                        <tr key={reserva.id} className="hover:bg-muted transition-colors">
                           <td className="px-6 py-4">
-                            <p className="text-sm font-black text-on-surface/90">{reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}</p>
-                            <p className="text-[10px] text-on-surface-variant font-medium">Reserva #{reserva.id}</p>
+                            <p className="text-sm font-black text-foreground/90">{reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">Reserva #{reserva.id}</p>
                           </td>
                           <td className="px-6 py-4">
-                            <p className="text-xs font-bold text-on-surface-variant">{reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}</p>
+                            <p className="text-xs font-bold text-muted-foreground">{reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}</p>
                             {reserva.propiedadUbicacion && (
-                              <p className="text-[10px] text-on-surface-variant/70 font-medium">{reserva.propiedadUbicacion}</p>
+                              <p className="text-[10px] text-muted-foreground/70 font-medium">{reserva.propiedadUbicacion}</p>
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <p className="text-[11px] font-medium text-on-surface-variant opacity-80">
+                            <p className="text-[11px] font-medium text-muted-foreground opacity-80">
                               {formatearFecha(reserva.fechaInicio)} – {formatearFecha(reserva.fechaFin)}
                             </p>
                           </td>

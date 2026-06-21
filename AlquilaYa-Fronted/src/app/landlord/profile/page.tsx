@@ -61,7 +61,7 @@ function InputField({
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-4 py-2.5 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="w-full px-4 py-2.5 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       />
     </label>
   );
@@ -81,7 +81,7 @@ function PasswordField({
           type={show ? 'text' : 'password'}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full px-4 py-2.5 pr-11 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+          className="w-full px-4 py-2.5 pr-11 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary transition-colors"
         />
         <button
           type="button"
@@ -106,7 +106,7 @@ function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors disabled:opacity-50"
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary text-white text-sm font-bold transition-colors disabled:opacity-50"
     >
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
@@ -159,7 +159,7 @@ function DocumentCard({
         {documento?.archivoUrl ? (
           isPdf ? (
             <a href={documento.archivoUrl} target="_blank" rel="noreferrer"
-              className="flex flex-col items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors">
+              className="flex flex-col items-center gap-1 text-primary hover:text-primary/40 transition-colors">
               <FileText size={32} />
               <span className="text-xs font-bold">Ver PDF</span>
             </a>
@@ -412,7 +412,7 @@ export default function LandlordProfilePage() {
           <div className="relative shrink-0">
             <div
               onClick={() => avatarInputRef.current?.click()}
-              className="w-[110px] h-[110px] rounded-full overflow-hidden bg-slate-700 flex items-center justify-center cursor-pointer group ring-4 ring-slate-700/50 hover:ring-blue-500/40 transition-all"
+              className="w-[110px] h-[110px] rounded-full overflow-hidden bg-slate-700 flex items-center justify-center cursor-pointer group ring-4 ring-slate-700/50 hover:ring-primary/40 transition-all"
             >
               {avatarSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -433,7 +433,7 @@ export default function LandlordProfilePage() {
               <h1 className="text-white text-2xl font-black tracking-tight">
                 {perfil?.nombre} {perfil?.apellido}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/30">
                 {perfil?.rol}
               </span>
               {estadoCfg && (
@@ -501,7 +501,7 @@ export default function LandlordProfilePage() {
             <SwitchPrimitive.Root
               checked={formArrendador.esEmpresa}
               onCheckedChange={v => setFormArrendador(p => ({ ...p, esEmpresa: v }))}
-              className="w-11 h-6 rounded-full bg-slate-600 transition-colors data-[state=checked]:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="w-11 h-6 rounded-full bg-slate-600 transition-colors data-[state=checked]:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <SwitchPrimitive.Thumb className="block w-5 h-5 rounded-full bg-white shadow-md transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
             </SwitchPrimitive.Root>

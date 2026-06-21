@@ -3,9 +3,20 @@
 import { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 
-import { resenaService, type Resena } from '@/services/resena-service';
+import {
+  resenaService,
+  type Resena,
+  type ResumenCategorias,
+} from '@/services/resena-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
+
+const CATEGORIAS: { key: keyof ResumenCategorias; label: string }[] = [
+  { key: 'limpieza', label: 'Limpieza' },
+  { key: 'ubicacion', label: 'Ubicación' },
+  { key: 'precio', label: 'Precio' },
+  { key: 'trato', label: 'Trato' },
+];
 
 interface Props {
   propiedadId: string;
@@ -15,6 +26,7 @@ interface Props {
 
 export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Props) {
   const [resenas, setResenas] = useState<Resena[]>([]);
+  const [resumen, setResumen] = useState<ResumenCategorias | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -28,10 +40,20 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
       .finally(() => {
         if (!cancelado) setCargando(false);
       });
+    resenaService
+      .getResumenCategorias(propiedadId)
+      .then((data) => {
+        if (!cancelado) setResumen(data);
+      })
+      .catch(() => {});
     return () => {
       cancelado = true;
     };
   }, [propiedadId]);
+
+  const categoriasConDatos = CATEGORIAS.filter(
+    (c) => resumen?.[c.key] != null,
+  );
 
   const distribucion = [5, 4, 3, 2, 1].map((stars) => ({
     stars,
@@ -67,6 +89,29 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Desglose por sub-categoría */}
+      {categoriasConDatos.length > 0 && (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-4">
+          {categoriasConDatos.map((c) => {
+            const valor = resumen![c.key]!;
+            return (
+              <div key={c.key} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{c.label}</span>
+                  <span className="text-xs font-bold text-foreground">{valor.toFixed(1)}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                    style={{ width: `${(valor / 5) * 100}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -112,6 +157,14 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
               </div>
               {r.comentario && (
                 <p className="text-sm leading-relaxed text-muted-foreground">{r.comentario}</p>
+              )}
+              {r.respuestaArrendador && (
+                <div className="ml-3 rounded-xl border-l-2 border-primary/40 bg-muted/40 p-3">
+                  <p className="text-[11px] font-bold text-primary">Respuesta del arrendador</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                    {r.respuestaArrendador}
+                  </p>
+                </div>
               )}
             </div>
           ))}

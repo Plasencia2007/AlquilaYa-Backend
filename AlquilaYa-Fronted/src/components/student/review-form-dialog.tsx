@@ -25,6 +25,15 @@ interface Props {
   trigger: ReactNode;
 }
 
+type CategoriaKey = 'limpieza' | 'ubicacion' | 'precio' | 'trato';
+
+const CATEGORIAS: { key: CategoriaKey; label: string }[] = [
+  { key: 'limpieza', label: 'Limpieza' },
+  { key: 'ubicacion', label: 'Ubicación' },
+  { key: 'precio', label: 'Precio' },
+  { key: 'trato', label: 'Trato' },
+];
+
 function StarPicker({
   value,
   onChange,
@@ -78,7 +87,12 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
   const [yaResenoArrendador, setYaResenoArrendador] = useState(false);
   const [enviada, setEnviada] = useState(false);
 
-  const [ratingPropiedad, setRatingPropiedad] = useState(0);
+  const [cats, setCats] = useState<Record<CategoriaKey, number>>({
+    limpieza: 0,
+    ubicacion: 0,
+    precio: 0,
+    trato: 0,
+  });
   const [comentarioPropiedad, setComentarioPropiedad] = useState('');
   const [calificarArrendador, setCalificarArrendador] = useState(false);
   const [ratingArrendador, setRatingArrendador] = useState(0);
@@ -87,7 +101,7 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
   useEffect(() => {
     if (!open) {
       setEnviada(false);
-      setRatingPropiedad(0);
+      setCats({ limpieza: 0, ubicacion: 0, precio: 0, trato: 0 });
       setComentarioPropiedad('');
       setCalificarArrendador(false);
       setRatingArrendador(0);
@@ -124,10 +138,15 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
   const todoResenado = yaResenoPropiedad && (yaResenoArrendador || !reserva.arrendadorId);
   const puedeArrendador = !!reserva.arrendadorId && !yaResenoArrendador;
 
+  const categoriasCompletas = CATEGORIAS.every((c) => cats[c.key] > 0);
+  const overallPropiedad = categoriasCompletas
+    ? Math.round((cats.limpieza + cats.ubicacion + cats.precio + cats.trato) / 4)
+    : 0;
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!yaResenoPropiedad && ratingPropiedad === 0) {
-      notify.warning('Elige una calificación para el cuarto');
+    if (!yaResenoPropiedad && !categoriasCompletas) {
+      notify.warning('Califica las 4 categorías del cuarto');
       return;
     }
     if (calificarArrendador && ratingArrendador === 0) {
@@ -139,8 +158,9 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
       if (!yaResenoPropiedad) {
         await resenaService.crearResenaPropiedad(
           reserva.propiedadId,
-          ratingPropiedad,
+          overallPropiedad,
           comentarioPropiedad.trim(),
+          { ...cats },
         );
       }
       if (calificarArrendador && puedeArrendador && reserva.arrendadorId) {
@@ -199,11 +219,28 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
                   <Label className="text-xs font-bold uppercase tracking-wider">
                     ¿Cómo estuvo el cuarto?
                   </Label>
-                  <StarPicker value={ratingPropiedad} onChange={setRatingPropiedad} />
+                  <div className="space-y-2.5">
+                    {CATEGORIAS.map((c) => (
+                      <div key={c.key} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-foreground">{c.label}</span>
+                        <StarPicker
+                          value={cats[c.key]}
+                          onChange={(v) => setCats((prev) => ({ ...prev, [c.key]: v }))}
+                          size="md"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {categoriasCompletas && (
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Calificación general: <span className="text-foreground">{overallPropiedad}/5</span>{' '}
+                      (promedio de las 4)
+                    </p>
+                  )}
                   <Textarea
                     value={comentarioPropiedad}
                     onChange={(e) => setComentarioPropiedad(e.target.value)}
-                    placeholder="Cuéntanos sobre el cuarto: limpieza, ruido, servicios… (opcional)"
+                    placeholder="Cuéntanos más sobre tu estadía… (opcional)"
                     maxLength={2000}
                     rows={3}
                   />

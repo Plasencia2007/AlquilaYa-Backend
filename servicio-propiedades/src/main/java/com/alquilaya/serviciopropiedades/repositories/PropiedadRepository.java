@@ -19,6 +19,14 @@ import java.util.Optional;
 public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> findByArrendadorId(Long arrendadorId);
 
+    List<Propiedad> findByArrendadorIdAndEstado(Long arrendadorId, EstadoPropiedad estado);
+
+    List<Propiedad> findByArrendadorIdAndEstadoNot(Long arrendadorId, EstadoPropiedad estado);
+
+    /** Borradores programados cuya fecha de publicación ya venció (para el scheduler). */
+    List<Propiedad> findByEstadoAndFechaPublicacionProgramadaLessThanEqual(
+            EstadoPropiedad estado, java.time.LocalDateTime momento);
+
     List<Propiedad> findByEstadoOrderByFechaCreacionAsc(EstadoPropiedad estado);
 
     // Lock pesimista para serializar creaciones de reserva concurrentes sobre la misma propiedad.
@@ -47,6 +55,10 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
               AND (:distanciaMax IS NULL OR p.distanciaMetros IS NULL OR p.distanciaMetros <= :distanciaMax)
               AND (:servicios IS NULL OR s IN :servicios)
               AND (:zona IS NULL OR LOWER(p.direccion) LIKE :zona)
+              AND (:universidadId IS NULL OR p.universidadId = :universidadId)
+              AND (:zonaId IS NULL OR p.zonaId = :zonaId)
+              AND (:capacidadMin IS NULL OR (p.capacidadPersonas IS NOT NULL AND p.capacidadPersonas >= :capacidadMin))
+              AND (:dormitoriosMin IS NULL OR (p.numDormitorios IS NOT NULL AND p.numDormitorios >= :dormitoriosMin))
             """)
     List<Propiedad> buscar(
             @Param("precioMin") BigDecimal precioMin,
@@ -56,6 +68,10 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             @Param("disponible") Boolean disponible,
             @Param("distanciaMax") Integer distanciaMax,
             @Param("servicios") List<String> servicios,
-            @Param("zona") String zona
+            @Param("zona") String zona,
+            @Param("universidadId") Long universidadId,
+            @Param("zonaId") Long zonaId,
+            @Param("capacidadMin") Integer capacidadMin,
+            @Param("dormitoriosMin") Integer dormitoriosMin
     );
 }

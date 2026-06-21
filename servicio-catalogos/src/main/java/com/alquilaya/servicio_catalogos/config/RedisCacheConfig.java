@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.annotation.CachingConfigurer;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -32,10 +36,43 @@ import java.time.Duration;
  * el backend del cache (de in-memory a Redis).
  */
 @Configuration
-public class RedisCacheConfig {
+@Slf4j
+public class RedisCacheConfig implements CachingConfigurer {
 
     private static final Duration CACHE_TTL = Duration.ofHours(1);
     private static final String KEY_PREFIX = "catalogos:cache:";
+
+    /**
+     * Tolera entradas de caché ilegibles (formato viejo tras un deploy, datos corruptos):
+     * en vez de propagar el error y devolver 500, se loguea, se descarta la entrada mala y
+     * se deja que el método se recalcule y reescriba la caché. Auto-reparable.
+     */
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException ex, Cache cache, Object key) {
+                log.warn("[CACHE] No se pudo leer '{}' key={}: {}. Se recalcula y reescribe.",
+                        cache.getName(), key, ex.getMessage());
+                try { cache.evict(key); } catch (RuntimeException ignore) { /* best-effort */ }
+            }
+
+            @Override
+            public void handleCachePutError(RuntimeException ex, Cache cache, Object key, Object value) {
+                log.warn("[CACHE] No se pudo escribir '{}' key={}: {}", cache.getName(), key, ex.getMessage());
+            }
+
+            @Override
+            public void handleCacheEvictError(RuntimeException ex, Cache cache, Object key) {
+                log.warn("[CACHE] No se pudo evictar '{}' key={}: {}", cache.getName(), key, ex.getMessage());
+            }
+
+            @Override
+            public void handleCacheClearError(RuntimeException ex, Cache cache) {
+                log.warn("[CACHE] No se pudo limpiar '{}': {}", cache.getName(), ex.getMessage());
+            }
+        };
+    }
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {

@@ -9,6 +9,7 @@ import { AuthDialog } from '@/components/auth/auth-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { GoogleAuthProvider } from '@/components/auth/google-auth-provider';
+import CampusHydrator from '@/components/shared/CampusHydrator';
 
 export const metadata: Metadata = {
   title: 'AlquilaYa — Encuentra tu cuarto ideal',
@@ -76,6 +77,7 @@ export default async function RootLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <GoogleAuthProvider>
+              <CampusHydrator />
               <AuthDialog />
               <Navbar />
               <main className="flex-1">{children}</main>

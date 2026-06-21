@@ -41,6 +41,7 @@ const NAVIGATION: NavCategory[] = [
         subItems: [
           { label: 'Cuartos activos', href: '/landlord/properties/active' },
           { label: 'Agregar cuarto', href: '/landlord/properties/add' },
+          { label: 'Borradores', href: '/landlord/properties/drafts' },
         ],
       },
     ],
@@ -53,6 +54,7 @@ const NAVIGATION: NavCategory[] = [
         icon: 'calendar_month',
         subItems: [
           { label: 'Reservas activas', href: '/landlord/reservations/active' },
+          { label: 'Contratos',        href: '/landlord/reservations/contracts' },
           { label: 'Historial',        href: '/landlord/reservations/history' },
         ],
       },
@@ -93,7 +95,13 @@ const NAVIGATION: NavCategory[] = [
   },
 ];
 
-export default function LandlordSidebar() {
+export default function LandlordSidebar({
+  mobileOpen = false,
+  onNavigate,
+}: {
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { usuario, cerrarSesion } = useAuth();
@@ -112,16 +120,22 @@ export default function LandlordSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[280px] bg-[#0b1222] border-r border-[#1e293b] flex flex-col z-[60] overflow-y-auto custom-scrollbar">
+    <aside
+      className={cn(
+        'fixed left-0 top-0 h-screen w-[280px] bg-[#0b1222] border-r border-[#1e293b] flex flex-col z-[60] overflow-y-auto custom-scrollbar',
+        'transition-transform duration-300 lg:translate-x-0',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+      )}
+    >
       {/* Logo Section */}
-      <div className="px-6 py-5">
+      <div className="px-6 py-5 border-b border-[#1e293b]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-500/20 border border-blue-500/30 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/5">
-            <span className="material-symbols-outlined text-blue-400 text-2xl">widgets</span>
+          <div className="w-10 h-10 bg-primary/15 border border-primary/25 rounded-md flex items-center justify-center">
+            <span className="material-symbols-outlined text-primary text-2xl">widgets</span>
           </div>
           <div>
-            <p className="text-xl font-black text-white tracking-tighter leading-none">AlquilaYa</p>
-            <p className="text-[10px] font-bold text-blue-400/50 uppercase tracking-[0.2em] mt-1">Provider Panel</p>
+            <p className="text-xl font-bold text-white tracking-tight leading-none">AlquilaYa</p>
+            <p className="text-[10px] font-semibold text-primary/50 uppercase tracking-wider mt-1">Provider Panel</p>
           </div>
         </div>
       </div>
@@ -148,10 +162,11 @@ export default function LandlordSidebar() {
                       <Link
                         href={item.href}
                         replace
+                        onClick={onNavigate}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 group",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors duration-150 group",
                           isActive
-                            ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                            ? "bg-primary text-white"
                             : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
                         )}
                       >
@@ -166,7 +181,7 @@ export default function LandlordSidebar() {
                         </div>
                         {efectivoBadge && (
                           <span className={cn(
-                            "min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black",
+                            "min-w-[20px] h-5 px-1.5 rounded flex items-center justify-center text-[10px] font-bold",
                             isActive ? "bg-white/20 text-white" : "bg-red-500 text-white"
                           )}>
                             {efectivoBadge > 99 ? '99+' : efectivoBadge}
@@ -177,18 +192,18 @@ export default function LandlordSidebar() {
                       <button
                         onClick={() => toggleItem(item.label)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 group",
+                          "w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors duration-150 group",
                           isActive && !isExpanded
-                            ? "bg-blue-600/10 text-blue-400 border border-blue-500/20"
+                            ? "bg-primary/10 text-primary border border-primary/20"
                             : isAnySubItemActive
-                              ? "text-blue-400"
+                              ? "text-primary"
                               : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
                         )}
                       >
                         <div className="flex items-center gap-3">
                           <span className={cn(
                             "material-symbols-outlined text-[20px] opacity-80",
-                            isActive ? "text-blue-400" : "text-[#94a3b8] group-hover:text-white"
+                            isActive ? "text-primary" : "text-[#94a3b8] group-hover:text-white"
                           )}>
                             {item.icon}
                           </span>
@@ -197,7 +212,7 @@ export default function LandlordSidebar() {
 
                         <div className="flex items-center gap-2">
                           {efectivoBadge && !isExpanded && (
-                            <span className="min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black bg-red-500 text-white">
+                            <span className="min-w-[20px] h-5 px-1.5 rounded flex items-center justify-center text-[10px] font-bold bg-red-500 text-white">
                               {efectivoBadge > 99 ? '99+' : efectivoBadge}
                             </span>
                           )}
@@ -219,6 +234,7 @@ export default function LandlordSidebar() {
                             key={subItem.href}
                             href={subItem.href}
                             replace
+                            onClick={onNavigate}
                             className={cn(
                               "block py-1.5 text-xs font-bold transition-all hover:text-white",
                               pathname === subItem.href
@@ -229,7 +245,7 @@ export default function LandlordSidebar() {
                             <span className="flex items-center gap-2">
                               <span className={cn(
                                 "w-1 h-1 rounded-full",
-                                pathname === subItem.href ? "bg-blue-500" : "bg-[#334155]"
+                                pathname === subItem.href ? "bg-primary" : "bg-[#334155]"
                               )} />
                               {subItem.label}
                             </span>
@@ -247,21 +263,21 @@ export default function LandlordSidebar() {
 
       {/* Bottom section */}
       <div className="p-3 bg-[#0f172a] border-t border-[#1e293b]">
-        <div className="p-3 rounded-2xl bg-[#1e293b]/50 border border-[#334155]/50 flex items-center justify-between group">
+        <div className="p-3 rounded-md bg-[#1e293b]/50 border border-[#334155]/50 flex items-center justify-between group hover:border-[#334155] transition-colors">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 bg-blue-500/20 rounded-full flex items-center justify-center shrink-0">
-              <span className="text-blue-400 text-xs font-black">
+            <div className="w-9 h-9 bg-primary/20 rounded-md flex items-center justify-center shrink-0">
+              <span className="text-primary text-xs font-bold">
                 {usuario?.nombre?.substring(0, 2).toUpperCase() || 'CA'}
               </span>
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-black text-white tracking-tight truncate">{usuario?.nombre || 'Socio AlquilaYa'}</p>
-              <p className="text-[10px] text-blue-400/50 font-bold truncate">Socio Verificado</p>
+              <p className="text-xs font-bold text-white tracking-tight truncate">{usuario?.nombre || 'Socio AlquilaYa'}</p>
+              <p className="text-[10px] text-primary/50 font-semibold truncate">Socio Verificado</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#64748b] hover:bg-red-500/10 hover:text-red-500 transition-all shrink-0 ml-2"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[#64748b] hover:bg-red-500/10 hover:text-red-500 transition-colors shrink-0 ml-2"
           >
             <span className="material-symbols-outlined text-[20px]">logout</span>
           </button>

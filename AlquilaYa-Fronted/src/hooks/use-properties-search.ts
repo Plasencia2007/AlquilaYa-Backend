@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { servicioPropiedades, filtrosABusqueda } from '@/services/property-service';
+import { servicioPropiedades, filtrosABusqueda, type BusquedaParams } from '@/services/property-service';
 import type { Filtros } from '@/schemas/search-schema';
 import type { Propiedad } from '@/types/propiedad';
 import { notify } from '@/lib/notify';
@@ -35,14 +35,24 @@ const stateInicial: State = {
  *  - `cargarMas()` para infinite scroll.
  *  - Maneja loading inicial vs. loading-more vs. error.
  */
-export function usePropertiesSearch(filtros: Filtros) {
+export function usePropertiesSearch(
+  filtros: Filtros,
+  userCoords?: { lat: number; lng: number } | null,
+) {
   const [state, setState] = useState<State>(stateInicial);
 
-  // Clave canónica: si cambia, refetch desde la página 0.
-  const claveBusqueda = useMemo(
-    () => JSON.stringify(filtrosABusqueda(filtros)),
-    [filtros],
+  // Búsqueda completa = filtros (URL) + coords del usuario (geolocalización, fuera de URL).
+  const busqueda = useMemo<BusquedaParams>(
+    () => ({
+      ...filtrosABusqueda(filtros),
+      userLat: userCoords?.lat,
+      userLng: userCoords?.lng,
+    }),
+    [filtros, userCoords?.lat, userCoords?.lng],
   );
+
+  // Clave canónica: si cambia, refetch desde la página 0.
+  const claveBusqueda = useMemo(() => JSON.stringify(busqueda), [busqueda]);
 
   const requestId = useRef(0);
 
@@ -58,7 +68,7 @@ export function usePropertiesSearch(filtros: Filtros) {
 
       try {
         const resultado = await servicioPropiedades.obtenerPaginadas({
-          ...filtrosABusqueda(filtros),
+          ...busqueda,
           page,
           size: PAGE_SIZE,
         });
@@ -85,7 +95,7 @@ export function usePropertiesSearch(filtros: Filtros) {
         }));
       }
     },
-    [filtros],
+    [busqueda],
   );
 
   useEffect(() => {

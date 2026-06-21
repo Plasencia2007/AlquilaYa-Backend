@@ -37,10 +37,20 @@ public class PropiedadImagen {
     @Builder.Default
     private Integer orden = 0;
 
+    /**
+     * true = la imagen vive en un host externo (URL pegada por el arrendador), NO en
+     * nuestro Cloudinary. Al eliminarla NO se intenta borrar de Cloudinary. Default false
+     * (las subidas por archivo son nuestras).
+     */
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean externa = false;
+
     private LocalDateTime fechaCreacion;
 
     @PrePersist
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();
+        if (externa == null) externa = false;
     }
 }

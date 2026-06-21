@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { esImagenExterna } from '@/lib/img';
 
 interface Props {
   imagenes: string[];
@@ -53,6 +54,7 @@ export function PropertyGallery({ imagenes, alt }: Props) {
             sizes="(min-width: 1024px) 800px, 100vw"
             src={imagenes[index]}
             alt={alt}
+            unoptimized={esImagenExterna(imagenes[index])}
             className="cursor-zoom-in object-cover transition-opacity duration-300"
             onClick={() => setFullscreen(true)}
           />
@@ -97,7 +99,7 @@ export function PropertyGallery({ imagenes, alt }: Props) {
                   i === index ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100',
                 )}
               >
-                <Image fill sizes="112px" src={img} alt={`${alt} ${i + 1}`} className="object-cover" />
+                <Image fill sizes="112px" src={img} alt={`${alt} ${i + 1}`} unoptimized={esImagenExterna(img)} className="object-cover" />
               </button>
             ))}
           </div>
@@ -133,6 +135,7 @@ export function PropertyGallery({ imagenes, alt }: Props) {
                   src={imagenes[index]}
                   alt={alt}
                   sizes="(min-width: 1280px) 1024px, 100vw"
+                  unoptimized={esImagenExterna(imagenes[index])}
                   className="object-contain"
                   priority
                 />

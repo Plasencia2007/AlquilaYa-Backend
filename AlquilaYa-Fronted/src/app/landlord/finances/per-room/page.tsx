@@ -95,24 +95,24 @@ export default function LandlordFinancesPerRoomPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">
             Ingresos por propiedad
           </h1>
-          <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
+          <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             Comparativo de cuánto está aportando cada habitación o propiedad.
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
             Total general
           </p>
-          <p className="text-3xl font-black text-blue-500">{formatearMoneda(total)}</p>
+          <p className="text-3xl font-black text-primary">{formatearMoneda(total)}</p>
         </div>
       </header>
 
-      <Card padding="none" className="bg-white/40 border border-on-surface/5 overflow-hidden">
+      <Card padding="none" className="bg-white/40 border border-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-on-surface/5 text-on-surface-variant text-[10px] uppercase tracking-widest">
+          <thead className="bg-muted text-muted-foreground text-[10px] uppercase tracking-widest">
             <tr>
               <th className="text-left px-6 py-3 font-black">Propiedad</th>
               <th className="text-right px-6 py-3 font-black">Reservas</th>
@@ -122,10 +122,10 @@ export default function LandlordFinancesPerRoomPage() {
           </thead>
           <tbody>
             {filas.map((f) => (
-              <tr key={f.propiedadId} className="border-t border-on-surface/5">
-                <td className="px-6 py-3 font-bold text-on-surface/80">{f.titulo}</td>
+              <tr key={f.propiedadId} className="border-t border-border">
+                <td className="px-6 py-3 font-bold text-foreground/80">{f.titulo}</td>
                 <td className="px-6 py-3 text-right font-medium">{f.reservas}</td>
-                <td className="px-6 py-3 text-right font-black text-blue-600">
+                <td className="px-6 py-3 text-right font-black text-primary">
                   {formatearMoneda(f.total)}
                 </td>
                 <td className="px-6 py-3 text-right font-medium">
@@ -135,7 +135,7 @@ export default function LandlordFinancesPerRoomPage() {
             ))}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-6 text-center text-on-surface-variant">
+                <td colSpan={4} className="px-6 py-6 text-center text-muted-foreground">
                   {cargando ? 'Cargando…' : 'Aún no tienes ingresos registrados.'}
                 </td>
               </tr>

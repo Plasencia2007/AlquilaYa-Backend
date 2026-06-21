@@ -42,7 +42,9 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardArrendadorDTO obtenerMetricasArrendador(Long arrendadorId) {
-        List<Propiedad> propiedades = propiedadRepository.findByArrendadorId(arrendadorId);
+        // Excluye borradores: no cuentan como propiedades del arrendador en las métricas.
+        List<Propiedad> propiedades = propiedadRepository
+                .findByArrendadorIdAndEstadoNot(arrendadorId, EstadoPropiedad.BORRADOR);
         List<Reserva> reservas = reservaRepository.findByArrendadorIdOrderByFechaCreacionDesc(arrendadorId);
 
         long totalPropiedades = propiedades.size();

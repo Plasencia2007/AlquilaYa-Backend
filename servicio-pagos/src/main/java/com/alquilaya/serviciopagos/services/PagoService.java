@@ -160,16 +160,31 @@ public class PagoService {
             String emailPagador = (reserva.getEstudianteCorreo() != null && !reserva.getEstudianteCorreo().isEmpty())
                     ? reserva.getEstudianteCorreo() : "estudiante@test.com";
 
-            PreferenceItemRequest itemRequest = PreferenceItemRequest.builder()
+            // El estudiante paga el precio del cuarto + la comisión de plataforma (modelo
+            // "comisión sumada al estudiante"). El arrendador recibe el montoTotal íntegro.
+            BigDecimal montoArrendador = reserva.getMontoTotal();
+            BigDecimal comision = reserva.getComision() != null
+                    ? reserva.getComision().setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            BigDecimal montoCobrado = montoArrendador.add(comision).setScale(2, RoundingMode.HALF_UP);
+
+            List<PreferenceItemRequest> items = new ArrayList<>();
+            items.add(PreferenceItemRequest.builder()
                     .id(reserva.getId().toString())
                     .title("Reserva AlquilaYa: " + (reserva.getPropiedadTitulo() != null ? reserva.getPropiedadTitulo() : "Habitación"))
                     .quantity(1)
-                    .unitPrice(reserva.getMontoTotal())
+                    .unitPrice(montoArrendador)
                     .currencyId("PEN")
-                    .build();
-
-            List<PreferenceItemRequest> items = new ArrayList<>();
-            items.add(itemRequest);
+                    .build());
+            if (comision.signum() > 0) {
+                items.add(PreferenceItemRequest.builder()
+                        .id("comision-" + reserva.getId())
+                        .title("Comisión de servicio AlquilaYa")
+                        .quantity(1)
+                        .unitPrice(comision)
+                        .currencyId("PEN")
+                        .build());
+            }
 
             PreferenceBackUrlsRequest backUrls = PreferenceBackUrlsRequest.builder()
                     .success(urlSuccess)
@@ -198,7 +213,9 @@ public class PagoService {
             Pago pago = Pago.builder()
                     .reservaId(reservaId)
                     .preferenciaId(preference.getId())
-                    .monto(reserva.getMontoTotal())
+                    .monto(montoCobrado)
+                    .comision(comision)
+                    .montoArrendador(montoArrendador)
                     .estado("PENDIENTE")
                     .build();
             pagoRepository.save(pago);
@@ -333,6 +350,8 @@ public class PagoService {
         payload.put("pagoId", guardado.getId());
         payload.put("reservaId", reservaId);
         payload.put("monto", guardado.getMonto());
+        payload.put("comision", guardado.getComision());
+        payload.put("montoArrendador", guardado.getMontoArrendador());
         payload.put("moneda", "PEN");
         payload.put("paymentId", paymentIdStr);
         payload.put("fechaPago", guardado.getFechaPago() != null
@@ -507,6 +526,8 @@ public class PagoService {
         payload.put("pagoId", guardado.getId());
         payload.put("reservaId", reservaId);
         payload.put("monto", guardado.getMonto());
+        payload.put("comision", guardado.getComision());
+        payload.put("montoArrendador", guardado.getMontoArrendador());
         payload.put("moneda", "PEN");
         payload.put("paymentId", guardado.getPaymentId());
         payload.put("fechaPago", guardado.getFechaPago() != null

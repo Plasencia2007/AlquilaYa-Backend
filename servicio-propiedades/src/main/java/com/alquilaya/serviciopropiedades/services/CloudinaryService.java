@@ -1,6 +1,7 @@
 package com.alquilaya.serviciopropiedades.services;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,13 @@ public class CloudinaryService {
 
     public static final String ROOT = "alquilaya";
 
+    /** Lado máximo (px) al que se limitan los originales subidos (c_limit no agranda). */
+    public static final int LADO_MAX_PX = 1920;
+
     private final Cloudinary cloudinary;
+
+    /** Resultado de una subida: URL final + dimensiones del asset guardado (tras optimizar). */
+    public record ImagenSubida(String url, int width, int height) {}
 
     /** Upload simple sin organización (legacy — solo para casos no atribuibles). */
     public String uploadFile(MultipartFile file) throws IOException {
@@ -44,11 +51,11 @@ public class CloudinaryService {
      * - `indice`: posición de la imagen (0-based) — se usa como public_id.
      * - `overwrite=true` para sobrescribir si existe (caso re-subida).
      */
-    public String uploadImagenCuarto(MultipartFile file,
-                                     Long arrendadorId,
-                                     String nombreArrendador,
-                                     Long propiedadId,
-                                     int indice) throws IOException {
+    public ImagenSubida uploadImagenCuarto(MultipartFile file,
+                                           Long arrendadorId,
+                                           String nombreArrendador,
+                                           Long propiedadId,
+                                           int indice) throws IOException {
         String folder = construirCarpeta(arrendadorId, nombreArrendador, propiedadId);
         String publicId = "img-" + indice;
 
@@ -59,11 +66,22 @@ public class CloudinaryService {
         opciones.put("resource_type", "image");
         opciones.put("use_filename", false);
         opciones.put("unique_filename", false);
+        // OPTIMIZACIÓN: transformación entrante -> el original se guarda ya limitado a
+        // LADO_MAX_PX (c_limit no agranda) y con q_auto:good. Ahorra storage/ancho de banda
+        // sin re-subir. La respuesta trae width/height del asset guardado (para validar calidad).
+        opciones.put("transformation",
+                new Transformation().width(LADO_MAX_PX).height(LADO_MAX_PX).crop("limit").quality("auto:good"));
 
         Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), opciones);
         String url = String.valueOf(result.get("secure_url"));
-        log.debug("[Cloudinary] subido: {}/{} -> {}", folder, publicId, url);
-        return url;
+        int width = aEntero(result.get("width"));
+        int height = aEntero(result.get("height"));
+        log.debug("[Cloudinary] subido: {}/{} -> {} ({}x{})", folder, publicId, url, width, height);
+        return new ImagenSubida(url, width, height);
+    }
+
+    private static int aEntero(Object o) {
+        return o instanceof Number n ? n.intValue() : 0;
     }
 
     /**

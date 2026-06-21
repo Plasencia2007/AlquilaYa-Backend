@@ -83,11 +83,11 @@ export function ReservationCard({
       variant="lowest"
       padding="none"
       hoverable={false}
-      className="border border-on-surface/5 overflow-hidden"
+      className="border border-border overflow-hidden"
     >
       <div className="flex flex-col md:flex-row gap-0">
         {/* Imagen / Avatar de la propiedad */}
-        <div className="relative w-full md:w-44 h-32 md:h-40 shrink-0 bg-on-surface/5">
+        <div className="relative w-full md:w-44 h-32 md:h-40 shrink-0 bg-muted">
           {reserva.propiedadImagen ? (
             <Image
               src={reserva.propiedadImagen}
@@ -97,7 +97,7 @@ export function ReservationCard({
               className="object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-on-surface-variant/40">
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
               <span className="material-symbols-outlined text-4xl">apartment</span>
             </div>
           )}
@@ -107,14 +107,14 @@ export function ReservationCard({
         <div className="flex-1 p-5 flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-black tracking-widest uppercase text-on-surface-variant opacity-60">
+              <p className="text-[10px] font-black tracking-widest uppercase text-muted-foreground opacity-60">
                 Reserva #{reserva.id}
               </p>
-              <h3 className="text-base font-black text-on-surface tracking-tight truncate mt-0.5">
+              <h3 className="text-base font-black text-foreground tracking-tight truncate mt-0.5">
                 {reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}
               </h3>
               {reserva.propiedadUbicacion && (
-                <p className="text-[11px] text-on-surface-variant font-medium mt-0.5 truncate">
+                <p className="text-[11px] text-muted-foreground font-medium mt-0.5 truncate">
                   <span className="material-symbols-outlined text-[12px] align-middle mr-1">
                     location_on
                   </span>
@@ -127,35 +127,35 @@ export function ReservationCard({
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant opacity-50 mb-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">
                 Estudiante
               </p>
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center text-[10px] font-black shrink-0">
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0">
                   {obtenerInicialesEstudiante(reserva.estudianteNombre)}
                 </div>
-                <p className="font-bold text-on-surface truncate">
+                <p className="font-bold text-foreground truncate">
                   {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
                 </p>
               </div>
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant opacity-50 mb-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">
                 Inicio
               </p>
-              <p className="font-bold text-on-surface">{formatearFecha(reserva.fechaInicio)}</p>
+              <p className="font-bold text-foreground">{formatearFecha(reserva.fechaInicio)}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant opacity-50 mb-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">
                 Fin
               </p>
-              <p className="font-bold text-on-surface">{formatearFecha(reserva.fechaFin)}</p>
+              <p className="font-bold text-foreground">{formatearFecha(reserva.fechaFin)}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant opacity-50 mb-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">
                 Monto
               </p>
-              <p className="font-black text-blue-500">{formatearMonto(reserva.montoTotal)}</p>
+              <p className="font-black text-primary">{formatearMonto(reserva.montoTotal)}</p>
             </div>
           </div>
 

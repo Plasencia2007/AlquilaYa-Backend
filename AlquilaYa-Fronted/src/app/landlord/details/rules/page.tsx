@@ -96,7 +96,7 @@ export default function RulesPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] animate-pulse">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-on-surface-variant font-medium">Cargando reglas...</p>
+        <p className="text-muted-foreground font-medium">Cargando reglas...</p>
       </div>
     );
   }
@@ -107,8 +107,8 @@ export default function RulesPage() {
         <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
           <span className="material-symbols-outlined text-4xl">gavel</span>
         </div>
-        <h1 className="text-2xl font-black text-on-surface mb-2">No tienes propiedades aún</h1>
-        <p className="text-on-surface-variant mb-6">
+        <h1 className="text-2xl font-black text-foreground mb-2">No tienes propiedades aún</h1>
+        <p className="text-muted-foreground mb-6">
           Publica una propiedad primero para configurar sus reglas.
         </p>
         <Button asChild variant="dark">
@@ -124,22 +124,22 @@ export default function RulesPage() {
         <Badge variant="surface" className="mb-2">
           Reglas
         </Badge>
-        <h1 className="text-4xl font-black text-on-surface tracking-tighter">
+        <h1 className="text-4xl font-black text-foreground tracking-tighter">
           Reglas de la <span className="text-primary">casa</span>
         </h1>
-        <p className="text-on-surface-variant mt-2 max-w-lg">
+        <p className="text-muted-foreground mt-2 max-w-lg">
           Define las normas de convivencia que esperas de tus inquilinos.
         </p>
       </div>
 
-      <Card className="border-none shadow-sm bg-surface-container-low mb-6">
-        <label className="text-sm font-medium text-on-surface-variant block mb-2">
+      <Card className="border-none shadow-sm bg-muted mb-6">
+        <label className="text-sm font-medium text-muted-foreground block mb-2">
           Propiedad
         </label>
         <select
           value={propiedadId}
           onChange={(e) => handleSelect(e.target.value)}
-          className="w-full rounded-2xl bg-surface border border-outline-variant/20 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full rounded-2xl bg-background border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           {propiedades.map((p) => (
             <option key={p.id} value={String(p.id)}>
@@ -149,8 +149,8 @@ export default function RulesPage() {
         </select>
       </Card>
 
-      <Card className="border-none shadow-sm bg-surface-container-low mb-6">
-        <h2 className="text-lg font-black text-on-surface mb-4">Reglas comunes</h2>
+      <Card className="border-none shadow-sm bg-muted mb-6">
+        <h2 className="text-lg font-black text-foreground mb-4">Reglas comunes</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {REGLAS_CATALOGO.map((r) => {
             const activo = seleccion.has(r.clave);
@@ -160,24 +160,24 @@ export default function RulesPage() {
                 className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-all ${
                   activo
                     ? 'bg-primary/10 border-primary/40'
-                    : 'bg-surface border-outline-variant/20 hover:border-primary/30'
+                    : 'bg-background border-border hover:border-primary/30'
                 }`}
               >
                 <span className="flex items-center gap-3">
                   <span
-                    className={`material-symbols-outlined ${activo ? 'text-primary' : 'text-on-surface-variant'}`}
+                    className={`material-symbols-outlined ${activo ? 'text-primary' : 'text-muted-foreground'}`}
                   >
                     {r.icono}
                   </span>
                   <span
-                    className={`text-sm font-medium ${activo ? 'text-primary' : 'text-on-surface'}`}
+                    className={`text-sm font-medium ${activo ? 'text-primary' : 'text-foreground'}`}
                   >
                     {r.etiqueta}
                   </span>
                 </span>
                 <span
                   className={`relative inline-flex w-10 h-6 rounded-full transition-colors ${
-                    activo ? 'bg-primary' : 'bg-surface-variant'
+                    activo ? 'bg-primary' : 'bg-background-variant'
                   }`}
                 >
                   <input
@@ -198,16 +198,16 @@ export default function RulesPage() {
         </div>
       </Card>
 
-      <Card className="border-none shadow-sm bg-surface-container-low mb-6">
-        <h2 className="text-lg font-black text-on-surface mb-2">Reglas personalizadas</h2>
-        <p className="text-xs text-on-surface-variant mb-3">
+      <Card className="border-none shadow-sm bg-muted mb-6">
+        <h2 className="text-lg font-black text-foreground mb-2">Reglas personalizadas</h2>
+        <p className="text-xs text-muted-foreground mb-3">
           Una regla por línea. Por ejemplo: "Reciclar en bolsas separadas".
         </p>
         <textarea
           value={extra}
           onChange={(e) => setExtra(e.target.value)}
           placeholder="Reciclar en bolsas separadas"
-          className="w-full min-h-[120px] rounded-xl bg-surface border-none p-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all"
+          className="w-full min-h-[120px] rounded-xl bg-background border-none p-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all"
         />
       </Card>
 

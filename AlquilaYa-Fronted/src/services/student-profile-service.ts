@@ -5,6 +5,18 @@ import type {
   DatosPersonalesData,
 } from '@/schemas/student-profile-schema';
 
+export interface EstudianteInfo {
+  id: number;
+  usuarioId: number;
+  nombre?: string;
+  apellido?: string;
+  correo?: string;
+  telefono?: string;
+  universidad?: string;
+  carrera?: string;
+  verificado?: boolean;
+}
+
 /**
  * Wrapper sobre los endpoints de actualización de perfil del estudiante en
  * servicio-usuarios. Si los endpoints aún no existen, devolvemos error que el
@@ -12,6 +24,12 @@ import type {
  * cuando estén operativos.
  */
 export const studentProfileService = {
+  /** Info académica del estudiante (incluye universidad y carrera). */
+  obtenerInfo: async (perfilId: number): Promise<EstudianteInfo> => {
+    const { data } = await api.get<EstudianteInfo>(`/usuarios/estudiante/${perfilId}/info`);
+    return data;
+  },
+
   actualizarPersonal: async (data: DatosPersonalesData): Promise<void> => {
     await api.patch('/usuarios/perfil/personal', data);
   },

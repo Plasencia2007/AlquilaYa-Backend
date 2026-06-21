@@ -122,8 +122,8 @@ export default function NetworkMetricsDashboard() {
               <AreaChart data={dataTrafico}>
                 <defs>
                   <linearGradient id="colorReq" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#8f0304" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#8f0304" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -145,7 +145,7 @@ export default function NetworkMetricsDashboard() {
                   name="req"
                   type="monotone" 
                   dataKey="req" 
-                  stroke="#3b82f6" 
+                  stroke="#8f0304" 
                   strokeWidth={3} 
                   fillOpacity={1} 
                   fill="url(#colorReq)" 

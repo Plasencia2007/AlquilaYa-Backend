@@ -5,6 +5,7 @@ import com.alquilaya.serviciopropiedades.dto.CrearResenaArrendadorRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
+import com.alquilaya.serviciopropiedades.dto.ResumenCategoriasDTO;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
 import com.alquilaya.serviciopropiedades.entities.ResenaEstudiante;
 import com.alquilaya.serviciopropiedades.entities.ResenaPropiedad;
@@ -47,6 +48,30 @@ public class ResenaController {
         return ResponseEntity.ok(resenaService.listarPorPropiedad(propiedadId));
     }
 
+    /** Promedios por sub-categoría (limpieza/ubicación/precio/trato) de una propiedad. */
+    @GetMapping("/propiedad/{propiedadId}/resumen")
+    public ResponseEntity<ResumenCategoriasDTO> resumenCategorias(@PathVariable Long propiedadId) {
+        return ResponseEntity.ok(resenaService.resumenCategorias(propiedadId));
+    }
+
+    /** El arrendador dueño responde (o edita/borra con texto vacío) una reseña de su propiedad. */
+    @PutMapping("/propiedad/{id}/respuesta")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<ResenaResponseDTO> responderPropiedad(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String respuesta = body != null ? body.get("respuesta") : null;
+        return ResponseEntity.ok(
+                resenaService.responderResenaPropiedad(id, respuesta, CurrentUserProvider.get()));
+    }
+
+    /** Moderación: el admin borra SOLO la respuesta del arrendador (la reseña queda visible). */
+    @DeleteMapping("/propiedad/{id}/respuesta")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_RESENAS')")
+    public ResponseEntity<ResenaResponseDTO> eliminarRespuestaPropiedad(@PathVariable Long id) {
+        return ResponseEntity.ok(resenaService.eliminarRespuestaPropiedad(id));
+    }
+
     @GetMapping("/arrendador/{arrendadorId}")
     public ResponseEntity<List<ResenaResponseDTO>> porArrendador(@PathVariable Long arrendadorId) {
         return ResponseEntity.ok(resenaService.listarPorArrendador(arrendadorId));
@@ -74,6 +99,25 @@ public class ResenaController {
             @PathVariable Long id,
             @RequestParam String tipo) {
         return ResponseEntity.ok(resenaService.ocultar(id, tipo));
+    }
+
+    /** Listado paginado de reseñas de propiedad (incl. ocultas) para el panel de moderación. */
+    @GetMapping("/admin/propiedad")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_RESENAS')")
+    public ResponseEntity<org.springframework.data.domain.Page<ResenaResponseDTO>> listarPropiedadAdmin(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(resenaService.listarPropiedadAdmin(page, size));
+    }
+
+    /** Moderación: oculta (visible=false) o restaura (visible=true) una reseña de propiedad. */
+    @PatchMapping("/propiedad/{id}/visibilidad")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_RESENAS')")
+    public ResponseEntity<ResenaResponseDTO> cambiarVisibilidadPropiedad(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> body) {
+        boolean visible = body != null && Boolean.TRUE.equals(body.get("visible"));
+        return ResponseEntity.ok(resenaService.cambiarVisibilidadPropiedad(id, visible));
     }
 
     @DeleteMapping("/{id}")

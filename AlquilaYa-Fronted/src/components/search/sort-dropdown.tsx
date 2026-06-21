@@ -13,6 +13,7 @@ import type { Orden } from '@/schemas/search-schema';
 
 const LABELS: Record<Orden, string> = {
   distancia: 'Más cercanos a UPeU',
+  cercania: 'Cerca de mí',
   precio: 'Precio: menor a mayor',
   calificacion: 'Mejor calificados',
 };
@@ -34,6 +35,7 @@ export function SortDropdown({ value, onChange }: Props) {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="distancia">{LABELS.distancia}</SelectItem>
+        <SelectItem value="cercania">{LABELS.cercania}</SelectItem>
         <SelectItem value="precio">{LABELS.precio}</SelectItem>
         <SelectItem value="calificacion">{LABELS.calificacion}</SelectItem>
       </SelectContent>

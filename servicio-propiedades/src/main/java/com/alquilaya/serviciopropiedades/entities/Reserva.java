@@ -45,6 +45,19 @@ public class Reserva {
     @Column(nullable = false)
     private BigDecimal montoTotal;
 
+    /**
+     * Habitación reservada, cuando la propiedad se gestiona por habitaciones. Null si el
+     * inmueble se alquila completo. El solapamiento y el monto se calculan por habitación.
+     */
+    private Long habitacionId;
+
+    /**
+     * Comisión de plataforma efectivamente cobrada en esta venta, snapshotteada al confirmarse
+     * el pago (la trae el evento PAGO_EXITOSO). Antes de pagar es null; las finanzas usan este
+     * valor histórico para no verse afectadas si luego cambia la comisión de la zona.
+     */
+    private BigDecimal comision;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

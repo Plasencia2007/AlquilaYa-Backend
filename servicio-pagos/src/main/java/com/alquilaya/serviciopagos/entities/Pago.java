@@ -40,7 +40,17 @@ public class Pago {
     @Column(name = "payment_id")
     private String paymentId;    // ID del pago final (unique cuando no es null)
 
+    /** Total cobrado al estudiante = montoArrendador + comision (lo que valida el webhook contra MP). */
     private BigDecimal monto;
+
+    /** Comisión de plataforma retenida (ingreso de AlquilaYa). 0 si la zona no cobra comisión. */
+    @Column(name = "comision")
+    private BigDecimal comision;
+
+    /** Lo que recibe el arrendador (precio del cuarto, sin la comisión). */
+    @Column(name = "monto_arrendador")
+    private BigDecimal montoArrendador;
+
     private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION
 
     @Column(name = "fecha_creacion")

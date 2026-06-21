@@ -18,7 +18,7 @@ import type { RolUsuario } from '@/types/auth';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-primary', 'bg-emerald-500', 'bg-amber-500',
   'bg-rose-500',   'bg-cyan-500',    'bg-orange-500',
 ];
 
@@ -55,6 +55,24 @@ function obtenerMiIdentidad(): { perfilId: number | null; rol: RolUsuario | null
   const v = u?.perfilId;
   const perfilId = typeof v === 'number' ? v : v ? Number(v) : null;
   return { perfilId, rol: u?.rol ?? null };
+}
+
+/**
+ * ¿Este mensaje lo envié yo? En un chat 1-a-1 estudiante↔arrendador el ROL ya
+ * distingue de forma única quién habla (los dos participantes nunca comparten
+ * rol), así que el rol es la señal principal. El perfilId se usa solo como
+ * guard extra cuando el token lo trae — defensa ante colisión de ids entre
+ * roles. Antes la comparación exigía perfilId, así que si el token no lo
+ * incluía TODOS los mensajes se pintaban como "del otro": ahí estaba el bug de
+ * "no noto cuál es mío".
+ */
+function esMensajeMio(
+  msg: Pick<Mensaje, 'emisorPerfilId' | 'emisorRol'>,
+  miPerfilId: number | null,
+  miRol: RolUsuario | null,
+): boolean {
+  if (miRol === null || msg.emisorRol !== miRol) return false;
+  return miPerfilId === null || msg.emisorPerfilId === miPerfilId;
 }
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
@@ -97,10 +115,12 @@ function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
     mainText = msg.contenido.slice(idx + 2);
   }
 
+  const leido = msg.estado === 'LEIDO' || !!msg.fechaLectura;
+
   const botonReply = (
     <button
       onClick={onReply}
-      className="mb-2 p-1 text-gray-400 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+      className="mb-2 p-1 text-gray-400 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity"
       title="Responder"
     >
       <span className="material-symbols-outlined text-[18px]">reply</span>
@@ -116,29 +136,28 @@ function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
       {!mio && hover && botonReply}
 
       <div className={cn(
-        'max-w-[65%] rounded-2xl px-4 py-2 shadow-sm',
+        // Estilo WhatsApp: verde claro para mis mensajes, blanco para los del otro.
+        'relative max-w-[65%] rounded-lg px-2.5 py-1.5 shadow-sm text-gray-800',
         mio
-          ? 'bg-indigo-500 text-white rounded-br-sm'
-          : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm',
+          ? 'bg-[#d9fdd3] rounded-tr-none'
+          : 'bg-white rounded-tl-none',
       )}>
         {quoteText && (
           <div className={cn(
-            'border-l-4 pl-2 mb-2 text-[11px] rounded-r py-1 pr-2 max-w-full truncate',
-            mio
-              ? 'border-indigo-300 bg-indigo-600/30 text-indigo-100'
-              : 'border-indigo-400 bg-indigo-50 text-indigo-700',
+            'border-l-4 pl-2 mb-1 text-[11px] rounded-r py-1 pr-2 max-w-full truncate',
+            'border-emerald-500 bg-emerald-50 text-emerald-700',
           )}>
             {quoteText}
           </div>
         )}
         <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{mainText}</p>
-        <div className="flex items-center justify-end gap-0.5 mt-1">
-          <span className={cn('text-[10px]', mio ? 'text-indigo-200' : 'text-gray-400')}>
+        <div className="flex items-center justify-end gap-0.5 mt-0.5">
+          <span className="text-[10px] text-gray-500">
             {horaMsg(msg.fechaEnvio)}
           </span>
           {mio && (
-            <span className={cn('text-[11px] ml-0.5', msg.estado === 'LEIDO' ? 'text-indigo-200' : 'text-white/40')}>
-              {msg.estado === 'LEIDO' ? '✓✓' : '✓'}
+            <span className={cn('text-[12px] ml-0.5 leading-none', leido ? 'text-sky-500' : 'text-gray-400')}>
+              {leido ? '✓✓' : '✓'}
             </span>
           )}
         </div>
@@ -221,10 +240,7 @@ export default function LandlordMessagesStudentsPage() {
       stompClient.subscribe(`/user/queue/conversacion.${conv.id}`, (raw) => {
         try {
           const msg: Mensaje = JSON.parse(raw.body);
-          // perfilId solo es único dentro de un rol: arrendador y estudiante
-          // pueden compartir id numérico. Comparamos (perfilId, rol) para
-          // evitar que el mensaje del otro participante se muestre como mío.
-          const esMio = msg.emisorPerfilId === miPerfilId && msg.emisorRol === miRol;
+          const esMio = esMensajeMio(msg, miPerfilId, miRol);
 
           if (seleccionadaRef.current?.id === conv.id) {
             // Conversación activa: agregar al chat
@@ -260,16 +276,15 @@ export default function LandlordMessagesStudentsPage() {
       try {
         const ev = JSON.parse(raw.body);
         if (ev.tipo === 'TYPING') {
-          const emisorEsOtro =
-            ev.emisorPerfilId !== miPerfilId || ev.emisorRol !== miRol;
+          // El rol basta para saber si es el otro participante (chat 1-a-1).
+          const emisorEsOtro = ev.emisorRol !== miRol;
           if (emisorEsOtro) setOtroEscribiendo(ev.escribiendo);
         } else if (ev.tipo === 'MENSAJES_LEIDOS') {
-          const lectorEsOtro =
-            ev.lectorPerfilId !== miPerfilId || ev.lectorRol !== miRol;
+          const lectorEsOtro = ev.lectorRol !== miRol;
           if (lectorEsOtro) {
             setMensajes((prev) =>
               prev.map((m) =>
-                m.emisorPerfilId === miPerfilId && m.emisorRol === miRol && !m.fechaLectura
+                esMensajeMio(m, miPerfilId, miRol) && !m.fechaLectura
                   ? { ...m, fechaLectura: new Date().toISOString(), estado: 'LEIDO' as const }
                   : m,
               ),
@@ -508,8 +523,9 @@ export default function LandlordMessagesStudentsPage() {
   //  RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    // Ocupa todo el área disponible a la derecha del sidebar fijo (280px)
-    <div className="fixed top-0 right-0 bottom-0 left-[280px] flex overflow-hidden z-10">
+    // En desktop ocupa el área a la derecha del sidebar (280px); en móvil va a pantalla
+    // completa dejando visible la barra superior (h-14) para poder abrir el menú.
+    <div className="fixed top-14 lg:top-0 right-0 bottom-0 left-0 lg:left-[280px] flex overflow-hidden z-10">
 
       {/* ══ Panel izquierdo: lista de conversaciones ══ */}
       <aside className={cn(
@@ -518,7 +534,7 @@ export default function LandlordMessagesStudentsPage() {
         vistaMovil === 'chat' ? 'hidden md:flex' : 'flex',
       )}>
         {/* Header azul indigo */}
-        <div className="bg-indigo-600 px-4 pt-4 pb-3 shrink-0">
+        <div className="bg-primary px-4 pt-4 pb-3 shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-white font-black text-lg tracking-tight">Mensajes</h2>
             {!stompConectado && (
@@ -526,7 +542,7 @@ export default function LandlordMessagesStudentsPage() {
             )}
           </div>
           <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 text-[18px]">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary/40 text-[18px]">
               search
             </span>
             <input
@@ -534,7 +550,7 @@ export default function LandlordMessagesStudentsPage() {
               placeholder="Buscar conversación…"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full bg-indigo-700/50 text-white placeholder-indigo-300 pl-9 pr-4 py-2 rounded-full text-sm focus:outline-none focus:bg-indigo-700/70 transition-colors"
+              className="w-full bg-primary/50 text-white placeholder-primary/40 pl-9 pr-4 py-2 rounded-full text-sm focus:outline-none focus:bg-primary/70 transition-colors"
             />
           </div>
         </div>
@@ -543,7 +559,7 @@ export default function LandlordMessagesStudentsPage() {
         <div className="flex-1 overflow-y-auto">
           {cargandoLista && (
             <div className="flex items-center justify-center py-12">
-              <div className="w-5 h-5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           )}
           {!cargandoLista && filtradas.length === 0 && (
@@ -566,7 +582,7 @@ export default function LandlordMessagesStudentsPage() {
                 onClick={() => seleccionarConv(conv)}
                 className={cn(
                   'w-full text-left flex items-center gap-3 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors',
-                  activa && 'bg-indigo-50 hover:bg-indigo-50',
+                  activa && 'bg-primary/5 hover:bg-primary/5',
                 )}
               >
                 {/* Avatar con punto verde */}
@@ -588,7 +604,7 @@ export default function LandlordMessagesStudentsPage() {
                     </span>
                     <span className={cn(
                       'text-[11px] shrink-0',
-                      conv.noLeidos > 0 ? 'text-indigo-600 font-bold' : 'text-gray-400',
+                      conv.noLeidos > 0 ? 'text-primary font-bold' : 'text-gray-400',
                     )}>
                       {fechaLista(conv.fechaUltimaActividad)}
                     </span>
@@ -598,7 +614,7 @@ export default function LandlordMessagesStudentsPage() {
                       {conv.ultimoMensajePreview || <em>Sin mensajes aún</em>}
                     </p>
                     {conv.noLeidos > 0 && !activa && (
-                      <span className="shrink-0 min-w-[20px] h-5 bg-indigo-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5">
+                      <span className="shrink-0 min-w-[20px] h-5 bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5">
                         {conv.noLeidos > 99 ? '99+' : conv.noLeidos}
                       </span>
                     )}
@@ -623,7 +639,7 @@ export default function LandlordMessagesStudentsPage() {
           /* Estado vacío */
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
             <div className="w-24 h-24 bg-white/60 rounded-full flex items-center justify-center shadow-md">
-              <span className="material-symbols-outlined text-6xl text-indigo-300">chat</span>
+              <span className="material-symbols-outlined text-6xl text-primary/40">chat</span>
             </div>
             <div>
               <p className="text-gray-600 font-bold text-xl tracking-tight">AlquilaYa Mensajes</p>
@@ -657,7 +673,7 @@ export default function LandlordMessagesStudentsPage() {
                 </p>
               </div>
 
-              <span className="hidden sm:inline-flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[11px] font-bold px-3 py-1 rounded-full shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 bg-primary/5 border border-primary/10 text-primary text-[11px] font-bold px-3 py-1 rounded-full shrink-0">
                 <span className="material-symbols-outlined text-[14px]">apartment</span>
                 Propiedad
               </span>
@@ -695,7 +711,7 @@ export default function LandlordMessagesStudentsPage() {
                   <button
                     onClick={cargarAntiguos}
                     disabled={cargandoAntiguos}
-                    className="text-[11px] font-bold text-indigo-600 bg-white/80 hover:bg-white border border-indigo-100 px-4 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
+                    className="text-[11px] font-bold text-primary bg-white/80 hover:bg-white border border-primary/10 px-4 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
                   >
                     {cargandoAntiguos ? 'Cargando…' : '↑ Ver mensajes anteriores'}
                   </button>
@@ -705,7 +721,7 @@ export default function LandlordMessagesStudentsPage() {
               {/* Spinner de carga */}
               {cargandoMensajes && (
                 <div className="flex justify-center py-12">
-                  <div className="w-6 h-6 border-2 border-indigo-400/30 border-t-indigo-500 rounded-full animate-spin" />
+                  <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                 </div>
               )}
 
@@ -722,7 +738,7 @@ export default function LandlordMessagesStudentsPage() {
                 if (item.type === 'sep') {
                   return <FechaSeparador key={item.key} label={item.label} />;
                 }
-                const mio = item.msg.emisorPerfilId === miPerfilId && item.msg.emisorRol === miRol;
+                const mio = esMensajeMio(item.msg, miPerfilId, miRol);
                 return (
                   <BurbujaMensaje
                     key={item.msg.id}
@@ -742,7 +758,7 @@ export default function LandlordMessagesStudentsPage() {
               {/* Preview del mensaje citado */}
               {quoteado && (
                 <div className="flex items-start gap-2 mb-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                  <div className="w-1 self-stretch bg-indigo-400 rounded-full shrink-0 mt-0.5" />
+                  <div className="w-1 self-stretch bg-primary rounded-full shrink-0 mt-0.5" />
                   <p className="flex-1 text-[12px] text-gray-600 line-clamp-2 leading-relaxed">
                     {quoteado.contenido}
                   </p>
@@ -760,7 +776,7 @@ export default function LandlordMessagesStudentsPage() {
                 <div ref={emojiRef} className="relative shrink-0">
                   <button
                     onClick={() => setMostrarEmojis((v) => !v)}
-                    className="p-2 text-gray-400 hover:text-indigo-500 transition-colors"
+                    className="p-2 text-gray-400 hover:text-emerald-600 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[24px]">emoji_emotions</span>
                   </button>
@@ -787,7 +803,7 @@ export default function LandlordMessagesStudentsPage() {
                   placeholder="Escribe un mensaje…"
                   rows={1}
                   maxLength={2000}
-                  className="flex-1 resize-none bg-gray-100 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:bg-gray-50 border border-transparent focus:border-indigo-200 transition-colors overflow-y-auto"
+                  className="flex-1 resize-none bg-gray-100 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:bg-gray-50 border border-transparent focus:border-primary/20 transition-colors overflow-y-auto"
                   style={{ maxHeight: '128px' }}
                 />
 
@@ -795,7 +811,7 @@ export default function LandlordMessagesStudentsPage() {
                 <button
                   onClick={enviarMensaje}
                   disabled={!borrador.trim()}
-                  className="w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
+                  className="w-10 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
                 >
                   <span className="material-symbols-outlined text-[20px]">send</span>
                 </button>

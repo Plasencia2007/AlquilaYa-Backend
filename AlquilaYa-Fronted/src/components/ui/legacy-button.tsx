@@ -18,15 +18,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
 
     const variants = {
-      primary: 'bg-primary text-on-primary shadow-lg shadow-primary/20 hover:bg-primary-container hover:shadow-xl',
-      outline: 'border-2 border-primary text-primary hover:bg-primary hover:text-on-primary',
-      ghost: 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
-      dark: 'bg-on-surface text-surface hover:bg-on-surface/90 shadow-xl',
-      white: 'bg-white text-primary hover:bg-surface-container-low shadow-xl',
+      primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+      outline: 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
+      ghost: 'text-muted-foreground hover:bg-muted hover:text-primary',
+      dark: 'bg-foreground text-background hover:bg-foreground/90',
+      white: 'bg-white text-primary border border-border hover:bg-muted',
     };
 
     const sizes = {
-      sm: 'px-4 py-1.5 text-[11px] font-black uppercase tracking-wider',
+      sm: 'px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider',
       md: 'px-6 py-2.5 text-sm',
       lg: 'px-8 py-3.5 text-base',
       xl: 'px-12 py-5 text-lg',
@@ -36,7 +36,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-full font-bold transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center gap-2 rounded-md font-bold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none',
           variants[variant],
           sizes[size],
           className

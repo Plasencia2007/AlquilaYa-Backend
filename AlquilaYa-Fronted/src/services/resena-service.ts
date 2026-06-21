@@ -8,13 +8,43 @@ export interface Resena {
   autorNombre?: string;
   /** perfilId del estudiante autor — sirve para saber si "ya reseñé". */
   estudianteId?: number;
+  // Sub-categorías (solo reseñas de propiedad; opcionales / legacy null).
+  limpieza?: number;
+  ubicacion?: number;
+  precio?: number;
+  trato?: number;
+  /** Respuesta pública del arrendador (solo reseñas de propiedad). */
+  respuestaArrendador?: string;
+  fechaRespuesta?: string;
+}
+
+/** Sub-puntajes que el estudiante asigna al reseñar una propiedad. */
+export interface SubCategoriasResena {
+  limpieza?: number;
+  ubicacion?: number;
+  precio?: number;
+  trato?: number;
+}
+
+/** Promedios por categoría de una propiedad (cada uno null si aún no hay datos). */
+export interface ResumenCategorias {
+  limpieza: number | null;
+  ubicacion: number | null;
+  precio: number | null;
+  trato: number | null;
 }
 
 /** Forma real que devuelve el backend (ResenaResponseDTO / entidad). */
 interface ResenaBackendDTO {
   id: number;
   rating: number;
+  ratingLimpieza?: number | null;
+  ratingUbicacion?: number | null;
+  ratingPrecio?: number | null;
+  ratingTrato?: number | null;
   comentario?: string | null;
+  respuestaArrendador?: string | null;
+  fechaRespuesta?: string | null;
   fechaCreacion: string;
   estudianteNombre?: string | null;
   estudianteId?: number;
@@ -28,6 +58,12 @@ function fromBackend(dto: ResenaBackendDTO): Resena {
     fechaCreacion: dto.fechaCreacion,
     autorNombre: dto.estudianteNombre ?? undefined,
     estudianteId: dto.estudianteId,
+    limpieza: dto.ratingLimpieza ?? undefined,
+    ubicacion: dto.ratingUbicacion ?? undefined,
+    precio: dto.ratingPrecio ?? undefined,
+    trato: dto.ratingTrato ?? undefined,
+    respuestaArrendador: dto.respuestaArrendador ?? undefined,
+    fechaRespuesta: dto.fechaRespuesta ?? undefined,
   };
 }
 
@@ -36,12 +72,38 @@ export const resenaService = {
     propiedadId: string | number,
     calificacion: number,
     comentario: string,
+    sub?: SubCategoriasResena,
   ): Promise<Resena> => {
     const { data } = await api.post<ResenaBackendDTO>('/resenas/propiedad', {
       propiedadId: Number(propiedadId),
       rating: calificacion,
       comentario,
+      ratingLimpieza: sub?.limpieza,
+      ratingUbicacion: sub?.ubicacion,
+      ratingPrecio: sub?.precio,
+      ratingTrato: sub?.trato,
     });
+    return fromBackend(data);
+  },
+
+  getResumenCategorias: async (
+    propiedadId: string | number,
+  ): Promise<ResumenCategorias> => {
+    const { data } = await api.get<ResumenCategorias>(
+      `/resenas/propiedad/${propiedadId}/resumen`,
+    );
+    return data;
+  },
+
+  /** El arrendador responde (o edita/borra con texto vacío) una reseña de su propiedad. */
+  responderResenaPropiedad: async (
+    resenaId: number,
+    respuesta: string,
+  ): Promise<Resena> => {
+    const { data } = await api.put<ResenaBackendDTO>(
+      `/resenas/propiedad/${resenaId}/respuesta`,
+      { respuesta },
+    );
     return fromBackend(data);
   },
 

@@ -152,7 +152,7 @@ export default function SystemHealthDashboard() {
                 <XAxis dataKey="time" hide />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Area type="stepAfter" dataKey="cpu" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
+                <Area type="stepAfter" dataKey="cpu" stroke="#8f0304" fill="#8f0304" fillOpacity={0.1} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

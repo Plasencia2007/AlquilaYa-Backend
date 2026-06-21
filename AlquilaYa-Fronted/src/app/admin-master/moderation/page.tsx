@@ -446,7 +446,7 @@ export default function AdminModeracionMensajeriaPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <span className="material-symbols-outlined text-blue-500 text-2xl">forum</span>
+                <span className="material-symbols-outlined text-primary text-2xl">forum</span>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Moderación de Mensajería</h2>
               </div>
               <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">
@@ -562,7 +562,7 @@ export default function AdminModeracionMensajeriaPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setMensajesConv(conv)}
-                          className="text-slate-300 hover:text-blue-500 p-2 h-auto rounded-md"
+                          className="text-slate-300 hover:text-primary p-2 h-auto rounded-md"
                           title="Ver mensajes"
                         >
                           <span className="material-symbols-outlined text-lg">chat_bubble</span>

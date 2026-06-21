@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useId, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
+import { esImagenExterna } from '@/lib/img';
 
 interface Props {
   imagenes: string[];
@@ -98,6 +99,7 @@ export function PropertyCardImageCarousel({
           src={safeImages[0]}
           alt={alt}
           priority={priority}
+          unoptimized={esImagenExterna(safeImages[0])}
           className="object-cover transition-transform duration-500 motion-safe:group-hover:scale-105"
         />
       </div>
@@ -121,6 +123,7 @@ export function PropertyCardImageCarousel({
           alt={i === 0 ? alt : `${alt} — imagen ${i + 1}`}
           priority={i === 0 ? priority : false}
           loading={i === 0 ? undefined : 'lazy'}
+          unoptimized={esImagenExterna(src)}
           className={cn(
             'object-cover transition-opacity duration-300 motion-safe:group-hover:scale-105 motion-safe:transition-transform motion-safe:duration-500',
             i === index ? 'opacity-100' : 'opacity-0 pointer-events-none',

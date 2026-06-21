@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Ruler,
   Share2,
+  ShieldCheck,
   ShowerHead,
   Star,
   User,
@@ -26,7 +27,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/shared/error-state';
 import { PropertyGallery } from '@/components/property/property-gallery';
 import { PropertyReviews } from '@/components/property/property-reviews';
+import { PropertyVideo } from '@/components/property/property-video';
 import { ServiceBadges } from '@/components/student/service-badges';
+import { PropertyBadges } from '@/components/student/property-badges';
+import { POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
+import { AvailabilityPanel } from '@/components/student/availability-panel';
+import { RoomList } from '@/components/student/room-list';
 import { FavoriteButton } from '@/components/student/favorite-button';
 import { ReservationFormDialog } from '@/components/student/reservation-form-dialog';
 import { ContactLandlordDialog } from '@/components/student/contact-landlord-dialog';
@@ -46,6 +52,7 @@ const TIPO_LABEL: Record<string, string> = {
   CUARTO_INDIVIDUAL: 'Cuarto individual',
   CUARTO_COMPARTIDO: 'Cuarto compartido',
   DEPARTAMENTO: 'Departamento',
+  MINI_DEPA: 'Mini depa',
   SUITE: 'Suite',
   MINI_DEPTO: 'Mini depto',
   CUARTO: 'Cuarto',
@@ -177,6 +184,7 @@ export default function PropertyDetailPage({ params }: Props) {
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {tipoLabel}
                   </span>
+                  <PropertyBadges badges={propiedad.badges} orientation="horizontal" max={4} />
                 </div>
                 <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
                   {propiedad.titulo}
@@ -230,11 +238,31 @@ export default function PropertyDetailPage({ params }: Props) {
 
           {/* Stats */}
           <section className="grid grid-cols-2 gap-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-4">
-            <Stat icon={BedDouble} value={`${propiedad.habitaciones}`} label="Habitación" />
-            <Stat icon={ShowerHead} value={`${propiedad.baños}`} label="Baño" />
-            <Stat icon={Ruler} value={`${propiedad.area} m²`} label="Área" />
+            {propiedad.habitaciones > 0 && (
+              <Stat icon={BedDouble} value={`${propiedad.habitaciones}`} label={propiedad.habitaciones === 1 ? 'Dormitorio' : 'Dormitorios'} />
+            )}
+            {propiedad.baños > 0 && (
+              <Stat icon={ShowerHead} value={`${propiedad.baños}`} label={propiedad.baños === 1 ? 'Baño' : 'Baños'} />
+            )}
+            {propiedad.capacidadPersonas ? (
+              <Stat icon={User} value={`${propiedad.capacidadPersonas}`} label={propiedad.capacidadPersonas === 1 ? 'Persona' : 'Personas'} />
+            ) : null}
+            {propiedad.area > 0 && (
+              <Stat icon={Ruler} value={`${propiedad.area} m²`} label="Área" />
+            )}
             <Stat icon={Building2} value={tipoLabel} label="Tipo" />
           </section>
+
+          {/* Habitaciones (solo inmuebles gestionados por habitación) */}
+          {propiedad.gestionPorHabitacion && (
+            <section id="habitaciones" className="space-y-3 scroll-mt-24">
+              <h2 className="font-headline text-xl font-bold">Habitaciones disponibles</h2>
+              <p className="text-sm text-muted-foreground">
+                Este inmueble se alquila por habitaciones. Elige y reserva el cuarto que prefieras.
+              </p>
+              <RoomList propiedad={propiedad} />
+            </section>
+          )}
 
           {/* Descripción */}
           <section className="space-y-3">
@@ -242,19 +270,52 @@ export default function PropertyDetailPage({ params }: Props) {
             <p className="text-sm leading-relaxed text-muted-foreground">{propiedad.descripcion}</p>
           </section>
 
-          {/* Servicios */}
-          <section className="space-y-4">
-            <h2 className="font-headline text-xl font-bold">Servicios incluidos</h2>
-            {propiedad.servicios.length > 0 ? (
-              <ServiceBadges
-                servicios={propiedad.servicios}
-                max={propiedad.servicios.length}
-                variant="plain"
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No especificados</p>
-            )}
-          </section>
+          {/* Video de la propiedad */}
+          {propiedad.videoUrl && (
+            <section className="space-y-3">
+              <h2 className="font-headline text-xl font-bold">Video</h2>
+              <PropertyVideo url={propiedad.videoUrl} titulo={propiedad.titulo} />
+            </section>
+          )}
+
+          {/* Disponibilidad (a nivel inmueble; en modo por-habitación el estado va por cuarto) */}
+          {!propiedad.gestionPorHabitacion && (
+            <section className="space-y-3">
+              <h2 className="font-headline text-xl font-bold">Disponibilidad</h2>
+              <AvailabilityPanel propiedadId={propiedad.id} />
+            </section>
+          )}
+
+          {/* Servicios — incluido vs. se paga aparte */}
+          {(() => {
+            const estado = propiedad.serviciosEstado;
+            const incluidos = estado
+              ? estado.filter((s) => s.estado === 'INCLUIDO').map((s) => s.servicio)
+              : propiedad.servicios;
+            const aparte = estado ? estado.filter((s) => s.estado === 'APARTE').map((s) => s.servicio) : [];
+            return (
+              <section className="space-y-4">
+                <h2 className="font-headline text-xl font-bold">Servicios</h2>
+                {incluidos.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-success)]">
+                      Incluido en el precio
+                    </p>
+                    <ServiceBadges servicios={incluidos} max={incluidos.length} variant="plain" />
+                  </div>
+                )}
+                {aparte.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600">Se paga aparte</p>
+                    <ServiceBadges servicios={aparte} max={aparte.length} variant="plain" />
+                  </div>
+                )}
+                {incluidos.length === 0 && aparte.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No especificados</p>
+                )}
+              </section>
+            );
+          })()}
 
           {/* Reglas */}
           {propiedad.reglas && propiedad.reglas.length > 0 && (
@@ -345,23 +406,46 @@ export default function PropertyDetailPage({ params }: Props) {
         {/* Sidebar */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <p className="text-sm text-muted-foreground">Precio mensual</p>
+            <p className="text-sm text-muted-foreground">
+              {propiedad.gestionPorHabitacion ? 'Habitaciones desde' : 'Precio mensual'}
+            </p>
+            {propiedad.badges?.includes('REBAJA') && propiedad.precioAnterior != null && (
+              <p className="mt-1 flex items-center gap-2">
+                <span className="text-base font-semibold text-muted-foreground line-through">
+                  S/ {propiedad.precioAnterior.toLocaleString('es-PE')}
+                </span>
+                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  Rebaja
+                </span>
+              </p>
+            )}
             <p className="mt-1 text-3xl font-black text-primary">
               S/ {propiedad.precio.toLocaleString('es-PE')}
               <span className="ml-1 text-sm font-normal text-muted-foreground">/mes</span>
             </p>
 
-            <ReservationFormDialog
-              propiedad={propiedad}
-              trigger={
+            {propiedad.gestionPorHabitacion ? (
+              <a href="#habitaciones">
                 <Button
                   size="lg"
                   className="mt-5 h-12 w-full rounded-full text-sm font-bold shadow-lg shadow-primary/20"
                 >
-                  <CalendarCheck className="size-4" aria-hidden /> Reservar cuarto
+                  <CalendarCheck className="size-4" aria-hidden /> Ver habitaciones
                 </Button>
-              }
-            />
+              </a>
+            ) : (
+              <ReservationFormDialog
+                propiedad={propiedad}
+                trigger={
+                  <Button
+                    size="lg"
+                    className="mt-5 h-12 w-full rounded-full text-sm font-bold shadow-lg shadow-primary/20"
+                  >
+                    <CalendarCheck className="size-4" aria-hidden /> Reservar cuarto
+                  </Button>
+                }
+              />
+            )}
 
             <ContactLandlordDialog
               propiedad={propiedad}
@@ -400,6 +484,19 @@ export default function PropertyDetailPage({ params }: Props) {
             <p className="mt-4 text-xs text-muted-foreground">
               Sin cargos hasta confirmar. La reserva se concreta al pagar el primer mes.
             </p>
+
+            {propiedad.politicaCancelacion && (
+              <div className="mt-4 border-t border-border pt-4">
+                <p className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <ShieldCheck className="size-3.5 shrink-0 text-primary" aria-hidden />
+                  Cancelación{' '}
+                  {POLITICA_CANCELACION_INFO[propiedad.politicaCancelacion].label.toLowerCase()}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {POLITICA_CANCELACION_INFO[propiedad.politicaCancelacion].descripcion}
+                </p>
+              </div>
+            )}
           </div>
         </aside>
       </div>

@@ -51,10 +51,12 @@ const SERVICIOS_OPCIONES = [
 ];
 
 const TIPO_LABELS: Record<string, string> = {
-  CUARTO: 'Cuarto',
+  CUARTO_INDIVIDUAL: 'Cuarto individual',
+  CUARTO_COMPARTIDO: 'Cuarto compartido',
   DEPARTAMENTO: 'Departamento',
-  ESTUDIO: 'Estudio',
+  MINI_DEPA: 'Mini depa',
   CASA: 'Casa',
+  SUITE: 'Suite',
 };
 
 interface Props {
@@ -103,6 +105,7 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
       distanciaMaxKm:
         values.distanciaMaxKm === DISTANCIA_MAX_DEFAULT ? undefined : values.distanciaMaxKm,
       calificacionMin: values.calificacionMin > 0 ? values.calificacionMin : undefined,
+      capacidadMin: values.capacidadMin,
     });
     setOpen(false);
   };
@@ -115,6 +118,7 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
       servicios: [],
       distanciaMaxKm: DISTANCIA_MAX_DEFAULT,
       calificacionMin: 0,
+      capacidadMin: undefined,
       orden: filtros.orden,
       view: filtros.view,
     });
@@ -242,6 +246,46 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                       className="text-xs font-semibold text-primary hover:underline"
                     >
                       Cualquier tipo
+                    </button>
+                  )}
+                </fieldset>
+              )}
+            />
+
+            {/* Capacidad (personas) — útil para departamentos/casas en grupo */}
+            <Controller
+              control={form.control}
+              name="capacidadMin"
+              render={({ field }) => (
+                <fieldset className="space-y-3">
+                  <legend className="text-sm font-bold text-foreground">¿Para cuántas personas?</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5].map((n) => {
+                      const activo = field.value === n;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => field.onChange(activo ? undefined : n)}
+                          className={
+                            'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ' +
+                            (activo
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border bg-card text-foreground hover:border-primary')
+                          }
+                        >
+                          {n}{n === 5 ? '+' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {field.value && (
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(undefined)}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      Cualquier capacidad
                     </button>
                   )}
                 </fieldset>

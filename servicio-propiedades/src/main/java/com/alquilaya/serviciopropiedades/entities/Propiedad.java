@@ -1,7 +1,6 @@
 package com.alquilaya.serviciopropiedades.entities;
 
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
-import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CercaDeUpeu;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLatitud;
 import com.alquilaya.serviciopropiedades.validaciones.anotaciones.CoordenadaLongitud;
 import jakarta.persistence.*;
@@ -29,7 +28,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@CercaDeUpeu
 public class Propiedad {
 
     @Id
@@ -50,6 +48,19 @@ public class Propiedad {
     @Column(nullable = false)
     private BigDecimal precio;
 
+    /**
+     * Último precio antes de la última bajada. Se setea al bajar el precio y se limpia
+     * (null) al subirlo. Alimenta el badge REBAJA y el precio tachado en UI.
+     */
+    private BigDecimal precioAnterior;
+
+    /**
+     * Momento de la última bajada de precio. Permite que el badge REBAJA EXPIRE
+     * (no es "rebaja" eterna): solo se considera vigente dentro de una ventana de días.
+     * Se setea junto con {@link #precioAnterior} al bajar y se limpia al subir.
+     */
+    private LocalDateTime fechaCambioPrecio;
+
     @NotBlank(message = "La dirección es obligatoria")
     @Size(max = 255)
     @Column(nullable = false)
@@ -59,6 +70,14 @@ public class Propiedad {
 
     @Column(name = "imagen_url")
     private String imagenUrl;
+
+    /**
+     * Enlace a un video de la propiedad (YouTube/Vimeo o archivo .mp4/.webm directo).
+     * Se valida y normaliza en el controller. Null = sin video. Extensible: para un
+     * tour 360° embebido se agregaría un campo paralelo sin tocar este.
+     */
+    @Column(name = "video_url", length = 512)
+    private String videoUrl;
 
     @OneToMany(mappedBy = "propiedad", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
@@ -81,15 +100,68 @@ public class Propiedad {
     @PositiveOrZero(message = "El piso no puede ser negativo")
     private Integer nroPiso;
 
+    // --- Distribución de la propiedad. Obligatorios para tipos multi-ambiente
+    //     (DEPARTAMENTO/MINI_DEPA/CASA); para un CUARTO/ESTUDIO individual son opcionales.
+    //     Se validan según el tipo en PropiedadController. ---
+    /** Número de dormitorios/cuartos del inmueble. */
+    @PositiveOrZero(message = "El número de dormitorios no puede ser negativo")
+    private Integer numDormitorios;
+
+    /** Número de baños. */
+    @PositiveOrZero(message = "El número de baños no puede ser negativo")
+    private Integer numBanos;
+
+    /** Cuántas personas pueden vivir (capacidad). Se alquila el inmueble completo. */
+    @PositiveOrZero(message = "La capacidad de personas no puede ser negativa")
+    private Integer capacidadPersonas;
+
+    /** Tiene sala/estar. */
+    private Boolean tieneSala;
+
+    /** Tiene cocina. */
+    private Boolean tieneCocina;
+
+    /** Viene amoblado. */
+    private Boolean amoblado;
+
+    /**
+     * Si true, el inmueble se alquila cuarto por cuarto: tiene {@link Habitacion} reservables
+     * por separado (cada una con su precio/estado) y la reserva apunta a una habitación. Si
+     * false (default), se alquila completo y el precio/disponibilidad son a nivel propiedad.
+     */
+    @Builder.Default
+    private Boolean gestionPorHabitacion = false;
+
     @Builder.Default
     private Boolean estaDisponible = true;
 
     private LocalDate disponibleDesde;
 
+    /**
+     * Política de cancelación: decide si una cancelación PAGADA se reembolsa según la
+     * anticipación al check-in. Default FLEXIBLE = reembolso completo (preserva el
+     * comportamiento previo). Ver {@link com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion}.
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion politicaCancelacion =
+            com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion.FLEXIBLE;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "propiedad_servicios", joinColumns = @JoinColumn(name = "propiedad_id"))
     @Column(name = "servicio")
     private List<String> serviciosIncluidos = new ArrayList<>();
+
+    /**
+     * Servicios con estado (INCLUIDO / APARTE / NO_DISPONIBLE). Es la fuente de verdad nueva;
+     * {@code serviciosIncluidos} se deriva de aquí (los INCLUIDO) vía
+     * {@link #sincronizarServiciosIncluidos()} para no romper la búsqueda ni el display previos.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "propiedad_servicios_estado", joinColumns = @JoinColumn(name = "propiedad_id"))
+    @Builder.Default
+    private List<ServicioPropiedad> servicios = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "propiedad_reglas", joinColumns = @JoinColumn(name = "propiedad_id"))
@@ -103,6 +175,16 @@ public class Propiedad {
     private Double longitud;
 
     private Integer distanciaMetros;
+
+    /**
+     * Zona de cobertura (del catálogo) en la que cae la propiedad, resuelta al publicar
+     * según su ubicación. Nullable por filas legacy y por tolerancia si el catálogo no
+     * respondió; las propiedades nuevas siempre se resuelven o se rechazan.
+     */
+    private Long zonaId;
+
+    /** Universidad dueña de la zona resuelta (denormalizado para filtrar rápido). */
+    private Long universidadId;
 
     @Builder.Default
     private Boolean aprobadoPorAdmin = false;
@@ -124,6 +206,13 @@ public class Propiedad {
     @Column(name = "vistas", nullable = false)
     private Long vistas = 0L;
 
+    /**
+     * Fecha/hora en que un borrador debe publicarse automáticamente (publicación programada).
+     * Null = sin programar. Solo aplica a propiedades en estado BORRADOR; un scheduler las
+     * publica (BORRADOR→PENDIENTE) cuando llega el momento.
+     */
+    private LocalDateTime fechaPublicacionProgramada;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -138,10 +227,35 @@ public class Propiedad {
         if (calificacion == null)     calificacion = 5.0;
         if (numResenas == null)       numResenas = 0;
         if (vistas == null)           vistas = 0L;
+        if (politicaCancelacion == null)
+            politicaCancelacion = com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion.FLEXIBLE;
     }
 
     @PreUpdate
     protected void onUpdate() {
         fechaActualizacion = LocalDateTime.now();
+    }
+
+    /**
+     * Deriva {@code serviciosIncluidos} (los que están INCLUIDO) desde la lista {@code servicios}
+     * con estado. Si {@code servicios} está vacío, no toca {@code serviciosIncluidos} (compat con
+     * el formato anterior que solo enviaba la lista plana). Llamar tras setear {@code servicios}.
+     */
+    public void sincronizarServiciosIncluidos() {
+        if (servicios == null || servicios.isEmpty()) {
+            return;
+        }
+        java.util.List<String> incluidos = new ArrayList<>();
+        for (ServicioPropiedad s : servicios) {
+            if (s != null && s.getEstado() == com.alquilaya.serviciopropiedades.enums.EstadoServicio.INCLUIDO
+                    && s.getServicio() != null) {
+                incluidos.add(s.getServicio());
+            }
+        }
+        if (serviciosIncluidos == null) {
+            serviciosIncluidos = new ArrayList<>();
+        }
+        serviciosIncluidos.clear();
+        serviciosIncluidos.addAll(incluidos);
     }
 }

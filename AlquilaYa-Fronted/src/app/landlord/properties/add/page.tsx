@@ -10,7 +10,7 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { propiedadService } from '@/services/landlord-property-service';
 import {
@@ -19,18 +19,27 @@ import {
   type ItemCatalogo,
 } from '@/services/catalogos-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { useDraft } from '@/hooks/use-draft';
+import { borradorService, type BorradorPayload } from '@/services/borrador-service';
+import { notify } from '@/lib/notify';
 import {
   UPEU_COORDS,
   UPEU_RADIO_MAX_KM,
   distanciaHaversineKm,
   formatearDistancia,
+  resolverZona,
 } from '@/lib/geo';
+import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import { cn } from '@/lib/cn';
+import { leerDimensionesImagen, MIN_LADO_PX } from '@/lib/img';
 import type {
   CrearPropiedadRequest,
   PeriodoAlquiler,
+  PoliticaCancelacion,
+  ServicioConEstado,
   TipoPropiedad,
 } from '@/types/propiedad';
+import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
 
 // =============================================================================
 // Font Awesome → Material Symbols mapper
@@ -116,12 +125,24 @@ interface FormState {
   periodoAlquiler: PeriodoAlquiler | '';
   area: string;
   nroPiso: string;
+  numDormitorios: string;
+  numBanos: string;
+  capacidadPersonas: string;
+  tieneSala: boolean;
+  tieneCocina: boolean;
+  amoblado: boolean;
+  gestionPorHabitacion: boolean;
   latitud: string;
   longitud: string;
   serviciosIncluidos: string[];
+  /** Servicios disponibles pero que se pagan aparte. */
+  serviciosAparte: string[];
   reglas: string[];
   estaDisponible: boolean;
   disponibleDesde: string;
+  /** Enlace de video (YouTube/Vimeo/.mp4). Opcional. */
+  videoUrl: string;
+  politicaCancelacion: PoliticaCancelacion;
 }
 
 type Errores = Partial<Record<keyof FormState | 'imagen' | 'general', string>>;
@@ -135,12 +156,22 @@ const INITIAL_FORM: FormState = {
   periodoAlquiler: 'MENSUAL',
   area: '',
   nroPiso: '',
+  numDormitorios: '',
+  numBanos: '',
+  capacidadPersonas: '',
+  tieneSala: false,
+  tieneCocina: false,
+  amoblado: false,
+  gestionPorHabitacion: false,
   latitud: '',
   longitud: '',
   serviciosIncluidos: [],
+  serviciosAparte: [],
   reglas: [],
   estaDisponible: true,
   disponibleDesde: '',
+  videoUrl: '',
+  politicaCancelacion: 'FLEXIBLE',
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -589,6 +620,27 @@ export default function AddPropertyPage() {
   const { usuario } = useAuthStore();
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  // Inmueble completo (departamento/mini depa/casa): exige declarar la distribución.
+  const esInmuebleCompleto = ['DEPARTAMENTO', 'MINI_DEPA', 'CASA'].includes(form.tipoPropiedad);
+
+  // Retomar un borrador del servidor (?borrador=<id>). En ese caso se desactiva el autosave local.
+  const searchParams = useSearchParams();
+  const borradorParam = searchParams.get('borrador');
+  const [draftId, setDraftId] = useState<number | null>(borradorParam ? Number(borradorParam) : null);
+  const [guardandoBorrador, setGuardandoBorrador] = useState(false);
+  const [fechaProgramada, setFechaProgramada] = useState('');
+
+  // Autoguardado LOCAL (localStorage) mientras se redacta; off si se retoma un borrador del servidor.
+  const draftKey = `alquilaya:draft:add-propiedad:${usuario?.id ?? usuario?.perfilId ?? 'anon'}`;
+  const { status: draftStatus, restaurado: draftRestaurado, limpiar: limpiarDraft } = useDraft(
+    draftKey,
+    form,
+    setForm,
+    {
+      enabled: !!usuario && !borradorParam,
+      hasContent: (f) => Boolean(f.titulo || f.descripcion || f.precio || f.direccion),
+    },
+  );
   const [errores, setErrores] = useState<Errores>({});
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -603,6 +655,7 @@ export default function AddPropertyPage() {
   const [requestingGeo, setRequestingGeo] = useState(false);
   const [catalogos, setCatalogos] = useState<CatalogosActivos | null>(null);
   const [cargandoCat, setCargandoCat] = useState(true);
+  const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
 
   useEffect(() => {
     let cancel = false;
@@ -611,6 +664,15 @@ export default function AddPropertyPage() {
       .then((data) => { if (!cancel) setCatalogos(data); })
       .catch(() => {})
       .finally(() => { if (!cancel) setCargandoCat(false); });
+    return () => { cancel = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancel = false;
+    universidadService
+      .listarZonasActivas()
+      .then((data) => { if (!cancel) setZonas(data); })
+      .catch(() => {});
     return () => { cancel = true; };
   }, []);
 
@@ -642,6 +704,8 @@ export default function AddPropertyPage() {
       { value: 'CUARTO_INDIVIDUAL' as TipoPropiedad, label: 'Cuarto individual', icon: 'bed' },
       { value: 'CUARTO_COMPARTIDO' as TipoPropiedad, label: 'Cuarto compartido', icon: 'bunk_bed' },
       { value: 'DEPARTAMENTO' as TipoPropiedad, label: 'Departamento', icon: 'apartment' },
+      { value: 'MINI_DEPA' as TipoPropiedad, label: 'Mini depa', icon: 'home_work' },
+      { value: 'CASA' as TipoPropiedad, label: 'Casa', icon: 'house' },
       { value: 'SUITE' as TipoPropiedad, label: 'Suite', icon: 'hotel' },
     ];
   }, [catalogos]);
@@ -663,7 +727,7 @@ export default function AddPropertyPage() {
     ];
   }, [catalogos]);
 
-  const handleFiles = (incoming: File[]) => {
+  const handleFiles = async (incoming: File[]) => {
     const remaining = MAX_IMAGES - imageFiles.length;
     if (remaining <= 0) return;
     const candidates = incoming.slice(0, remaining);
@@ -673,6 +737,21 @@ export default function AddPropertyPage() {
     if (invalid) {
       setErrores((p) => ({ ...p, imagen: `"${invalid.name}": formato no soportado o excede 10 MB.` }));
       return;
+    }
+    // Resolución mínima (feedback inmediato; el backend valida igual al subir).
+    for (const f of candidates) {
+      try {
+        const { width, height } = await leerDimensionesImagen(f);
+        if (width < MIN_LADO_PX || height < MIN_LADO_PX) {
+          setErrores((p) => ({
+            ...p,
+            imagen: `"${f.name}": muy pequeña (${width}×${height}). Mínimo ${MIN_LADO_PX}px por lado.`,
+          }));
+          return;
+        }
+      } catch {
+        /* si no se puede medir, deja pasar: el backend decide */
+      }
     }
     setErrores((p) => { const { imagen: _omit, ...rest } = p; return rest; });
     candidates.forEach((file) => {
@@ -686,14 +765,14 @@ export default function AddPropertyPage() {
   };
 
   const onFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    handleFiles(Array.from(e.target.files ?? []));
+    void handleFiles(Array.from(e.target.files ?? []));
     e.target.value = '';
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFiles(Array.from(e.dataTransfer.files));
+    void handleFiles(Array.from(e.dataTransfer.files));
   };
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -745,6 +824,14 @@ export default function AddPropertyPage() {
     return distanciaHaversineKm({ lat, lng }, UPEU_COORDS);
   }, [form.latitud, form.longitud]);
 
+  // Zona en la que cae el pin actual (misma lógica que el backend). null = fuera de cobertura.
+  const zonaActual = useMemo(() => {
+    const lat = parseFloat(form.latitud);
+    const lng = parseFloat(form.longitud);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return resolverZona({ lat, lng }, zonas);
+  }, [form.latitud, form.longitud, zonas]);
+
   const validar = (): Errores => {
     const e: Errores = {};
     if (!form.titulo.trim()) e.titulo = 'Ponle un título a tu publicación.';
@@ -763,6 +850,23 @@ export default function AddPropertyPage() {
       const p = parseInt(form.nroPiso, 10);
       if (Number.isNaN(p) || p < 0) e.nroPiso = 'Número de piso inválido.';
     }
+    // Distribución: obligatoria para inmuebles completos (departamento/mini depa/casa).
+    const entero = (raw: string): number | null => {
+      const n = parseInt(raw, 10);
+      return Number.isNaN(n) ? null : n;
+    };
+    if (esInmuebleCompleto) {
+      const d = entero(form.numDormitorios);
+      const b = entero(form.numBanos);
+      const c = entero(form.capacidadPersonas);
+      if (d === null || d < 1) e.numDormitorios = 'Indica cuántos dormitorios tiene.';
+      if (b === null || b < 1) e.numBanos = 'Indica cuántos baños tiene.';
+      if (c === null || c < 1) e.capacidadPersonas = 'Indica para cuántas personas.';
+    } else {
+      if (form.numDormitorios !== '' && (entero(form.numDormitorios) ?? -1) < 0) e.numDormitorios = 'Valor inválido.';
+      if (form.numBanos !== '' && (entero(form.numBanos) ?? -1) < 0) e.numBanos = 'Valor inválido.';
+      if (form.capacidadPersonas !== '' && (entero(form.capacidadPersonas) ?? -1) < 0) e.capacidadPersonas = 'Valor inválido.';
+    }
     const latRaw = form.latitud.trim();
     const lngRaw = form.longitud.trim();
     if ((latRaw && !lngRaw) || (!latRaw && lngRaw)) {
@@ -772,7 +876,13 @@ export default function AddPropertyPage() {
       const lng = parseFloat(lngRaw);
       if (Number.isNaN(lat) || lat < -90 || lat > 90) e.latitud = 'Latitud entre -90 y 90.';
       else if (Number.isNaN(lng) || lng < -180 || lng > 180) e.longitud = 'Longitud entre -180 y 180.';
-      else {
+      else if (zonas.length > 0) {
+        // Si hay zonas cargadas, la regla real es "dentro de alguna zona de cobertura"
+        // (esto es lo que el backend valida y rechaza). El radio fijo queda de respaldo.
+        if (!resolverZona({ lat, lng }, zonas)) {
+          e.longitud = 'La ubicación está fuera de toda zona de cobertura. Acércala a una universidad registrada.';
+        }
+      } else {
         const km = distanciaHaversineKm({ lat, lng }, UPEU_COORDS);
         if (km > UPEU_RADIO_MAX_KM)
           e.longitud = `La ubicación está a ${formatearDistancia(km)} de UPeU. Máx: ${UPEU_RADIO_MAX_KM} km.`;
@@ -781,6 +891,149 @@ export default function AddPropertyPage() {
     if (imageFiles.length === 0) e.imagen = 'Sube al menos una foto.';
     return e;
   };
+
+  // Servicios con estado: incluidos (en el precio) + aparte (se pagan extra).
+  const construirServicios = (): ServicioConEstado[] => [
+    ...form.serviciosIncluidos.map((s) => ({ servicio: s, estado: 'INCLUIDO' as const })),
+    ...form.serviciosAparte.map((s) => ({ servicio: s, estado: 'APARTE' as const })),
+  ];
+
+  // Payload lenient para guardar el borrador (no exige campos completos).
+  const construirBorradorPayload = (): BorradorPayload => {
+    const num = (s: string) => (s.trim() !== '' && !Number.isNaN(Number(s)) ? Number(s) : undefined);
+    return {
+      titulo: form.titulo.trim() || undefined,
+      descripcion: form.descripcion.trim() || undefined,
+      precio: num(form.precio),
+      direccion: form.direccion.trim() || undefined,
+      tipoPropiedad: form.tipoPropiedad || undefined,
+      periodoAlquiler: form.periodoAlquiler || undefined,
+      area: num(form.area),
+      nroPiso: num(form.nroPiso),
+      numDormitorios: num(form.numDormitorios),
+      numBanos: num(form.numBanos),
+      capacidadPersonas: num(form.capacidadPersonas),
+      tieneSala: form.tieneSala,
+      tieneCocina: form.tieneCocina,
+      amoblado: form.amoblado,
+      gestionPorHabitacion: form.gestionPorHabitacion,
+      latitud: num(form.latitud),
+      longitud: num(form.longitud),
+      serviciosIncluidos: form.serviciosIncluidos,
+      servicios: construirServicios(),
+      reglas: form.reglas,
+      estaDisponible: form.estaDisponible,
+      disponibleDesde: form.disponibleDesde || undefined,
+      videoUrl: form.videoUrl.trim() || undefined,
+      politicaCancelacion: form.politicaCancelacion,
+    };
+  };
+
+  const guardarBorrador = async () => {
+    if (!usuario) { setSubmitError('Debes iniciar sesión.'); return; }
+    setGuardandoBorrador(true);
+    try {
+      const payload = construirBorradorPayload();
+      if (draftId) {
+        await borradorService.actualizar(draftId, payload);
+      } else {
+        const creado = await borradorService.crear(payload);
+        setDraftId(creado.id);
+      }
+      limpiarDraft(); // ya está en el servidor → descartar la copia local
+      notify.success('Borrador guardado', 'Lo encuentras en Propiedades → Borradores.');
+    } catch (err) {
+      notify.error(err, 'No se pudo guardar el borrador');
+    } finally {
+      setGuardandoBorrador(false);
+    }
+  };
+
+  // Programar la publicación: guarda el borrador, sube las fotos y agenda la fecha.
+  const programarPublicacion = async () => {
+    if (!usuario) { setSubmitError('Debes iniciar sesión.'); return; }
+    if (!fechaProgramada) { notify.error(null, 'Elige la fecha y hora de publicación'); return; }
+    const validationErrors = validar();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrores(validationErrors);
+      const firstField = Object.keys(validationErrors)[0];
+      document.querySelector(`[data-field="${firstField}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    setLoading(true);
+    try {
+      let id = draftId;
+      const payload = construirBorradorPayload();
+      if (id) {
+        await borradorService.actualizar(id, payload);
+      } else {
+        const creado = await borradorService.crear(payload);
+        id = creado.id;
+        setDraftId(id);
+      }
+      // Subir las fotos al borrador para que la publicación programada ya las tenga.
+      const coverFile = imageFiles[coverIndex] ?? imageFiles[0];
+      const extraFiles = imageFiles.filter((_, i) => i !== imageFiles.indexOf(coverFile));
+      const ordenadas = [coverFile, ...extraFiles].filter(Boolean) as File[];
+      if (ordenadas.length > 0 && id) {
+        await propiedadService.subirImagenes(id, ordenadas);
+      }
+      await borradorService.programar(id as number, fechaProgramada);
+      limpiarDraft();
+      notify.success('Publicación programada', `Se publicará el ${new Date(fechaProgramada).toLocaleString('es-PE')}.`);
+      router.push('/landlord/properties/drafts');
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ||
+        (err as { message?: string })?.message || 'No se pudo programar la publicación';
+      setSubmitError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Retomar un borrador del servidor: prefill del formulario.
+  useEffect(() => {
+    if (!borradorParam) return;
+    let cancel = false;
+    propiedadService
+      .obtenerCompleto(Number(borradorParam))
+      .then((b) => {
+        if (cancel || !b) return;
+        setForm((f) => ({
+          ...f,
+          titulo: b.titulo ?? '',
+          descripcion: b.descripcion ?? '',
+          precio: b.precio != null ? String(b.precio) : '',
+          direccion: b.direccion ?? '',
+          tipoPropiedad: (b.tipoPropiedad as TipoPropiedad) || '',
+          periodoAlquiler: (b.periodoAlquiler as PeriodoAlquiler) || '',
+          area: b.area != null ? String(b.area) : '',
+          nroPiso: b.nroPiso != null ? String(b.nroPiso) : '',
+          numDormitorios: b.numDormitorios != null ? String(b.numDormitorios) : '',
+          numBanos: b.numBanos != null ? String(b.numBanos) : '',
+          capacidadPersonas: b.capacidadPersonas != null ? String(b.capacidadPersonas) : '',
+          tieneSala: b.tieneSala ?? false,
+          tieneCocina: b.tieneCocina ?? false,
+          amoblado: b.amoblado ?? false,
+          gestionPorHabitacion: b.gestionPorHabitacion ?? false,
+          latitud: b.latitud != null ? String(b.latitud) : '',
+          longitud: b.longitud != null ? String(b.longitud) : '',
+          serviciosIncluidos:
+            b.servicios?.filter((s) => s.estado === 'INCLUIDO').map((s) => s.servicio)
+            ?? b.serviciosIncluidos ?? [],
+          serviciosAparte:
+            b.servicios?.filter((s) => s.estado === 'APARTE').map((s) => s.servicio) ?? [],
+          reglas: b.reglas ?? [],
+          estaDisponible: b.estaDisponible ?? true,
+          disponibleDesde: b.disponibleDesde ?? '',
+          videoUrl: b.videoUrl ?? '',
+          politicaCancelacion: b.politicaCancelacion ?? 'FLEXIBLE',
+        }));
+      })
+      .catch(() => { /* borrador no accesible */ });
+    return () => { cancel = true; };
+  }, [borradorParam]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -807,6 +1060,13 @@ export default function AddPropertyPage() {
       periodoAlquiler: form.periodoAlquiler || undefined,
       area: form.area !== '' ? parseFloat(form.area) : undefined,
       nroPiso: form.nroPiso !== '' ? parseInt(form.nroPiso, 10) : undefined,
+      numDormitorios: form.numDormitorios !== '' ? parseInt(form.numDormitorios, 10) : undefined,
+      numBanos: form.numBanos !== '' ? parseInt(form.numBanos, 10) : undefined,
+      capacidadPersonas: form.capacidadPersonas !== '' ? parseInt(form.capacidadPersonas, 10) : undefined,
+      tieneSala: esInmuebleCompleto ? form.tieneSala : undefined,
+      tieneCocina: esInmuebleCompleto ? form.tieneCocina : undefined,
+      amoblado: form.amoblado || undefined,
+      gestionPorHabitacion: form.gestionPorHabitacion || undefined,
       latitud: form.latitud !== '' ? parseFloat(form.latitud) : undefined,
       longitud: form.longitud !== '' ? parseFloat(form.longitud) : undefined,
       ubicacionGps:
@@ -814,19 +1074,33 @@ export default function AddPropertyPage() {
           ? `${parseFloat(form.latitud).toFixed(6)},${parseFloat(form.longitud).toFixed(6)}`
           : undefined,
       serviciosIncluidos: form.serviciosIncluidos.length ? form.serviciosIncluidos : undefined,
+      servicios: construirServicios().length ? construirServicios() : undefined,
       reglas: form.reglas.length ? form.reglas : undefined,
       estaDisponible: form.estaDisponible,
       disponibleDesde: form.disponibleDesde || undefined,
+      videoUrl: form.videoUrl.trim() || undefined,
+      politicaCancelacion: form.politicaCancelacion,
       arrendadorId: arrendadorIdNumber,
     };
     setLoading(true);
     try {
       const coverFile = imageFiles[coverIndex] ?? imageFiles[0];
       const extraFiles = imageFiles.filter((_, i) => i !== imageFiles.indexOf(coverFile));
-      const nuevaPropiedad = await propiedadService.crearPropiedad(payload, coverFile);
-      if (extraFiles.length > 0 && nuevaPropiedad?.id) {
-        await propiedadService.subirImagenes(nuevaPropiedad.id, extraFiles);
+      if (draftId) {
+        // Publicar un borrador: persistir últimos cambios → validar+publicar en backend → subir fotos.
+        await borradorService.actualizar(draftId, construirBorradorPayload());
+        const publicada = await borradorService.publicar(draftId);
+        const ordenadas = [coverFile, ...extraFiles].filter(Boolean) as File[];
+        if (ordenadas.length > 0 && publicada?.id) {
+          await propiedadService.subirImagenes(publicada.id, ordenadas);
+        }
+      } else {
+        const nuevaPropiedad = await propiedadService.crearPropiedad(payload, coverFile);
+        if (extraFiles.length > 0 && nuevaPropiedad?.id) {
+          await propiedadService.subirImagenes(nuevaPropiedad.id, extraFiles);
+        }
       }
+      limpiarDraft(); // publicado con éxito → descartar la copia local
       router.push('/landlord/properties/active');
     } catch (err) {
       console.error('Error al crear propiedad:', err);
@@ -867,7 +1141,34 @@ export default function AddPropertyPage() {
             encontrarás inquilino.
           </p>
         </div>
+
+        {/* Indicador de autoguardado */}
+        {draftStatus !== 'idle' && (
+          <span className="ml-auto hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground shrink-0">
+            <span className={cn('material-symbols-outlined text-[15px]', draftStatus === 'guardando' && 'animate-pulse')}>
+              {draftStatus === 'guardando' ? 'cloud_sync' : 'cloud_done'}
+            </span>
+            {draftStatus === 'guardando' ? 'Guardando borrador…' : 'Borrador guardado'}
+          </span>
+        )}
       </div>
+
+      {/* Banner: borrador restaurado */}
+      {draftRestaurado && (
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="material-symbols-outlined text-[18px] text-primary">history</span>
+            Restauramos tu borrador. <span className="text-muted-foreground">Las fotos debes volver a adjuntarlas.</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => { limpiarDraft(); setForm(INITIAL_FORM); }}
+            className="shrink-0 text-xs font-bold text-primary hover:underline"
+          >
+            Descartar y empezar de cero
+          </button>
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}
@@ -959,7 +1260,11 @@ export default function AddPropertyPage() {
             step={2}
             icon="location_on"
             title="Ubicación"
-            subtitle="Las propiedades deben estar a menos de 15 km del campus UPeU"
+            subtitle={
+              zonas.length > 0
+                ? 'La propiedad debe ubicarse dentro de una zona de cobertura de una universidad registrada'
+                : `Las propiedades deben estar a menos de ${UPEU_RADIO_MAX_KM} km del campus`
+            }
           >
             <div data-field="direccion">
               <Field label="Dirección" hint={`${form.direccion.length}/255`} required error={errores.direccion}>
@@ -1017,7 +1322,9 @@ export default function AddPropertyPage() {
                 {requestingGeo ? 'Buscando…' : 'Usar mi ubicación'}
               </button>
 
-              {distanciaUpeu !== null && (
+              {/* Distancia al campus: solo en modo fallback (sin zonas cargadas). Con zonas, manda
+                  el badge de zona de abajo y este indicador de un solo campus sería contradictorio. */}
+              {distanciaUpeu !== null && zonas.length === 0 && (
                 <span
                   className={cn(
                     'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border',
@@ -1028,8 +1335,24 @@ export default function AddPropertyPage() {
                 >
                   <span className="material-symbols-outlined text-[13px]">school</span>
                   {distanciaUpeu <= UPEU_RADIO_MAX_KM ? 'A ' : 'Fuera de rango: '}
-                  {formatearDistancia(distanciaUpeu)} de UPeU
+                  {formatearDistancia(distanciaUpeu)} del campus
                 </span>
+              )}
+
+              {/* Zona de cobertura resuelta en vivo (coincide con la validación del backend). */}
+              {distanciaUpeu !== null && zonas.length > 0 && (
+                zonaActual ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-[var(--color-success-light)] text-[var(--color-success)] border-[var(--color-success)]/20">
+                    <span className="material-symbols-outlined text-[13px]">where_to_vote</span>
+                    En {zonaActual.nombre}
+                    {zonaActual.universidadNombre ? ` · ${zonaActual.universidadNombre}` : ''}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-destructive/10 text-destructive border-destructive/20">
+                    <span className="material-symbols-outlined text-[13px]">wrong_location</span>
+                    Fuera de cobertura — no podrás publicar aquí
+                  </span>
+                )
               )}
             </div>
 
@@ -1080,6 +1403,96 @@ export default function AddPropertyPage() {
               </div>
             </div>
 
+            {/* Distribución — obligatoria para inmuebles completos (depa / mini depa / casa) */}
+            <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                Distribución
+                {esInmuebleCompleto && <span className="text-primary normal-case tracking-normal"> · obligatoria para departamentos</span>}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div data-field="numDormitorios">
+                  <Field label="Dormitorios" hint={esInmuebleCompleto ? undefined : 'opcional'} required={esInmuebleCompleto} error={errores.numDormitorios}>
+                    <InputField type="number" inputMode="numeric" min="0" name="numDormitorios" icon="bed"
+                      value={form.numDormitorios} onChange={onInput} placeholder="3" error={!!errores.numDormitorios} />
+                  </Field>
+                </div>
+                <div data-field="numBanos">
+                  <Field label="Baños" hint={esInmuebleCompleto ? undefined : 'opcional'} required={esInmuebleCompleto} error={errores.numBanos}>
+                    <InputField type="number" inputMode="numeric" min="0" name="numBanos" icon="bathtub"
+                      value={form.numBanos} onChange={onInput} placeholder="2" error={!!errores.numBanos} />
+                  </Field>
+                </div>
+                <div data-field="capacidadPersonas">
+                  <Field label="Capacidad" hint={esInmuebleCompleto ? 'personas' : 'personas · opcional'} required={esInmuebleCompleto} error={errores.capacidadPersonas}>
+                    <InputField type="number" inputMode="numeric" min="0" name="capacidadPersonas" icon="group"
+                      value={form.capacidadPersonas} onChange={onInput} placeholder="4" error={!!errores.capacidadPersonas} />
+                  </Field>
+                </div>
+              </div>
+              {esInmuebleCompleto && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {([
+                    { campo: 'tieneSala' as const, label: 'Sala / estar', icon: 'weekend', valor: form.tieneSala },
+                    { campo: 'tieneCocina' as const, label: 'Cocina', icon: 'kitchen', valor: form.tieneCocina },
+                    { campo: 'amoblado' as const, label: 'Amoblado', icon: 'chair', valor: form.amoblado },
+                  ]).map((t) => (
+                    <div key={t.campo} className="flex items-center justify-between gap-2 rounded-xl bg-card border border-border px-3 py-2.5">
+                      <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <span className="material-symbols-outlined text-[18px] text-muted-foreground">{t.icon}</span>
+                        {t.label}
+                      </span>
+                      <Switch checked={t.valor} onChange={(v) => setField(t.campo, v)} label={t.label} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div data-field="videoUrl">
+              <Field label="Video (enlace)" hint="opcional">
+                <InputField
+                  type="url"
+                  name="videoUrl"
+                  icon="smart_display"
+                  placeholder="https://youtu.be/… o https://vimeo.com/…"
+                  value={form.videoUrl}
+                  onChange={onInput}
+                />
+              </Field>
+              <p className="mt-1 text-xs text-muted-foreground">
+                YouTube, Vimeo o un archivo .mp4. Se mostrará como video reproducible en la ficha.
+              </p>
+            </div>
+
+            <div data-field="politicaCancelacion">
+              <Field label="Política de cancelación">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {POLITICAS_CANCELACION.map((pol) => {
+                    const info = POLITICA_CANCELACION_INFO[pol];
+                    const activo = form.politicaCancelacion === pol;
+                    return (
+                      <button
+                        key={pol}
+                        type="button"
+                        onClick={() => setField('politicaCancelacion', pol)}
+                        className={cn(
+                          'text-left rounded-xl border p-3 transition-colors',
+                          activo
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border bg-input hover:border-primary/50',
+                        )}
+                      >
+                        <span className="block text-sm font-bold text-foreground">{info.label}</span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                          {info.resumen}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               <div data-field="disponibleDesde">
                 <Field label="Disponible desde" hint="opcional">
@@ -1121,6 +1534,32 @@ export default function AddPropertyPage() {
                 </div>
               </div>
             </div>
+
+            {/* Alquilar por habitaciones */}
+            <div className="rounded-xl bg-muted/40 border border-border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="material-symbols-outlined text-[20px] shrink-0 text-primary">meeting_room</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Alquilar por habitaciones</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      El inmueble se alquila cuarto por cuarto (precio y estado por habitación)
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={form.gestionPorHabitacion}
+                  onChange={(v) => setField('gestionPorHabitacion', v)}
+                  label="Alquilar por habitaciones"
+                />
+              </div>
+              {form.gestionPorHabitacion && (
+                <p className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  Publica el inmueble y luego agrega las habitaciones desde “Editar”.
+                </p>
+              )}
+            </div>
           </Section>
 
           {/* 04 — Servicios */}
@@ -1137,12 +1576,17 @@ export default function AddPropertyPage() {
                 items={catalogos?.SERVICIO ?? []}
                 selected={form.serviciosIncluidos}
                 onToggle={(valor) =>
-                  setField(
-                    'serviciosIncluidos',
-                    form.serviciosIncluidos.includes(valor)
-                      ? form.serviciosIncluidos.filter((v) => v !== valor)
-                      : [...form.serviciosIncluidos, valor],
-                  )
+                  setForm((f) => {
+                    const ya = f.serviciosIncluidos.includes(valor);
+                    return {
+                      ...f,
+                      serviciosIncluidos: ya
+                        ? f.serviciosIncluidos.filter((v) => v !== valor)
+                        : [...f.serviciosIncluidos, valor],
+                      // Un servicio no puede estar incluido y aparte a la vez.
+                      serviciosAparte: f.serviciosAparte.filter((v) => v !== valor),
+                    };
+                  })
                 }
               />
             )}
@@ -1175,6 +1619,33 @@ export default function AddPropertyPage() {
                 }
                 placeholder="Ej: Calefacción central, balcón privado…"
               />
+            </div>
+
+            {/* Servicios que se pagan aparte */}
+            <div className="pt-4 mt-2 border-t border-border">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                Se paga aparte (no incluido en el precio)
+              </p>
+              {cargandoCat ? (
+                <SkeletonChips />
+              ) : (
+                <ChipsMultiselect
+                  items={catalogos?.SERVICIO ?? []}
+                  selected={form.serviciosAparte}
+                  onToggle={(valor) =>
+                    setForm((f) => {
+                      const ya = f.serviciosAparte.includes(valor);
+                      return {
+                        ...f,
+                        serviciosAparte: ya
+                          ? f.serviciosAparte.filter((v) => v !== valor)
+                          : [...f.serviciosAparte, valor],
+                        serviciosIncluidos: f.serviciosIncluidos.filter((v) => v !== valor),
+                      };
+                    })
+                  }
+                />
+              )}
             </div>
           </Section>
 
@@ -1394,6 +1865,44 @@ export default function AddPropertyPage() {
                   </>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={guardarBorrador}
+                disabled={guardandoBorrador || loading}
+                className="w-full h-10 flex items-center justify-center gap-2 rounded-xl border border-border text-sm font-bold text-foreground transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span className={cn('material-symbols-outlined text-[18px]', guardandoBorrador && 'animate-spin')}>
+                  {guardandoBorrador ? 'autorenew' : 'save'}
+                </span>
+                {guardandoBorrador ? 'Guardando…' : (draftId ? 'Actualizar borrador' : 'Guardar borrador')}
+              </button>
+
+              {/* Programar publicación */}
+              <div className="pt-1">
+                <label className="block text-[11px] font-bold text-muted-foreground mb-1 uppercase tracking-widest">
+                  Programar publicación (opcional)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="datetime-local"
+                    value={fechaProgramada}
+                    onChange={(e) => setFechaProgramada(e.target.value)}
+                    className="flex-1 min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={programarPublicacion}
+                    disabled={loading || !fechaProgramada}
+                    className="shrink-0 rounded-xl border border-primary px-3 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    Programar
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Se publicará automáticamente en esa fecha (pasa a revisión del admin).
+                </p>
+              </div>
 
               <Link
                 href="/landlord/dashboard"

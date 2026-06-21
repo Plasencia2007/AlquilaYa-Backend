@@ -17,6 +17,12 @@ public class CrearResenaPropiedadRequest {
     @Max(value = 5, message = "El rating máximo es 5")
     private Integer rating;
 
+    // --- Sub-categorías (1-5). Opcionales: si vienen, se guardan y el front arma el rating general como su promedio. ---
+    @Min(1) @Max(5) private Integer ratingLimpieza;
+    @Min(1) @Max(5) private Integer ratingUbicacion;
+    @Min(1) @Max(5) private Integer ratingPrecio;
+    @Min(1) @Max(5) private Integer ratingTrato;
+
     @Size(max = 2000, message = "El comentario no puede exceder 2000 caracteres")
     private String comentario;
 }

@@ -127,6 +127,12 @@ public class ReservaController {
             log.warn("Error obteniendo info del estudiante {} para el DTO: {}", r.getEstudianteId(), e.getMessage());
         }
         
-        return ReservaResponseDTO.from(r, titulo, estNombre, estCorreo);
+        ReservaResponseDTO dto = ReservaResponseDTO.from(r, titulo, estNombre, estCorreo);
+        // Si ya se pagó, usamos la comisión snapshotteada (histórica); si no, la calculamos en
+        // vivo desde la zona para que el estudiante vea el cargo antes de pagar.
+        dto.setComision(r.getComision() != null
+                ? r.getComision()
+                : reservaService.calcularComision(r.getPropiedadId(), r.getMontoTotal()));
+        return dto;
     }
 }

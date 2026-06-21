@@ -28,6 +28,13 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     boolean existsByPropiedadIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
             Long propiedadId, Collection<EstadoReserva> estados, LocalDate fechaFin, LocalDate fechaInicio);
 
+    /** Solapamiento por habitación (propiedades gestionadas por habitaciones). */
+    boolean existsByHabitacionIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
+            Long habitacionId, Collection<EstadoReserva> estados, LocalDate fechaFin, LocalDate fechaInicio);
+
+    /** Reservas activas de una habitación (para el calendario por cuarto). */
+    List<Reserva> findByHabitacionIdAndEstadoIn(Long habitacionId, Collection<EstadoReserva> estados);
+
     /**
      * Devuelve reservas en estado APROBADA cuya última actualización es anterior al corte.
      * Usado por {@code ReservaExpirationScheduler} para identificar reservas aprobadas

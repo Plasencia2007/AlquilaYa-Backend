@@ -14,6 +14,9 @@ public class CrearReservaRequest {
     @NotNull(message = "La propiedad es obligatoria")
     private Long propiedadId;
 
+    /** Obligatoria solo si la propiedad se gestiona por habitaciones (se valida en el servicio). */
+    private Long habitacionId;
+
     @NotNull(message = "La fecha de inicio es obligatoria")
     @FutureOrPresent(message = "La fecha de inicio no puede ser anterior a hoy")
     private LocalDate fechaInicio;

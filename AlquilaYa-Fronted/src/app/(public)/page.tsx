@@ -34,10 +34,12 @@ import { TIPOS_PROPIEDAD, type TipoPropiedadFiltro } from '@/schemas/search-sche
 import { distanciaAUpeuKm } from '@/lib/geo';
 
 const TIPO_LABELS: Record<TipoPropiedadFiltro, string> = {
-  CUARTO: 'Cuarto',
+  CUARTO_INDIVIDUAL: 'Cuarto individual',
+  CUARTO_COMPARTIDO: 'Cuarto compartido',
   DEPARTAMENTO: 'Departamento',
-  ESTUDIO: 'Estudio',
+  MINI_DEPA: 'Mini depa',
   CASA: 'Casa',
+  SUITE: 'Suite',
 };
 
 function fallbackDestacados(): Propiedad[] {

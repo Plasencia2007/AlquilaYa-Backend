@@ -84,8 +84,8 @@ export default function PropertyHeatmap() {
                 key={prop.id}
                 center={[prop.coordenadas?.lat || -12, prop.coordenadas?.lng || -77]}
                 pathOptions={{ 
-                  fillColor: '#3b82f6', 
-                  color: '#3b82f6', 
+                  fillColor: '#8f0304', 
+                  color: '#8f0304', 
                   weight: 1, 
                   opacity: 0.1, 
                   fillOpacity: 0.25 

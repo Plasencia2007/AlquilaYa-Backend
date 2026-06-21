@@ -105,6 +105,7 @@ public class ReservaExpirationScheduler {
         private final ReservaRepository reservaRepository;
         private final ReservaEventProducer reservaEventProducer;
         private final SagaReservaPagoService sagaReservaPagoService;
+        private final com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService;
 
         /**
          * Expira una sola reserva en su propia transacción. Re-lee la entidad
@@ -134,6 +135,7 @@ public class ReservaExpirationScheduler {
 
             r.setEstado(EstadoReserva.EXPIRADA);
             Reserva guardada = reservaRepository.save(r);
+            habitacionService.recomputarEstado(guardada.getHabitacionId());
 
             // Evento via Outbox: misma TX que el cambio de estado.
             Map<String, Object> extra = new HashMap<>();

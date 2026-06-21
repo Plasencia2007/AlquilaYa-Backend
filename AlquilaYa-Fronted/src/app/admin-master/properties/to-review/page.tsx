@@ -5,6 +5,8 @@ import { adminPropertyService, type PropiedadAdminDTO } from '@/services/admin-p
 import { catalogosService } from '@/services/catalogos-service';
 import { catalogService, type ItemCatalogoInput } from '@/services/catalog-service';
 import { cn } from '@/lib/cn';
+import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
+import type { PoliticaCancelacion } from '@/types/propiedad';
 
 // =============================================================================
 // Helpers
@@ -203,10 +205,12 @@ interface PropertyReviewPanelProps {
   catalogoServicios: Set<string>;
   catalogoReglas: Set<string>;
   actionLoading: number | null;
+  politicaLoading: boolean;
   onClose: () => void;
   onAprobar: () => void;
   onRechazar: () => void;
   onPromote: (value: string, tipo: 'SERVICIO' | 'REGLA') => void;
+  onCambiarPolitica: (politica: PoliticaCancelacion) => void;
 }
 
 function PropertyReviewPanel({
@@ -214,10 +218,12 @@ function PropertyReviewPanel({
   catalogoServicios,
   catalogoReglas,
   actionLoading,
+  politicaLoading,
   onClose,
   onAprobar,
   onRechazar,
   onPromote,
+  onCambiarPolitica,
 }: PropertyReviewPanelProps) {
   const servicios = resolveItemStatus(prop.serviciosIncluidos ?? [], catalogoServicios);
   const reglas = resolveItemStatus(prop.reglas ?? [], catalogoReglas);
@@ -280,7 +286,14 @@ function PropertyReviewPanel({
             </div>
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Tipo</p>
-              <p className="text-sm font-medium text-slate-600">{prop.tipoPropiedad ?? '—'}</p>
+              <p className="text-sm font-medium text-slate-600">
+                {prop.tipoPropiedad ?? '—'}
+                {prop.gestionPorHabitacion && (
+                  <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                    Por habitaciones
+                  </span>
+                )}
+              </p>
             </div>
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Piso / Área</p>
@@ -289,6 +302,21 @@ function PropertyReviewPanel({
                 {prop.area != null ? ` · ${prop.area} m²` : ''}
               </p>
             </div>
+            {(prop.numDormitorios != null || prop.numBanos != null || prop.capacidadPersonas != null) && (
+              <div className="col-span-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Distribución</p>
+                <p className="text-sm font-medium text-slate-600">
+                  {[
+                    prop.numDormitorios != null ? `${prop.numDormitorios} dorm.` : null,
+                    prop.numBanos != null ? `${prop.numBanos} baño${prop.numBanos === 1 ? '' : 's'}` : null,
+                    prop.capacidadPersonas != null ? `hasta ${prop.capacidadPersonas} pers.` : null,
+                    prop.tieneSala ? 'sala' : null,
+                    prop.tieneCocina ? 'cocina' : null,
+                    prop.amoblado ? 'amoblado' : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+            )}
             <div className="col-span-2">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-0.5">Dirección</p>
               <p className="text-sm font-medium text-slate-600">{prop.direccion}</p>
@@ -306,6 +334,84 @@ function PropertyReviewPanel({
               </div>
             )}
           </div>
+
+          {/* Política de cancelación (override de moderación) */}
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Política de cancelación
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {POLITICAS_CANCELACION.map((pol) => {
+                const info = POLITICA_CANCELACION_INFO[pol];
+                const activo = (prop.politicaCancelacion ?? 'FLEXIBLE') === pol;
+                return (
+                  <button
+                    key={pol}
+                    type="button"
+                    onClick={() => onCambiarPolitica(pol)}
+                    disabled={politicaLoading || activo}
+                    title={info.descripcion}
+                    className={cn(
+                      'rounded-lg border px-2 py-2 text-left transition-colors',
+                      activo
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-slate-200 hover:border-primary/50 disabled:opacity-50',
+                    )}
+                  >
+                    <span className="block text-[11px] font-bold text-slate-800">{info.label}</span>
+                    <span className="block text-[9px] leading-tight text-slate-400 mt-0.5">
+                      {info.resumen}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5">
+              Override de moderación. Solo afecta cancelaciones futuras.
+            </p>
+          </div>
+
+          {/* Video */}
+          {prop.videoUrl && (
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Video</p>
+              <a
+                href={prop.videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-primary hover:bg-slate-50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">smart_display</span>
+                Ver video del aviso
+                <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+              </a>
+            </div>
+          )}
+
+          {/* Servicios que se pagan aparte */}
+          {(() => {
+            const aparte = (prop.servicios ?? [])
+              .filter((s) => s.estado === 'APARTE')
+              .map((s) => s.servicio);
+            if (aparte.length === 0) return null;
+            return (
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Servicios que se pagan aparte
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {aparte.map((s) => (
+                    <span
+                      key={s}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-700"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Servicios */}
           {(prop.serviciosIncluidos ?? []).length > 0 && (
@@ -443,6 +549,7 @@ export default function AdminPropiedadesRevisionPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PropiedadAdminDTO | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [politicaLoading, setPoliticaLoading] = useState(false);
   const [promoteTarget, setPromoteTarget] = useState<{
     value: string;
     tipo: 'SERVICIO' | 'REGLA';
@@ -506,6 +613,23 @@ export default function AdminPropiedadesRevisionPage() {
       showToast('Error al rechazar la propiedad', 'error');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleCambiarPolitica = async (politica: PoliticaCancelacion) => {
+    if (!selected || selected.politicaCancelacion === politica) return;
+    setPoliticaLoading(true);
+    try {
+      await adminPropertyService.cambiarPoliticaCancelacion(selected.id, politica);
+      setSelected((prev) => (prev ? { ...prev, politicaCancelacion: politica } : prev));
+      setPropiedades((prev) =>
+        prev.map((p) => (p.id === selected.id ? { ...p, politicaCancelacion: politica } : p)),
+      );
+      showToast(`Política cambiada a ${POLITICA_CANCELACION_INFO[politica].label}`, 'success');
+    } catch {
+      showToast('Error al cambiar la política', 'error');
+    } finally {
+      setPoliticaLoading(false);
     }
   };
 
@@ -673,10 +797,12 @@ export default function AdminPropiedadesRevisionPage() {
           catalogoServicios={catalogoServicios}
           catalogoReglas={catalogoReglas}
           actionLoading={actionLoading}
+          politicaLoading={politicaLoading}
           onClose={() => setSelected(null)}
           onAprobar={handleAprobar}
           onRechazar={handleRechazar}
           onPromote={(value, tipo) => setPromoteTarget({ value, tipo })}
+          onCambiarPolitica={handleCambiarPolitica}
         />
       )}
 

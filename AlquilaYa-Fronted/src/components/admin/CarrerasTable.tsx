@@ -203,7 +203,7 @@ export const CarrerasTable: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleActivo(carrera)}
-                        className="text-slate-300 hover:text-blue-600 p-2 h-auto rounded-md"
+                        className="text-slate-300 hover:text-primary p-2 h-auto rounded-md"
                         title={carrera.activo ? 'Desactivar' : 'Activar'}
                       >
                         <span className="material-symbols-outlined text-lg">

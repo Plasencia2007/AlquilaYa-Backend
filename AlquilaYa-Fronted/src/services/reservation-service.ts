@@ -10,6 +10,7 @@ interface ReservaResponseDTO {
   fechaInicio: string;
   fechaFin: string;
   montoTotal: number;
+  comision?: number;
   estado: EstadoReserva;
   propiedadTitulo: string;
   estudianteNombre?: string;
@@ -22,6 +23,8 @@ interface CrearReservaPayload {
   propiedadId: string | number;
   fechaInicio: string; // YYYY-MM-DD
   fechaFin: string; // YYYY-MM-DD
+  /** Obligatoria si la propiedad se gestiona por habitaciones. */
+  habitacionId?: number;
 }
 
 function fromDTO(dto: ReservaResponseDTO): Reserva {
@@ -35,6 +38,7 @@ function fromDTO(dto: ReservaResponseDTO): Reserva {
     fechaInicio: dto.fechaInicio,
     fechaFin: dto.fechaFin,
     montoTotal: Number(dto.montoTotal),
+    comision: dto.comision != null ? Number(dto.comision) : undefined,
     estado: dto.estado,
     motivoRechazo: dto.motivoRechazo,
     fechaCreacion: dto.fechaCreacion,
@@ -88,6 +92,7 @@ export const reservationService = {
       propiedadId: Number(payload.propiedadId),
       fechaInicio: payload.fechaInicio,
       fechaFin: payload.fechaFin,
+      habitacionId: payload.habitacionId,
     });
     return fromDTO(data);
   },

@@ -1,8 +1,11 @@
 package com.alquilaya.serviciousuarios.controllers;
 
+import com.alquilaya.serviciousuarios.dto.ActualizarPerfilAcademicoRequest;
+import com.alquilaya.serviciousuarios.dto.ActualizarPerfilPersonalRequest;
 import com.alquilaya.serviciousuarios.dto.ActualizarUsuarioRequest;
 import com.alquilaya.serviciousuarios.dto.ArrendadorInfoResponse;
 import com.alquilaya.serviciousuarios.dto.ArrendadorPublicoResponse;
+import com.alquilaya.serviciousuarios.dto.CambiarPasswordPerfilRequest;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordRequest;
 import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
@@ -13,6 +16,7 @@ import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
+import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +44,66 @@ public class UsuarioController {
     private final UsuarioService usuarioService;
     private final ArrendadorRepository arrendadorRepository;
     private final EstudianteRepository estudianteRepository;
+    private final UsuarioRepository usuarioRepository;
+
+    /** Usuario autenticado, resuelto por el correo que el JWT pone como principal. */
+    private Usuario usuarioActual() {
+        String correo = SecurityContextHolder.getContext().getAuthentication().getName();
+        return usuarioService.buscarPorCorreo(correo)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario autenticado"));
+    }
+
+    // ===== Perfil propio (datos del usuario autenticado) =====
+
+    @PatchMapping("/perfil/personal")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> actualizarPerfilPersonal(@Valid @RequestBody ActualizarPerfilPersonalRequest req) {
+        Usuario u = usuarioActual();
+        u.setNombre(req.getNombre().trim());
+        u.setApellido(req.getApellido().trim());
+        if (req.getTelefono() != null && !req.getTelefono().isBlank()) {
+            u.setTelefono(req.getTelefono().trim());
+        }
+        usuarioRepository.save(u);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/perfil/academico")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> actualizarPerfilAcademico(@Valid @RequestBody ActualizarPerfilAcademicoRequest req) {
+        Usuario u = usuarioActual();
+        Estudiante e = estudianteRepository.findByUsuario(u)
+                .orElseThrow(() -> new RecursoNoEncontradoException("El usuario autenticado no tiene perfil de estudiante"));
+        e.setUniversidad(req.getUniversidad().trim());
+        e.setCodigoEstudiante(req.getCodigoEstudiante().trim());
+        e.setCarrera(req.getCarrera().trim());
+        e.setCiclo(parseCiclo(req.getCiclo()));
+        estudianteRepository.save(e);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/perfil/password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> cambiarPasswordPerfil(@Valid @RequestBody CambiarPasswordPerfilRequest req) {
+        Usuario u = usuarioActual();
+        usuarioService.cambiarPassword(u.getId(), req.getActual(), req.getNueva());
+        return ResponseEntity.noContent().build();
+    }
+
+    private Integer parseCiclo(String ciclo) {
+        if (ciclo == null || ciclo.isBlank()) {
+            return null;
+        }
+        try {
+            int v = Integer.parseInt(ciclo.trim());
+            if (v < 1 || v > 12) {
+                throw new IllegalArgumentException("El ciclo debe estar entre 1 y 12");
+            }
+            return v;
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("El ciclo debe ser un número entre 1 y 12");
+        }
+    }
 
     @GetMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")

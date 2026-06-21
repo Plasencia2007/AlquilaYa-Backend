@@ -15,7 +15,15 @@ public class ResenaResponseDTO {
     private Long estudianteId;
     private String estudianteNombre;
     private Integer rating;
+    // Sub-categorías (solo aplican a reseñas de PROPIEDAD; null en arrendador/legacy).
+    private Integer ratingLimpieza;
+    private Integer ratingUbicacion;
+    private Integer ratingPrecio;
+    private Integer ratingTrato;
     private String comentario;
+    /** Respuesta pública del arrendador (solo reseñas de PROPIEDAD). */
+    private String respuestaArrendador;
+    private LocalDateTime fechaRespuesta;
     private Boolean visible;
     private LocalDateTime fechaCreacion;
 }

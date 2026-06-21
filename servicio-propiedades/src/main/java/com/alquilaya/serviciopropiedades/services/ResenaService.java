@@ -7,6 +7,7 @@ import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
+import com.alquilaya.serviciopropiedades.dto.ResumenCategoriasDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
@@ -66,7 +67,13 @@ public class ResenaService {
         ResenaPropiedad resena = ResenaPropiedad.builder()
                 .propiedadId(req.getPropiedadId())
                 .estudianteId(estudianteId)
-                .rating(req.getRating())
+                // El rating general es DERIVADO de las sub-categorías (fuente de verdad en el
+                // servidor, no en el cliente). Si no vienen las 4, se respeta el rating enviado.
+                .rating(calcularRatingGeneral(req))
+                .ratingLimpieza(req.getRatingLimpieza())
+                .ratingUbicacion(req.getRatingUbicacion())
+                .ratingPrecio(req.getRatingPrecio())
+                .ratingTrato(req.getRatingTrato())
                 .comentario(req.getComentario())
                 .visible(true)
                 .build();
@@ -87,10 +94,121 @@ public class ResenaService {
                         .targetId(r.getPropiedadId())
                         .estudianteId(r.getEstudianteId())
                         .rating(r.getRating())
+                        .ratingLimpieza(r.getRatingLimpieza())
+                        .ratingUbicacion(r.getRatingUbicacion())
+                        .ratingPrecio(r.getRatingPrecio())
+                        .ratingTrato(r.getRatingTrato())
                         .comentario(r.getComentario())
+                        .respuestaArrendador(r.getRespuestaArrendador())
+                        .fechaRespuesta(r.getFechaRespuesta())
                         .visible(r.getVisible())
                         .fechaCreacion(r.getFechaCreacion())
                         .build());
+    }
+
+    /**
+     * El arrendador dueño de la propiedad responde (o edita/borra) públicamente una reseña.
+     * Texto en blanco = borra la respuesta. Valida que el solicitante sea el arrendador dueño.
+     */
+    /** Máximo de caracteres de la respuesta del arrendador (igual que el comentario). */
+    private static final int MAX_RESPUESTA = 2000;
+
+    @Transactional
+    public ResenaResponseDTO responderResenaPropiedad(Long resenaId, String respuesta, CurrentUser current) {
+        Long arrendadorId = validarArrendador(current);
+        ResenaPropiedad r = resenaPropRepo.findById(resenaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de propiedad " + resenaId));
+        Propiedad propiedad = propiedadRepository.findById(r.getPropiedadId())
+                .orElseThrow(() -> new IllegalArgumentException("No existe la propiedad de la reseña"));
+        if (!arrendadorId.equals(propiedad.getArrendadorId())) {
+            throw new IllegalStateException("Solo el arrendador dueño de la propiedad puede responder esta reseña");
+        }
+        String texto = respuesta != null ? respuesta.trim() : "";
+        if (texto.length() > MAX_RESPUESTA) {
+            throw new IllegalArgumentException("La respuesta no puede exceder " + MAX_RESPUESTA + " caracteres");
+        }
+        if (texto.isEmpty()) {
+            r.setRespuestaArrendador(null);
+            r.setFechaRespuesta(null);
+        } else {
+            r.setRespuestaArrendador(texto);
+            r.setFechaRespuesta(java.time.LocalDateTime.now());
+        }
+        return mapPropiedad(resenaPropRepo.save(r));
+    }
+
+    /** Listado paginado de TODAS las reseñas de propiedad (incl. ocultas) para moderación admin. */
+    public org.springframework.data.domain.Page<ResenaResponseDTO> listarPropiedadAdmin(int page, int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return resenaPropRepo.findAllByOrderByFechaCreacionDesc(pageable).map(this::mapPropiedad);
+    }
+
+    /** Moderación: oculta/muestra una reseña de propiedad y recalcula el promedio. */
+    @Transactional
+    public ResenaResponseDTO cambiarVisibilidadPropiedad(Long resenaId, boolean visible) {
+        ResenaPropiedad r = resenaPropRepo.findById(resenaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de propiedad " + resenaId));
+        r.setVisible(visible);
+        ResenaPropiedad guardada = resenaPropRepo.save(r);
+        recalcularPropiedad(guardada.getPropiedadId());
+        return mapPropiedad(guardada);
+    }
+
+    /** Moderación: el admin borra SOLO la respuesta del arrendador (la reseña queda intacta). */
+    @Transactional
+    public ResenaResponseDTO eliminarRespuestaPropiedad(Long resenaId) {
+        ResenaPropiedad r = resenaPropRepo.findById(resenaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la reseña de propiedad " + resenaId));
+        r.setRespuestaArrendador(null);
+        r.setFechaRespuesta(null);
+        return mapPropiedad(resenaPropRepo.save(r));
+    }
+
+    /** DTO de una reseña de propiedad (sin enriquecer con nombre de estudiante). */
+    private ResenaResponseDTO mapPropiedad(ResenaPropiedad g) {
+        return ResenaResponseDTO.builder()
+                .id(g.getId()).tipo("PROPIEDAD").targetId(g.getPropiedadId())
+                .estudianteId(g.getEstudianteId()).rating(g.getRating())
+                .ratingLimpieza(g.getRatingLimpieza()).ratingUbicacion(g.getRatingUbicacion())
+                .ratingPrecio(g.getRatingPrecio()).ratingTrato(g.getRatingTrato())
+                .comentario(g.getComentario())
+                .respuestaArrendador(g.getRespuestaArrendador()).fechaRespuesta(g.getFechaRespuesta())
+                .visible(g.getVisible()).fechaCreacion(g.getFechaCreacion())
+                .build();
+    }
+
+    /**
+     * Rating general derivado: si vienen las 4 sub-categorías, es su promedio redondeado;
+     * si no (formato legacy), se respeta el rating que envió el cliente.
+     */
+    private Integer calcularRatingGeneral(CrearResenaPropiedadRequest req) {
+        Integer l = req.getRatingLimpieza();
+        Integer u = req.getRatingUbicacion();
+        Integer p = req.getRatingPrecio();
+        Integer t = req.getRatingTrato();
+        if (l != null && u != null && p != null && t != null) {
+            return (int) Math.round((l + u + p + t) / 4.0);
+        }
+        return req.getRating();
+    }
+
+    /** Promedios por sub-categoría (limpieza/ubicación/precio/trato) de una propiedad. */
+    public ResumenCategoriasDTO resumenCategorias(Long propiedadId) {
+        List<Object[]> filas = resenaPropRepo.promediosCategorias(propiedadId);
+        if (filas == null || filas.isEmpty() || filas.get(0) == null) {
+            return ResumenCategoriasDTO.builder().build();
+        }
+        Object[] f = filas.get(0);
+        return ResumenCategoriasDTO.builder()
+                .limpieza(aDouble(f[0]))
+                .ubicacion(aDouble(f[1]))
+                .precio(aDouble(f[2]))
+                .trato(aDouble(f[3]))
+                .build();
+    }
+
+    private static Double aDouble(Object o) {
+        return o instanceof Number n ? n.doubleValue() : null;
     }
 
     // ======================= ARRENDADOR =======================

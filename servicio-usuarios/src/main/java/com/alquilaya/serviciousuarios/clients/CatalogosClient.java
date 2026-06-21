@@ -15,4 +15,8 @@ public interface CatalogosClient {
 
     @GetMapping("/api/v1/catalogos/carreras/existe/{id}")
     Boolean existeCarrera(@PathVariable("id") Long id);
+
+    /** Endpoint público de catalogos: no requiere JWT. Ancla la validación de cercanía. */
+    @GetMapping("/api/v1/catalogos/universidades/principal")
+    CampusPrincipalDTO obtenerCampusPrincipal();
 }

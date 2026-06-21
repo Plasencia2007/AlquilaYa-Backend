@@ -14,8 +14,8 @@ const STATUS_CONFIG = {
     label: 'Pendiente'
   },
   CRITICO: {
-    base: 'bg-error/5 text-error border-error/10',
-    dot: 'bg-error',
+    base: 'bg-destructive/5 text-destructive border-destructive/10',
+    dot: 'bg-destructive',
     label: 'Crítico'
   },
 };
@@ -24,8 +24,8 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   const config = STATUS_CONFIG[status];
   
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all duration-300 ${config.base}`}>
-      <span className={`w-1.5 h-1.5 rounded-full mr-2 shadow-sm ${config.dot}`} />
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border transition-colors ${config.base}`}>
+      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${config.dot}`} />
       {config.label}
     </span>
   );

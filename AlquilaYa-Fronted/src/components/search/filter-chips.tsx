@@ -7,10 +7,12 @@ import { cn } from '@/lib/cn';
 import type { Filtros } from '@/schemas/search-schema';
 
 const TIPO_LABELS: Record<string, string> = {
-  CUARTO: 'Cuarto',
+  CUARTO_INDIVIDUAL: 'Cuarto individual',
+  CUARTO_COMPARTIDO: 'Cuarto compartido',
   DEPARTAMENTO: 'Departamento',
-  ESTUDIO: 'Estudio',
+  MINI_DEPA: 'Mini depa',
   CASA: 'Casa',
+  SUITE: 'Suite',
 };
 
 interface Chip {

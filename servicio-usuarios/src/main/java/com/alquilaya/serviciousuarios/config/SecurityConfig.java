@@ -47,6 +47,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT,  "/api/v1/usuarios/{id}").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/cambiar-password").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/foto").authenticated()
+                        // Perfil propio: el usuario autenticado edita SUS datos (resueltos por el token).
+                        .requestMatchers("/api/v1/usuarios/perfil/**").authenticated()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session

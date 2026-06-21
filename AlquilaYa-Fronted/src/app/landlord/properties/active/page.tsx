@@ -98,7 +98,7 @@ export default function ActivePropertiesPage() {
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-on-surface-variant px-2.5 py-1 rounded-full shadow-md">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/95 backdrop-blur-sm text-muted-foreground px-2.5 py-1 rounded-full shadow-md">
             {status}
           </span>
         );
@@ -109,7 +109,7 @@ export default function ActivePropertiesPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] animate-pulse">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-on-surface-variant font-medium">Cargando tu inventario...</p>
+        <p className="text-muted-foreground font-medium">Cargando tu inventario...</p>
       </div>
     );
   }
@@ -122,10 +122,10 @@ export default function ActivePropertiesPage() {
           <Badge variant="surface" className="mb-2">
             Mis Publicaciones
           </Badge>
-          <h1 className="text-4xl font-black text-on-surface tracking-tighter sm:text-5xl">
+          <h1 className="text-4xl font-black text-foreground tracking-tighter sm:text-5xl">
             Cuartos <span className="text-primary">Activos</span>
           </h1>
-          <p className="text-on-surface-variant mt-2 max-w-lg">
+          <p className="text-muted-foreground mt-2 max-w-lg">
             Aquí puedes gestionar la disponibilidad de tus habitaciones y ver el estado de tus
             publicaciones.
           </p>
@@ -140,7 +140,7 @@ export default function ActivePropertiesPage() {
       </div>
 
       {error && (
-        <div className="p-4 bg-error/10 text-error rounded-2xl border border-error/20 mb-8 flex items-center gap-3">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-2xl border border-destructive/20 mb-8 flex items-center gap-3">
           <span className="material-symbols-outlined">error</span>
           <p className="text-sm font-medium">{error}</p>
         </div>
@@ -247,14 +247,14 @@ export default function ActivePropertiesPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-surface-container-low rounded-[2.5rem] p-12 text-center border-2 border-dashed border-surface-variant/50">
-          <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-6 text-on-surface-variant/30">
+        <div className="bg-muted rounded-[2.5rem] p-12 text-center border-2 border-dashed border-border-variant/50">
+          <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mx-auto mb-6 text-muted-foreground/30">
             <span className="material-symbols-outlined text-4xl">inventory_2</span>
           </div>
-          <h2 className="text-2xl font-black text-on-surface tracking-tight mb-2">
+          <h2 className="text-2xl font-black text-foreground tracking-tight mb-2">
             Aún no tienes publicaciones
           </h2>
-          <p className="text-on-surface-variant max-w-sm mx-auto mb-8">
+          <p className="text-muted-foreground max-w-sm mx-auto mb-8">
             Empieza a publicar tus habitaciones disponibles para que los estudiantes puedan
             encontrarte.
           </p>
@@ -295,7 +295,7 @@ export default function ActivePropertiesPage() {
               variant="dark"
               onClick={handleConfirmDelete}
               disabled={deleting}
-              className="bg-error text-on-error hover:bg-error/90"
+              className="bg-destructive text-on-error hover:bg-destructive/90"
             >
               {deleting ? 'Eliminando...' : 'Eliminar'}
             </Button>

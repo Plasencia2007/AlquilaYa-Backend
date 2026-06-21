@@ -59,12 +59,16 @@ public class MensajeService {
             throw new RateLimitExceededException(
                     "Has enviado demasiados mensajes en poco tiempo. Espera un momento antes de continuar.");
         }
+        // El rol del emisor se toma del JWT, NO del perfilId: perfilId no es único
+        // entre roles (un arrendador y un estudiante pueden compartir el mismo id
+        // numérico, son tablas distintas). verificarAcceso() ya confirmó que el caller
+        // es participante con ese rol, así que aquí basta con mapear su rol.
         // Admin puede leer pero NO emitir como "estudiante" o "arrendador".
         RolEmisor rolEmisor;
-        if (user.getPerfilId().equals(c.getEstudianteId())) {
-            rolEmisor = RolEmisor.ESTUDIANTE;
-        } else if (user.getPerfilId().equals(c.getArrendadorId())) {
+        if ("ARRENDADOR".equalsIgnoreCase(user.getRol())) {
             rolEmisor = RolEmisor.ARRENDADOR;
+        } else if ("ESTUDIANTE".equalsIgnoreCase(user.getRol())) {
+            rolEmisor = RolEmisor.ESTUDIANTE;
         } else {
             // Caller es ADMIN u otro rol sin participación: no puede enviar.
             throw new IllegalStateException("Solo los participantes pueden enviar mensajes");
@@ -169,7 +173,12 @@ public class MensajeService {
         // Admin no marca nada (no es destinatario real).
         if ("ADMIN".equalsIgnoreCase(user.getRol())) return 0;
 
-        int actualizados = mensajeRepo.marcarLeidos(c.getId(), user.getPerfilId(), LocalDateTime.now());
+        // El lector marca como leídos los mensajes del OTRO participante. Lo
+        // identificamos por rol (no por perfilId, que colisiona entre roles).
+        RolEmisor lectorRol = "ARRENDADOR".equalsIgnoreCase(user.getRol())
+                ? RolEmisor.ARRENDADOR
+                : RolEmisor.ESTUDIANTE;
+        int actualizados = mensajeRepo.marcarLeidos(c.getId(), lectorRol, LocalDateTime.now());
         if (actualizados > 0) {
             wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
                     new EventoLectura(c.getId(), user.getPerfilId(), user.getRol(), actualizados));

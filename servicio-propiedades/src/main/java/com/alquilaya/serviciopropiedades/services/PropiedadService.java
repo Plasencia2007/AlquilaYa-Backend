@@ -8,7 +8,10 @@ import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.PropiedadImagen;
+import com.alquilaya.serviciopropiedades.enums.EstadoHabitacion;
+import com.alquilaya.serviciopropiedades.repositories.HabitacionRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
+import com.alquilaya.serviciopropiedades.util.BadgeCalculator;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -36,12 +39,15 @@ import java.util.stream.Collectors;
 public class PropiedadService {
 
     private final PropiedadRepository propiedadRepository;
+    private final HabitacionRepository habitacionRepository;
     private final DistanciaService distanciaService;
     private final UsuariosClient usuariosClient;
 
     public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, String tipo,
                                    String periodo, Boolean disponible, Integer distanciaMax,
-                                   List<String> servicios, String zona) {
+                                   List<String> servicios, String zona,
+                                   Long universidadId, Long zonaId,
+                                   Integer capacidadMin, Integer dormitoriosMin) {
         if (precioMin != null && precioMin.signum() < 0) {
             throw new IllegalArgumentException("precioMin no puede ser negativo");
         }
@@ -63,7 +69,7 @@ public class PropiedadService {
                 ? null
                 : "%" + zona.trim().toLowerCase() + "%";
         return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax,
-                filtroServicios, filtroZona);
+                filtroServicios, filtroZona, universidadId, zonaId, capacidadMin, dormitoriosMin);
     }
 
     /**
@@ -75,12 +81,13 @@ public class PropiedadService {
      */
     @Cacheable(
         value = "propiedades:listado",
-        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona)"
+        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona, #universidadId, #zonaId, #capacidadMin, #dormitoriosMin)"
     )
     public PropiedadBusquedaResultado buscarPublicoCacheado(
             BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
-            Boolean disponible, Integer distanciaMax, List<String> servicios, String zona) {
-        List<Propiedad> resultados = buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona);
+            Boolean disponible, Integer distanciaMax, List<String> servicios, String zona,
+            Long universidadId, Long zonaId, Integer capacidadMin, Integer dormitoriosMin) {
+        List<Propiedad> resultados = buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona, universidadId, zonaId, capacidadMin, dormitoriosMin);
         // Batch enrich: una sola llamada Feign al servicio-usuarios por página
         // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
         return new PropiedadBusquedaResultado(toPublicoBatch(resultados));
@@ -88,7 +95,7 @@ public class PropiedadService {
 
     public void calcularYSetearDistancia(Propiedad p) {
         if (p.getLatitud() != null && p.getLongitud() != null) {
-            p.setDistanciaMetros(distanciaService.distanciaAUpeuMetros(p.getLatitud(), p.getLongitud()));
+            p.setDistanciaMetros(distanciaService.distanciaACampusMetros(p.getLatitud(), p.getLongitud()));
         }
     }
 
@@ -97,27 +104,41 @@ public class PropiedadService {
      * Para listados, preferir {@link #toPublicoBatch(List)} para evitar N+1.
      */
     public PropiedadPublicoDTO toPublico(Propiedad p) {
-        return toPublicoBuilder(p, null).build();
+        return toPublicoBuilder(p, null, contarLibres(p)).build();
     }
 
-    private PropiedadPublicoDTO.PropiedadPublicoDTOBuilder toPublicoBuilder(Propiedad p, ArrendadorInfoDTO info) {
+    private PropiedadPublicoDTO.PropiedadPublicoDTOBuilder toPublicoBuilder(Propiedad p, ArrendadorInfoDTO info,
+                                                                            Long habitacionesLibres) {
         PropiedadPublicoDTO.PropiedadPublicoDTOBuilder b = PropiedadPublicoDTO.builder()
                 .id(p.getId())
                 .titulo(p.getTitulo())
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
+                .precioAnterior(p.getPrecioAnterior())
+                .videoUrl(p.getVideoUrl())
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
                 .periodoAlquiler(p.getPeriodoAlquiler())
                 .area(p.getArea())
                 .nroPiso(p.getNroPiso())
+                .numDormitorios(p.getNumDormitorios())
+                .numBanos(p.getNumBanos())
+                .capacidadPersonas(p.getCapacidadPersonas())
+                .tieneSala(p.getTieneSala())
+                .tieneCocina(p.getTieneCocina())
+                .amoblado(p.getAmoblado())
+                .gestionPorHabitacion(p.getGestionPorHabitacion())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
+                .politicaCancelacion(p.getPoliticaCancelacion())
                 .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .servicios(p.getServicios() != null ? new java.util.ArrayList<>(p.getServicios()) : null)
                 .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())
                 .distanciaMetros(p.getDistanciaMetros())
+                .zonaId(p.getZonaId())
+                .universidadId(p.getUniversidadId())
                 .aprobadoPorAdmin(p.getAprobadoPorAdmin())
                 .calificacion(p.getCalificacion())
                 .numResenas(p.getNumResenas())
@@ -127,7 +148,8 @@ public class PropiedadService {
                 // Campos premium del card rediseñado
                 .fechaCreacion(p.getFechaCreacion())
                 .ultimaActualizacion(p.getFechaActualizacion())
-                .vistas(p.getVistas() != null ? p.getVistas() : 0L);
+                .vistas(p.getVistas() != null ? p.getVistas() : 0L)
+                .badges(new ArrayList<>(BadgeCalculator.calcular(p, habitacionesLibres)));
 
         if (info != null) {
             b.arrendadorNombre(componerNombre(info))
@@ -149,9 +171,40 @@ public class PropiedadService {
             return Collections.emptyList();
         }
         Map<Long, ArrendadorInfoDTO> infoPorId = cargarArrendadoresBulk(propiedades);
+        Map<Long, Long> libresPorId = contarLibresBatch(propiedades);
         return propiedades.stream()
-                .map(p -> toPublicoBuilder(p, infoPorId.get(p.getArrendadorId())).build())
+                .map(p -> toPublicoBuilder(p, infoPorId.get(p.getArrendadorId()),
+                        libresPorId.get(p.getId())).build())
                 .toList();
+    }
+
+    /**
+     * Cuenta habitaciones LIBRE de una sola propiedad (para el badge ÚLTIMA PLAZA en el
+     * detalle). Devuelve null si la propiedad no se gestiona por habitación.
+     */
+    private Long contarLibres(Propiedad p) {
+        if (p == null || p.getId() == null || !Boolean.TRUE.equals(p.getGestionPorHabitacion())) {
+            return null;
+        }
+        return habitacionRepository.countByPropiedadIdAndEstado(p.getId(), EstadoHabitacion.LIBRE);
+    }
+
+    /**
+     * Cuenta habitaciones LIBRE para todas las propiedades gestionadas por habitación
+     * del listado en UNA sola query (anti N+1). Las que no aparecen tienen 0 libres.
+     */
+    private Map<Long, Long> contarLibresBatch(List<Propiedad> propiedades) {
+        List<Long> ids = propiedades.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getGestionPorHabitacion()))
+                .map(Propiedad::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (ids.isEmpty()) return Collections.emptyMap();
+        Map<Long, Long> map = new HashMap<>();
+        for (Object[] fila : habitacionRepository.contarPorEstadoEnPropiedades(ids, EstadoHabitacion.LIBRE)) {
+            map.put((Long) fila[0], (Long) fila[1]);
+        }
+        return map;
     }
 
     private Map<Long, ArrendadorInfoDTO> cargarArrendadoresBulk(List<Propiedad> propiedades) {
@@ -238,14 +291,25 @@ public class PropiedadService {
                 .titulo(p.getTitulo())
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
+                .precioAnterior(p.getPrecioAnterior())
+                .videoUrl(p.getVideoUrl())
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
                 .periodoAlquiler(p.getPeriodoAlquiler())
                 .area(p.getArea())
                 .nroPiso(p.getNroPiso())
+                .numDormitorios(p.getNumDormitorios())
+                .numBanos(p.getNumBanos())
+                .capacidadPersonas(p.getCapacidadPersonas())
+                .tieneSala(p.getTieneSala())
+                .tieneCocina(p.getTieneCocina())
+                .amoblado(p.getAmoblado())
+                .gestionPorHabitacion(p.getGestionPorHabitacion())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
+                .politicaCancelacion(p.getPoliticaCancelacion())
                 .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .servicios(p.getServicios() != null ? new java.util.ArrayList<>(p.getServicios()) : null)
                 .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())
@@ -259,7 +323,8 @@ public class PropiedadService {
                 // Campos premium del card rediseñado
                 .fechaCreacion(p.getFechaCreacion())
                 .ultimaActualizacion(p.getFechaActualizacion())
-                .vistas(p.getVistas() != null ? p.getVistas() : 0L);
+                .vistas(p.getVistas() != null ? p.getVistas() : 0L)
+                .badges(new ArrayList<>(BadgeCalculator.calcular(p, contarLibres(p))));
 
         if (info != null) {
             b.arrendadorNombre(componerNombre(info))
@@ -288,11 +353,21 @@ public class PropiedadService {
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
                 .periodoAlquiler(p.getPeriodoAlquiler())
+                .videoUrl(p.getVideoUrl())
                 .area(p.getArea())
                 .nroPiso(p.getNroPiso())
+                .numDormitorios(p.getNumDormitorios())
+                .numBanos(p.getNumBanos())
+                .capacidadPersonas(p.getCapacidadPersonas())
+                .tieneSala(p.getTieneSala())
+                .tieneCocina(p.getTieneCocina())
+                .amoblado(p.getAmoblado())
+                .gestionPorHabitacion(p.getGestionPorHabitacion())
                 .estaDisponible(p.getEstaDisponible())
                 .disponibleDesde(p.getDisponibleDesde())
+                .politicaCancelacion(p.getPoliticaCancelacion())
                 .serviciosIncluidos(copiaPlana(p.getServiciosIncluidos()))
+                .servicios(p.getServicios() != null ? new java.util.ArrayList<>(p.getServicios()) : null)
                 .reglas(copiaPlana(p.getReglas()))
                 .latitud(p.getLatitud())
                 .longitud(p.getLongitud())

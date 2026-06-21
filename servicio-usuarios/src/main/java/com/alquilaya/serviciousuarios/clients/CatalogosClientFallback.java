@@ -13,4 +13,10 @@ public class CatalogosClientFallback implements CatalogosClient {
                 "No se puede validar carreraId={}. Se asume válida temporalmente.", id);
         return null;
     }
+
+    @Override
+    public CampusPrincipalDTO obtenerCampusPrincipal() {
+        log.warn("[FEIGN FALLBACK] servicio-catalogos no disponible. Se usará el campus de respaldo.");
+        return null;
+    }
 }

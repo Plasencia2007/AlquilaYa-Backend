@@ -55,6 +55,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+		<!-- Kafka: publica eventos de cambio de catálogo (zonas/universidades) para que
+		     servicio-propiedades invalide sus caches de zonas/campus al instante. -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
 		<!-- Documentacion OpenAPI/Swagger UI -> /swagger-ui.html -->
 		<dependency>
 			<groupId>org.springdoc</groupId>

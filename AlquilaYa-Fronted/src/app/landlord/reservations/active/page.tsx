@@ -25,14 +25,14 @@ const ESTADOS_CONFIRMADAS: EstadoReserva[] = ['APROBADA', 'PAGADA'];
 
 function CardSkeleton() {
   return (
-    <div className="rounded-[2.5rem] border border-on-surface/5 bg-surface-container-lowest p-0 overflow-hidden animate-pulse">
+    <div className="rounded-[2.5rem] border border-border bg-card p-0 overflow-hidden animate-pulse">
       <div className="flex flex-col md:flex-row">
-        <div className="w-full md:w-44 h-32 md:h-40 bg-on-surface/5" />
+        <div className="w-full md:w-44 h-32 md:h-40 bg-muted" />
         <div className="flex-1 p-5 space-y-3">
-          <div className="h-4 w-1/2 bg-on-surface/5 rounded-full" />
-          <div className="h-3 w-1/3 bg-on-surface/5 rounded-full" />
+          <div className="h-4 w-1/2 bg-muted rounded-full" />
+          <div className="h-3 w-1/3 bg-muted rounded-full" />
           <div className="grid grid-cols-4 gap-3 pt-2">
-            {[1,2,3,4].map((i) => <div key={i} className="h-8 bg-on-surface/5 rounded-xl" />)}
+            {[1,2,3,4].map((i) => <div key={i} className="h-8 bg-muted rounded-xl" />)}
           </div>
         </div>
       </div>
@@ -105,10 +105,10 @@ export default function ReservationsActivePage() {
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           {TABS.find((t) => t.id === tab)?.badge}
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90 mt-3">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90 mt-3">
             Reservas activas
           </h1>
-          <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
+          <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             {tab === 'pendientes'
               ? 'Revisa y responde las solicitudes de tus estudiantes a tiempo.'
               : 'Estudiantes con tu aprobación o que ya completaron el pago.'}
@@ -126,7 +126,7 @@ export default function ReservationsActivePage() {
       </header>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-on-surface/10 pb-0">
+      <div className="flex gap-2 border-b border-border pb-0">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -135,15 +135,15 @@ export default function ReservationsActivePage() {
             className={
               'relative px-5 py-2.5 text-[12px] font-black uppercase tracking-wider transition-all rounded-t-xl ' +
               (tab === t.id
-                ? 'bg-surface text-primary border-b-2 border-primary'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low')
+                ? 'bg-background text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted')
             }
           >
             {t.label}
             {t.count > 0 && (
               <span className={
                 'ml-2 rounded-full px-2 py-0.5 text-[9px] font-black ' +
-                (tab === t.id ? 'bg-primary/10 text-primary' : 'bg-on-surface/5 text-on-surface-variant')
+                (tab === t.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')
               }>
                 {t.count}
               </span>
@@ -169,12 +169,12 @@ export default function ReservationsActivePage() {
       {!loading && tab === 'pendientes' && (
         <>
           {pendientes.length === 0 && !error ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-on-surface/10 bg-surface-container-lowest">
-              <div className="w-16 h-16 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-5">
+            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-border bg-card">
+              <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-5">
                 <span className="material-symbols-outlined text-3xl">inbox</span>
               </div>
-              <h2 className="text-xl font-black text-on-surface tracking-tight">Sin solicitudes nuevas</h2>
-              <p className="text-on-surface-variant text-sm font-medium mt-1 max-w-sm">
+              <h2 className="text-xl font-black text-foreground tracking-tight">Sin solicitudes nuevas</h2>
+              <p className="text-muted-foreground text-sm font-medium mt-1 max-w-sm">
                 Cuando un estudiante reserve uno de tus cuartos, aparecerá aquí.
               </p>
               <Button asChild variant="dark" size="sm" className="mt-6">
@@ -212,11 +212,11 @@ export default function ReservationsActivePage() {
                     'inline-flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all ' +
                     (activo
                       ? 'bg-primary text-white shadow-md'
-                      : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container')
+                      : 'bg-muted text-muted-foreground hover:bg-muted')
                   }
                 >
                   {f.label}
-                  <span className={'rounded-full px-2 py-0.5 text-[9px] font-black ' + (activo ? 'bg-white/25' : 'bg-on-surface/5')}>
+                  <span className={'rounded-full px-2 py-0.5 text-[9px] font-black ' + (activo ? 'bg-white/25' : 'bg-muted')}>
                     {total}
                   </span>
                 </button>
@@ -225,12 +225,12 @@ export default function ReservationsActivePage() {
           </div>
 
           {confirmadasFiltradas.length === 0 && !error ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-on-surface/10 bg-surface-container-lowest">
+            <div className="flex flex-col items-center justify-center text-center py-16 px-6 rounded-[2.5rem] border border-dashed border-border bg-card">
               <div className="w-16 h-16 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center mb-5">
                 <span className="material-symbols-outlined text-3xl">verified</span>
               </div>
-              <h2 className="text-xl font-black text-on-surface tracking-tight">Sin reservas confirmadas</h2>
-              <p className="text-on-surface-variant text-sm font-medium mt-1 max-w-sm">
+              <h2 className="text-xl font-black text-foreground tracking-tight">Sin reservas confirmadas</h2>
+              <p className="text-muted-foreground text-sm font-medium mt-1 max-w-sm">
                 Aprueba las solicitudes pendientes para verlas aquí.
               </p>
               <Button type="button" variant="dark" size="sm" className="mt-6" onClick={() => setTab('pendientes')}>

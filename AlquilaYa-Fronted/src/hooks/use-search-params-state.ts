@@ -48,6 +48,8 @@ export function useSearchParamsState() {
       servicios: [],
       distanciaMaxKm: undefined,
       calificacionMin: undefined,
+      universidadId: undefined,
+      zonaId: undefined,
     });
   }, [setFiltros]);
 

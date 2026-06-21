@@ -62,13 +62,16 @@ public class SagaReservaPagoService {
     private final SagaReservaPagoRepository sagaRepository;
     private final ReservaRepository reservaRepository;
     private final OutboxPublisher outboxPublisher;
+    private final com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService;
 
     public SagaReservaPagoService(SagaReservaPagoRepository sagaRepository,
                                   ReservaRepository reservaRepository,
-                                  OutboxPublisher outboxPublisher) {
+                                  OutboxPublisher outboxPublisher,
+                                  com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService) {
         this.sagaRepository = sagaRepository;
         this.reservaRepository = reservaRepository;
         this.outboxPublisher = outboxPublisher;
+        this.habitacionService = habitacionService;
     }
 
     // =====================================================================
@@ -155,7 +158,7 @@ public class SagaReservaPagoService {
                 : MDC.get("correlationId");
 
         switch (estado) {
-            case APROBADA -> rutaFelizPagado(saga, reserva);
+            case APROBADA -> rutaFelizPagado(saga, reserva, envelope);
             case CANCELADA, RECHAZADA, EXPIRADA -> iniciarRefund(saga, reservaId, pagoId,
                     "Pago recibido pero reserva en estado " + estado, correlationId);
             case PAGADA -> {
@@ -166,16 +169,33 @@ public class SagaReservaPagoService {
         }
     }
 
-    private void rutaFelizPagado(SagaReservaPago saga, Reserva reserva) {
+    private void rutaFelizPagado(SagaReservaPago saga, Reserva reserva, EventEnvelope envelope) {
         if (reserva.getEstado() != EstadoReserva.APROBADA) {
             log.warn("rutaFelizPagado invocada con reserva en estado {} (esperado APROBADA)",
                     reserva.getEstado());
             return;
         }
         reserva.setEstado(EstadoReserva.PAGADA);
+        snapshotComision(reserva, envelope);
         reservaRepository.save(reserva);
+        habitacionService.recomputarEstado(reserva.getHabitacionId());
         log.info("Saga {}: reserva {} → PAGADA (ruta feliz)", saga.getSagaId(), reserva.getId());
         marcarSagaCompletada(saga, PasoSaga.PAGO_CONFIRMADO);
+    }
+
+    /** Snapshotea en la reserva la comisión efectivamente cobrada que trae el evento de pago. */
+    private void snapshotComision(Reserva reserva, EventEnvelope envelope) {
+        if (envelope == null || envelope.getPayload() == null) return;
+        JsonNode node = envelope.getPayload().get("comision");
+        if (node == null || node.isNull()) return;
+        try {
+            reserva.setComision(node.isNumber()
+                    ? node.decimalValue()
+                    : new java.math.BigDecimal(node.asText().trim()));
+        } catch (Exception e) {
+            log.warn("No se pudo leer comision del evento de pago para reserva {}: {}",
+                    reserva.getId(), e.getMessage());
+        }
     }
 
     // =====================================================================
@@ -352,7 +372,9 @@ public class SagaReservaPagoService {
         EstadoReserva estado = reserva.getEstado();
         if (estado == EstadoReserva.APROBADA) {
             reserva.setEstado(EstadoReserva.PAGADA);
+            snapshotComision(reserva, envelope);
             reservaRepository.save(reserva);
+            habitacionService.recomputarEstado(reserva.getHabitacionId());
             log.info("Reserva {} → PAGADA (sin saga; fallback)", reserva.getId());
         } else if (estado == EstadoReserva.CANCELADA
                 || estado == EstadoReserva.RECHAZADA

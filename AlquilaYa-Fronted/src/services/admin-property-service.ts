@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { PoliticaCancelacion, ServicioConEstado } from '@/types/propiedad';
 
 export interface PropiedadAdminDTO {
   id: number;
@@ -8,11 +9,22 @@ export interface PropiedadAdminDTO {
   direccion: string;
   tipoPropiedad?: string;
   periodoAlquiler?: string;
+  videoUrl?: string;
   area?: number;
   nroPiso?: number;
+  numDormitorios?: number;
+  numBanos?: number;
+  capacidadPersonas?: number;
+  tieneSala?: boolean;
+  tieneCocina?: boolean;
+  amoblado?: boolean;
+  gestionPorHabitacion?: boolean;
   estaDisponible?: boolean;
   disponibleDesde?: string;
+  politicaCancelacion?: PoliticaCancelacion;
   serviciosIncluidos: string[];
+  /** Servicios con estado (incluido/aparte/no disponible). */
+  servicios?: ServicioConEstado[];
   reglas: string[];
   latitud?: number;
   longitud?: number;
@@ -46,5 +58,13 @@ export const adminPropertyService = {
 
   rechazar: async (id: number): Promise<void> => {
     await api.patch(`admin/propiedades/${id}/rechazar`);
+  },
+
+  /** Override de moderación: cambia la política de cancelación de una propiedad. */
+  cambiarPoliticaCancelacion: async (
+    id: number,
+    politica: PoliticaCancelacion,
+  ): Promise<void> => {
+    await api.patch(`admin/propiedades/${id}/politica-cancelacion`, { politica });
   },
 };

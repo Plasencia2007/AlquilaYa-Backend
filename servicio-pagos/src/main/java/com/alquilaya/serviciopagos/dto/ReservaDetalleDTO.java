@@ -12,5 +12,7 @@ public class ReservaDetalleDTO {
     private String estudianteNombre;
     private String estudianteCorreo;
     private BigDecimal montoTotal;
+    /** Comisión de plataforma para esta venta (según la zona de la propiedad). Puede ser null/0. */
+    private BigDecimal comision;
     private String estado;
 }

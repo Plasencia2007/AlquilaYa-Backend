@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/legacy-button';
+import { RoomManager } from '@/components/landlord/room-manager';
 import { propiedadService } from '@/services/landlord-property-service';
 import {
   catalogosService,
@@ -11,6 +12,7 @@ import {
 } from '@/services/catalogos-service';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
+import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
 import type { PropiedadUpdate } from '@/types/propiedad';
 
 /* ── Icon mapper (FA → Material Symbols) ──────────────────── */
@@ -177,7 +179,10 @@ const EMPTY_FORM: PropiedadUpdate = {
   titulo: '', descripcion: '', precio: 0, direccion: '',
   tipoPropiedad: '', periodoAlquiler: '',
   area: undefined, nroPiso: undefined, estaDisponible: true,
-  disponibleDesde: '', serviciosIncluidos: [], reglas: [],
+  numDormitorios: undefined, numBanos: undefined, capacidadPersonas: undefined,
+  tieneSala: false, tieneCocina: false, amoblado: false,
+  gestionPorHabitacion: false,
+  disponibleDesde: '', videoUrl: '', politicaCancelacion: 'FLEXIBLE', serviciosIncluidos: [], reglas: [],
 };
 
 /* ── Component ────────────────────────────────────────────── */
@@ -190,6 +195,11 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
   const [imagenesExistentes, setImagenesExistentes] = useState<ImagenExistente[]>([]);
   const [imagenesParaEliminar, setImagenesParaEliminar] = useState<number[]>([]);
   const [imagenesNuevas, setImagenesNuevas] = useState<File[]>([]);
+  // Servicios que se pagan aparte (estado separado del form, que solo guarda los incluidos).
+  const [serviciosAparte, setServiciosAparte] = useState<string[]>([]);
+  // Snapshot del formulario al cargar, para detectar cambios sin guardar al cerrar.
+  const baselineRef = useRef<string>('');
+  const serviciosAparteBaseRef = useRef<string>('');
   const [previewNuevas, setPreviewNuevas] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -204,6 +214,8 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
       { value: 'CUARTO_INDIVIDUAL', label: 'Cuarto individual' },
       { value: 'CUARTO_COMPARTIDO', label: 'Cuarto compartido' },
       { value: 'DEPARTAMENTO',      label: 'Departamento' },
+      { value: 'MINI_DEPA',         label: 'Mini depa' },
+      { value: 'CASA',              label: 'Casa' },
       { value: 'SUITE',             label: 'Suite' },
     ];
   }, [catalogos]);
@@ -230,11 +242,17 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
   );
 
   /* Toggle chip catálogo */
-  const toggleServicio = (valor: string) =>
+  const toggleServicio = (valor: string) => {
     setForm((p) => {
       const cur = p.serviciosIncluidos ?? [];
       return { ...p, serviciosIncluidos: cur.includes(valor) ? cur.filter((x) => x !== valor) : [...cur, valor] };
     });
+    setServiciosAparte((a) => a.filter((x) => x !== valor)); // no puede estar incluido y aparte
+  };
+  const toggleServicioAparte = (valor: string) => {
+    setServiciosAparte((a) => (a.includes(valor) ? a.filter((x) => x !== valor) : [...a, valor]));
+    setForm((p) => ({ ...p, serviciosIncluidos: (p.serviciosIncluidos ?? []).filter((x) => x !== valor) }));
+  };
   const toggleRegla = (valor: string) =>
     setForm((p) => {
       const cur = p.reglas ?? [];
@@ -258,7 +276,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
           propiedadService.obtenerCompleto(prop.id),
           propiedadService.obtenerImagenes(prop.id),
         ]);
-        setForm({
+        const cargado: PropiedadUpdate = {
           titulo:             completo.titulo ?? '',
           descripcion:        completo.descripcion ?? '',
           precio:             completo.precio ?? 0,
@@ -267,11 +285,27 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
           periodoAlquiler:    completo.periodoAlquiler ?? '',
           area:               completo.area,
           nroPiso:            completo.nroPiso,
+          numDormitorios:     completo.numDormitorios,
+          numBanos:           completo.numBanos,
+          capacidadPersonas:  completo.capacidadPersonas,
+          tieneSala:          completo.tieneSala ?? false,
+          tieneCocina:        completo.tieneCocina ?? false,
+          amoblado:           completo.amoblado ?? false,
+          gestionPorHabitacion: completo.gestionPorHabitacion ?? false,
           estaDisponible:     completo.estaDisponible ?? true,
           disponibleDesde:    completo.disponibleDesde ?? '',
-          serviciosIncluidos: completo.serviciosIncluidos ?? [],
+          videoUrl:           completo.videoUrl ?? '',
+          politicaCancelacion: completo.politicaCancelacion ?? 'FLEXIBLE',
+          serviciosIncluidos:
+            completo.servicios?.filter((s) => s.estado === 'INCLUIDO').map((s) => s.servicio)
+            ?? completo.serviciosIncluidos ?? [],
           reglas:             completo.reglas ?? [],
-        });
+        };
+        setForm(cargado);
+        const aparteList = completo.servicios?.filter((s) => s.estado === 'APARTE').map((s) => s.servicio) ?? [];
+        setServiciosAparte(aparteList);
+        serviciosAparteBaseRef.current = JSON.stringify(aparteList);
+        baselineRef.current = JSON.stringify(cargado);
         if (imagenes.length > 0) {
           setImagenesExistentes(imagenes);
         } else {
@@ -288,6 +322,32 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
 
   const set = (field: keyof PropiedadUpdate, value: unknown) =>
     setForm((p) => ({ ...p, [field]: value }));
+
+  // Inmueble completo (departamento/mini depa/casa): distribución obligatoria.
+  const esInmuebleCompleto = ['DEPARTAMENTO', 'MINI_DEPA', 'CASA'].includes(form.tipoPropiedad ?? '');
+
+  // ── Guard de cambios sin guardar ──
+  const hayCambios = useCallback(() => {
+    const formCambiado = baselineRef.current !== '' && JSON.stringify(form) !== baselineRef.current;
+    const aparteCambiado =
+      serviciosAparteBaseRef.current !== '' && JSON.stringify(serviciosAparte) !== serviciosAparteBaseRef.current;
+    return formCambiado || aparteCambiado || imagenesNuevas.length > 0 || imagenesParaEliminar.length > 0;
+  }, [form, serviciosAparte, imagenesNuevas, imagenesParaEliminar]);
+
+  const intentarCerrar = useCallback(() => {
+    if (saving) return;
+    if (hayCambios() && !window.confirm('Tienes cambios sin guardar. ¿Descartarlos y cerrar?')) return;
+    onClose();
+  }, [saving, hayCambios, onClose]);
+
+  // Avisar al refrescar/cerrar la pestaña con cambios pendientes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hayCambios()) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hayCambios]);
 
   const toggleEliminarImagen = (id: number) => {
     if (id < 0) return;
@@ -314,13 +374,25 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
       notify.error(null, 'Título, precio y dirección son obligatorios');
       return;
     }
+    // Para inmueble completo, la distribución es obligatoria (igual que en el alta y el backend).
+    if (esInmuebleCompleto && (!form.numDormitorios || !form.numBanos || !form.capacidadPersonas)) {
+      notify.error(null, 'Para un departamento indica dormitorios, baños y capacidad de personas');
+      return;
+    }
     try {
       setSaving(true);
       await propiedadService.actualizar(prop.id, {
         ...form,
-        precio:          Number(form.precio),
-        area:            form.area    ? Number(form.area)   : undefined,
-        nroPiso:         form.nroPiso ? Number(form.nroPiso): undefined,
+        precio:            Number(form.precio),
+        area:              form.area    ? Number(form.area)   : undefined,
+        nroPiso:           form.nroPiso ? Number(form.nroPiso): undefined,
+        numDormitorios:    form.numDormitorios   ? Number(form.numDormitorios)    : undefined,
+        numBanos:          form.numBanos         ? Number(form.numBanos)          : undefined,
+        capacidadPersonas: form.capacidadPersonas? Number(form.capacidadPersonas) : undefined,
+        servicios: [
+          ...(form.serviciosIncluidos ?? []).map((s) => ({ servicio: s, estado: 'INCLUIDO' as const })),
+          ...serviciosAparte.map((s) => ({ servicio: s, estado: 'APARTE' as const })),
+        ],
         tipoPropiedad:   form.tipoPropiedad   || undefined,
         periodoAlquiler: form.periodoAlquiler  || undefined,
         disponibleDesde: form.disponibleDesde  || undefined,
@@ -348,7 +420,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
   return (
     <Modal
       open={!!prop}
-      onClose={saving ? () => null : onClose}
+      onClose={saving ? () => null : intentarCerrar}
       title=""
       size="lg"
       showCloseButton={false}
@@ -367,7 +439,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
           </div>
           <button
             type="button"
-            onClick={saving ? undefined : onClose}
+            onClick={saving ? undefined : intentarCerrar}
             disabled={saving}
             className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/35 text-white transition-colors mt-0.5"
             aria-label="Cerrar"
@@ -443,6 +515,34 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
               <input type="number" min={0} className={inputCls} value={form.area ?? ''} onChange={(e) => set('area', e.target.value || undefined)} placeholder="Ej: 18" />
             </div>
 
+            {/* Distribución — obligatoria para inmuebles completos (depa / mini depa / casa) */}
+            <div>
+              <label className={labelCls}>Dormitorios {esInmuebleCompleto && <span className="text-primary">*</span>}</label>
+              <input type="number" min={0} className={inputCls} value={form.numDormitorios ?? ''} onChange={(e) => set('numDormitorios', e.target.value || undefined)} placeholder="Ej: 3" />
+            </div>
+            <div>
+              <label className={labelCls}>Baños {esInmuebleCompleto && <span className="text-primary">*</span>}</label>
+              <input type="number" min={0} className={inputCls} value={form.numBanos ?? ''} onChange={(e) => set('numBanos', e.target.value || undefined)} placeholder="Ej: 2" />
+            </div>
+            <div>
+              <label className={labelCls}>Capacidad (personas) {esInmuebleCompleto && <span className="text-primary">*</span>}</label>
+              <input type="number" min={0} className={inputCls} value={form.capacidadPersonas ?? ''} onChange={(e) => set('capacidadPersonas', e.target.value || undefined)} placeholder="Ej: 4" />
+            </div>
+            {esInmuebleCompleto && (
+              <div className="sm:col-span-2 flex flex-wrap gap-4 pt-1">
+                {([
+                  { campo: 'tieneSala' as const, label: 'Sala / estar' },
+                  { campo: 'tieneCocina' as const, label: 'Cocina' },
+                  { campo: 'amoblado' as const, label: 'Amoblado' },
+                ]).map((t) => (
+                  <label key={t.campo} className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+                    <input type="checkbox" className="accent-primary w-4 h-4" checked={Boolean(form[t.campo])} onChange={(e) => set(t.campo, e.target.checked)} />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
+            )}
+
             <div className="sm:col-span-2">
               <label className={labelCls}>Dirección *</label>
               <div className="relative">
@@ -485,6 +585,48 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
               <input type="date" className={inputCls} value={form.disponibleDesde ?? ''} onChange={(e) => set('disponibleDesde', e.target.value)} />
             </div>
 
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Video (enlace)</label>
+              <input
+                type="url"
+                className={inputCls}
+                value={form.videoUrl ?? ''}
+                onChange={(e) => set('videoUrl', e.target.value)}
+                placeholder="https://youtu.be/… o https://vimeo.com/… (opcional)"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                YouTube, Vimeo o un archivo .mp4. Déjalo vacío para quitar el video.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Política de cancelación</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {POLITICAS_CANCELACION.map((pol) => {
+                  const info = POLITICA_CANCELACION_INFO[pol];
+                  const activo = (form.politicaCancelacion ?? 'FLEXIBLE') === pol;
+                  return (
+                    <button
+                      key={pol}
+                      type="button"
+                      onClick={() => set('politicaCancelacion', pol)}
+                      className={cn(
+                        'text-left rounded-xl border p-3 transition-colors',
+                        activo
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/50',
+                      )}
+                    >
+                      <span className="block text-sm font-bold text-foreground">{info.label}</span>
+                      <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                        {info.resumen}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Switch disponible */}
             <div className="sm:col-span-2 flex items-center gap-3 pt-1 pb-1">
               <button
@@ -503,6 +645,31 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
                 <p className="text-sm font-bold text-card-foreground">Disponible para alquiler</p>
                 <p className="text-xs text-muted-foreground">{form.estaDisponible ? 'Visible en búsquedas' : 'Oculto de búsquedas'}</p>
               </div>
+            </div>
+
+            {/* Alquilar por habitaciones */}
+            <div className="sm:col-span-2 space-y-3 pt-1">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.gestionPorHabitacion}
+                  onClick={() => set('gestionPorHabitacion', !form.gestionPorHabitacion)}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                    form.gestionPorHabitacion ? 'bg-primary' : 'bg-muted',
+                  )}
+                >
+                  <span className={cn('pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200', form.gestionPorHabitacion ? 'translate-x-5' : 'translate-x-0')} />
+                </button>
+                <div>
+                  <p className="text-sm font-bold text-card-foreground">Alquilar por habitaciones</p>
+                  <p className="text-xs text-muted-foreground">El inmueble se alquila cuarto por cuarto (precio y estado por habitación)</p>
+                </div>
+              </div>
+              {form.gestionPorHabitacion && prop?.id != null && (
+                <RoomManager propiedadId={prop.id} />
+              )}
             </div>
           </div>
 
@@ -532,6 +699,19 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
                   />
                 </div>
               )}
+            </div>
+
+            {/* Servicios que se pagan aparte */}
+            <div>
+              <p className={sectionTitleCls}>
+                <span className="material-symbols-outlined text-[16px] text-amber-600">payments</span>
+                Se paga aparte (no incluido en el precio)
+              </p>
+              <ChipsMultiselect
+                items={serviciosCatalogo}
+                selected={serviciosAparte}
+                onToggle={toggleServicioAparte}
+              />
             </div>
 
             <div className="h-px bg-border" />
@@ -640,7 +820,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
           {activeTab === 'fotos'     && `${imagenesExistentes.length - imagenesParaEliminar.length + imagenesNuevas.length} foto(s) quedarán`}
         </p>
         <div className="flex gap-2 ml-auto">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={saving} className="rounded-xl px-5">
+          <Button type="button" variant="ghost" size="sm" onClick={intentarCerrar} disabled={saving} className="rounded-xl px-5">
             Cancelar
           </Button>
           <Button type="button" size="sm" onClick={handleSave} disabled={saving || loading} variant="primary" className="rounded-xl px-6">

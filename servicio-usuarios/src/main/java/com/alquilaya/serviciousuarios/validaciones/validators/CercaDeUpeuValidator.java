@@ -1,20 +1,27 @@
 package com.alquilaya.serviciousuarios.validaciones.validators;
 
+import com.alquilaya.serviciousuarios.clients.CampusProvider;
 import com.alquilaya.serviciousuarios.validaciones.anotaciones.CercaDeUpeu;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.lang.reflect.Method;
 
 public class CercaDeUpeuValidator implements ConstraintValidator<CercaDeUpeu, Object> {
 
-    // Coordenadas aproximadas de UPeU Campus Lima (Ñaña)
-    private static final double UPEU_LAT = -11.9922;
-    private static final double UPEU_LON = -76.8403;
-    private double radioKm;
+    // Respaldo si el validador se instancia fuera del contexto Spring (sin inyección).
+    private static final double FALLBACK_LAT = -11.99024;
+    private static final double FALLBACK_LON = -76.83992;
+
+    @Autowired(required = false)
+    private CampusProvider campusProvider;
+
+    private double radioKmAnotacion;
 
     @Override
     public void initialize(CercaDeUpeu constraintAnnotation) {
-        this.radioKm = constraintAnnotation.radioKm();
+        this.radioKmAnotacion = constraintAnnotation.radioKm();
     }
 
     @Override
@@ -24,18 +31,28 @@ public class CercaDeUpeuValidator implements ConstraintValidator<CercaDeUpeu, Ob
         try {
             Method getLat = value.getClass().getMethod("getLatitud");
             Method getLon = value.getClass().getMethod("getLongitud");
-            
+
             Double lat = (Double) getLat.invoke(value);
             Double lon = (Double) getLon.invoke(value);
 
             if (lat == null || lon == null) return true;
 
-            double distancia = calcularDistancia(lat, lon, UPEU_LAT, UPEU_LON);
-            
+            double campusLat = FALLBACK_LAT;
+            double campusLon = FALLBACK_LON;
+            double radioKm = radioKmAnotacion;
+            if (campusProvider != null) {
+                CampusProvider.Campus campus = campusProvider.get();
+                campusLat = campus.lat();
+                campusLon = campus.lng();
+                radioKm = campus.radioKm();
+            }
+
+            double distancia = calcularDistancia(lat, lon, campusLat, campusLon);
+
             if (distancia > radioKm) {
                 ctx.disableDefaultConstraintViolation();
                 ctx.buildConstraintViolationWithTemplate(
-                    String.format("La ubicación registrada (%.2f km) excede el radio de %.1f km permitido desde la UPeU", 
+                    String.format("La ubicación registrada (%.2f km) excede el radio de %.1f km permitido desde el campus",
                     distancia, radioKm)
                 ).addConstraintViolation();
                 return false;

@@ -66,7 +66,7 @@ export const Modal: React.FC<ModalProps> = ({
       />
       <div
         className={cn(
-          'relative w-full bg-surface rounded-3xl shadow-2xl border border-outline-variant/20 p-6',
+          'relative w-full bg-surface rounded-3xl shadow-2xl border border-border p-6',
           sizes[size],
           className,
         )}
@@ -76,18 +76,18 @@ export const Modal: React.FC<ModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-surface-container-low text-on-surface-variant transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         )}
         {title && (
-          <h2 id="modal-title" className="text-xl font-black text-on-surface tracking-tight mb-1 pr-8">
+          <h2 id="modal-title" className="text-xl font-black text-foreground tracking-tight mb-1 pr-8">
             {title}
           </h2>
         )}
         {description && (
-          <p className="text-sm text-on-surface-variant mb-4">{description}</p>
+          <p className="text-sm text-muted-foreground mb-4">{description}</p>
         )}
         {children && <div className={cn(title || description ? 'mt-2' : '')}>{children}</div>}
         {footer && <div className="mt-6 flex flex-wrap items-center justify-end gap-2">{footer}</div>}

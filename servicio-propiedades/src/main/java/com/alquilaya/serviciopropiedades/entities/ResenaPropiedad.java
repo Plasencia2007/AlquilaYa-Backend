@@ -33,12 +33,26 @@ public class ResenaPropiedad {
     @Column(nullable = false)
     private Long estudianteId;
 
+    /** Rating general (1-5). Se calcula como el promedio de las sub-categorías. */
     @Min(1) @Max(5)
     @Column(nullable = false)
     private Integer rating;
 
+    // --- Sub-categorías (1-5). Nullable por compatibilidad con reseñas antiguas. ---
+    @Min(1) @Max(5) private Integer ratingLimpieza;
+    @Min(1) @Max(5) private Integer ratingUbicacion;
+    @Min(1) @Max(5) private Integer ratingPrecio;
+    @Min(1) @Max(5) private Integer ratingTrato;
+
     @Column(columnDefinition = "TEXT")
     private String comentario;
+
+    /** Respuesta pública del arrendador a esta reseña (estilo Airbnb). Null = sin responder. */
+    @Column(columnDefinition = "TEXT")
+    private String respuestaArrendador;
+
+    /** Momento de la respuesta del arrendador. */
+    private LocalDateTime fechaRespuesta;
 
     @Builder.Default
     private Boolean visible = true;

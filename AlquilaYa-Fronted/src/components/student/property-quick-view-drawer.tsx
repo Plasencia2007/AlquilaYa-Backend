@@ -14,6 +14,8 @@ import { cn } from '@/lib/cn';
 import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
 import type { Propiedad, PropiedadCompleta } from '@/types/propiedad';
 import { ServiceBadges } from '@/components/student/service-badges';
+import { PropertyBadges } from '@/components/student/property-badges';
+import { esImagenExterna } from '@/lib/img';
 import { PropertyLandlordStrip } from '@/components/student/property-landlord-strip';
 
 interface Props {
@@ -175,6 +177,12 @@ export function PropertyQuickViewDrawer({ propiedad, open, onClose }: Props) {
                   {propiedad.ubicacion}
                 </p>
               )}
+              <PropertyBadges
+                badges={propiedad.badges}
+                orientation="horizontal"
+                max={4}
+                className="mt-1.5"
+              />
             </div>
             <Dialog.Close
               className={cn(
@@ -207,6 +215,7 @@ export function PropertyQuickViewDrawer({ propiedad, open, onClose }: Props) {
                         alt={`${propiedad.titulo} – foto ${i + 1}`}
                         fill
                         sizes="(max-width: 768px) 85vw, 480px"
+                        unoptimized={esImagenExterna(src)}
                         className="object-cover"
                         loading={i === 0 ? 'eager' : 'lazy'}
                         priority={i === 0}
@@ -222,7 +231,13 @@ export function PropertyQuickViewDrawer({ propiedad, open, onClose }: Props) {
             <div className="space-y-6 px-5 pt-4">
               {/* 2. Precio + disponibilidad */}
               <section>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-2">
+                  {propiedad.badges?.includes('REBAJA') &&
+                    propiedad.precioAnterior != null && (
+                      <span className="text-base font-semibold text-muted-foreground line-through">
+                        {formatPrice(propiedad.precioAnterior)}
+                      </span>
+                    )}
                   <span className="text-3xl font-extrabold text-primary">
                     {formatPrice(propiedad.precio)}
                   </span>

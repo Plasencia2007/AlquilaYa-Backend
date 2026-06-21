@@ -75,10 +75,10 @@ export default function AdminSettingsPage() {
           </span>
         </div>
         <div>
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter">
             Reglas de la Plataforma
           </h1>
-          <p className="text-on-surface-variant font-medium opacity-70">
+          <p className="text-muted-foreground font-medium opacity-70">
             Parámetros globales del sistema de reservas.
           </p>
         </div>
@@ -96,13 +96,13 @@ export default function AdminSettingsPage() {
 
         <CardContent className="space-y-4">
           {cargando ? (
-            <div className="flex items-center gap-2 text-on-surface-variant">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               Cargando configuración…
             </div>
           ) : (
             <div className="space-y-2">
-              <label htmlFor="expiracionHoras" className="text-sm font-semibold text-on-surface">
+              <label htmlFor="expiracionHoras" className="text-sm font-semibold text-foreground">
                 Horas para pagar tras la aprobación
               </label>
               <div className="flex items-center gap-3">
@@ -118,14 +118,14 @@ export default function AdminSettingsPage() {
                   }}
                   className="w-32"
                 />
-                <span className="text-on-surface-variant text-sm">horas</span>
+                <span className="text-muted-foreground text-sm">horas</span>
                 {valorActual !== null && (
-                  <span className="text-xs text-on-surface-variant opacity-70">
+                  <span className="text-xs text-muted-foreground opacity-70">
                     (valor actual: {valorActual}h)
                   </span>
                 )}
               </div>
-              <p className="text-xs text-on-surface-variant opacity-70">
+              <p className="text-xs text-muted-foreground opacity-70">
                 Entre {MIN_HORAS} y {MAX_HORAS} horas. El cambio aplica sin reiniciar el servicio,
                 en la siguiente ejecución del job de expiración (cada hora).
               </p>

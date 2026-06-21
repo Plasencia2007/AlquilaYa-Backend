@@ -10,6 +10,7 @@ import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
 import type { Propiedad } from '@/types/propiedad';
 
 import { FavoriteButton } from './favorite-button';
+import { PropertyBadges } from './property-badges';
 import { PropertyCardImageCarousel } from './property-card-image-carousel';
 import { PropertyCardKebabMenu } from './property-card-kebab-menu';
 import { PropertyLandlordStrip } from './property-landlord-strip';
@@ -80,6 +81,8 @@ function PropertyCardImpl({
   className,
 }: Props) {
   const cfg = variantConfig[variant];
+  const hayRebaja =
+    (propiedad.badges?.includes('REBAJA') ?? false) && propiedad.precioAnterior != null;
   const distancia = distanciaAUpeuKm(propiedad.coordenadas);
   const href = `/property/${propiedad.id}`;
   const isCompact = variant === 'compact';
@@ -118,13 +121,10 @@ function PropertyCardImpl({
           </div>
         )}
 
-        {/* Badges personalización — esquina superior izquierda */}
-        <div className="absolute left-3 top-3 z-[8]">
-          <PropertyPersonalizationBadges
-            propiedadId={propiedad.id}
-            fechaCreacion={propiedad.fechaCreacion}
-            variant={variant}
-          />
+        {/* Badges automáticos + personalización — esquina superior izquierda */}
+        <div className="absolute left-3 top-3 z-[8] flex flex-col items-start gap-1.5">
+          <PropertyBadges badges={propiedad.badges} max={isCompact ? 2 : 3} />
+          <PropertyPersonalizationBadges propiedadId={propiedad.id} />
         </div>
 
         {/* Esquina superior derecha: kebab (a la izquierda) + favorito */}
@@ -218,10 +218,17 @@ function PropertyCardImpl({
           )}
 
           <div className="mt-2 flex items-baseline justify-between gap-2">
-            <p className="text-xl font-black text-primary">
-              S/ {propiedad.precio.toLocaleString('es-PE')}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">/mes</span>
-            </p>
+            <div className="flex items-baseline gap-2">
+              {hayRebaja && (
+                <span className="text-sm font-semibold text-muted-foreground line-through">
+                  S/ {propiedad.precioAnterior!.toLocaleString('es-PE')}
+                </span>
+              )}
+              <p className="text-xl font-black text-primary">
+                S/ {propiedad.precio.toLocaleString('es-PE')}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">/mes</span>
+              </p>
+            </div>
             {variant === 'feature' && (
               <span className="text-xs font-bold uppercase tracking-wider text-primary group-hover:underline">
                 Ver detalles →

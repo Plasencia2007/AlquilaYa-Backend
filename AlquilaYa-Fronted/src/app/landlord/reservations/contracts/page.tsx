@@ -55,10 +55,10 @@ export default function LandlordContractsPage() {
     <div className="space-y-8 animate-fade-in">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black text-on-surface tracking-tighter opacity-90">
+          <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">
             Mis Contratos
           </h1>
-          <p className="text-on-surface-variant text-[12px] font-medium mt-0.5 tracking-tight">
+          <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             Gestión de documentos legales y acuerdos de alquiler.
           </p>
         </div>
@@ -79,25 +79,25 @@ export default function LandlordContractsPage() {
         </div>
       )}
 
-      <Card variant="glass" padding="none" className="overflow-hidden border border-on-surface/5">
+      <Card variant="glass" padding="none" className="overflow-hidden border border-border">
         {/* Loading state */}
         {loading && (
           <div className="p-8 space-y-3">
-            <div className="h-6 w-1/3 bg-on-surface/5 rounded-full animate-pulse" />
-            <div className="h-4 w-1/2 bg-on-surface/5 rounded-full animate-pulse" />
-            <div className="h-4 w-1/4 bg-on-surface/5 rounded-full animate-pulse" />
+            <div className="h-6 w-1/3 bg-muted rounded-full animate-pulse" />
+            <div className="h-4 w-1/2 bg-muted rounded-full animate-pulse" />
+            <div className="h-4 w-1/4 bg-muted rounded-full animate-pulse" />
           </div>
         )}
 
         {!loading && filas.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center text-center py-16 px-6">
-            <div className="w-16 h-16 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-5">
+            <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-5">
               <span className="material-symbols-outlined text-3xl">description</span>
             </div>
-            <h2 className="text-xl font-black text-on-surface tracking-tight">
+            <h2 className="text-xl font-black text-foreground tracking-tight">
               Aún no hay contratos
             </h2>
-            <p className="text-on-surface-variant text-sm font-medium mt-1 max-w-sm">
+            <p className="text-muted-foreground text-sm font-medium mt-1 max-w-sm">
               Cuando una reserva se pague o finalice, su contrato aparecerá aquí.
             </p>
           </div>
@@ -107,47 +107,47 @@ export default function LandlordContractsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-on-surface/5 border-b border-on-surface/10">
-                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60">
+                <tr className="bg-muted border-b border-border">
+                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
                     Estudiante
                   </th>
-                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60">
+                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
                     Cuarto
                   </th>
-                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60">
+                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
                     Periodo
                   </th>
-                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60">
+                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
                     Estado
                   </th>
-                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant opacity-60 text-right">
+                  <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60 text-right">
                     Acciones
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-on-surface/5">
+              <tbody className="divide-y divide-border">
                 {filas.map(({ reserva, estadoContrato }) => (
-                  <tr key={reserva.id} className="hover:bg-on-surface/5 transition-colors">
+                  <tr key={reserva.id} className="hover:bg-muted transition-colors">
                     <td className="px-6 py-4">
-                      <p className="text-sm font-black text-on-surface/90">
+                      <p className="text-sm font-black text-foreground/90">
                         {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
                       </p>
-                      <p className="text-[10px] text-on-surface-variant font-medium">
+                      <p className="text-[10px] text-muted-foreground font-medium">
                         Reserva #{reserva.id}
                       </p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-xs font-bold text-on-surface-variant">
+                      <p className="text-xs font-bold text-muted-foreground">
                         {reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}
                       </p>
                       {reserva.propiedadUbicacion && (
-                        <p className="text-[10px] text-on-surface-variant/70 font-medium">
+                        <p className="text-[10px] text-muted-foreground/70 font-medium">
                           {reserva.propiedadUbicacion}
                         </p>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-[11px] font-medium text-on-surface-variant opacity-80">
+                      <p className="text-[11px] font-medium text-muted-foreground opacity-80">
                         {formatearFecha(reserva.fechaInicio)} – {formatearFecha(reserva.fechaFin)}
                       </p>
                     </td>
@@ -163,7 +163,7 @@ export default function LandlordContractsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-blue-500 font-black text-[10px] uppercase tracking-wider"
+                        className="text-primary font-black text-[10px] uppercase tracking-wider"
                       >
                         Ver detalle
                       </Button>
@@ -176,11 +176,11 @@ export default function LandlordContractsPage() {
         )}
       </Card>
 
-      <div className="bg-blue-500/5 rounded-2xl p-6 border border-blue-500/10 max-w-2xl">
-        <h4 className="font-black text-blue-500 text-[10px] mb-2 flex items-center gap-2 uppercase tracking-widest">
+      <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10 max-w-2xl">
+        <h4 className="font-black text-primary text-[10px] mb-2 flex items-center gap-2 uppercase tracking-widest">
           <span className="material-symbols-outlined text-[16px]">info</span> Nota legal
         </h4>
-        <p className="text-[11px] text-on-surface-variant font-medium leading-relaxed">
+        <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
           Todos los contratos están encriptados y cumplen con la normativa de alquileres en
           Perú. Puedes descargar copias físicas en cualquier momento.
         </p>

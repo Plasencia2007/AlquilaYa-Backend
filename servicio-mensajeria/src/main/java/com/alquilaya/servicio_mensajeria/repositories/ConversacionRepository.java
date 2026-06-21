@@ -18,12 +18,17 @@ public interface ConversacionRepository extends JpaRepository<Conversacion, Long
     Optional<Conversacion> findByEstudianteIdAndArrendadorIdAndPropiedadId(
             Long estudianteId, Long arrendadorId, Long propiedadId);
 
+    // Conversaciones del participante. Se filtra por (perfilId, rol) y no solo por
+    // perfilId, porque perfilId colisiona entre roles (estudiante#1 y arrendador#1
+    // son personas distintas): comparar solo por id mezclaría sus conversaciones.
     @Query("""
             SELECT c FROM Conversacion c
-            WHERE c.estudianteId = :perfilId OR c.arrendadorId = :perfilId
+            WHERE (:rol = 'ESTUDIANTE' AND c.estudianteId = :perfilId)
+               OR (:rol = 'ARRENDADOR' AND c.arrendadorId = :perfilId)
             ORDER BY c.fechaUltimaActividad DESC
             """)
-    List<Conversacion> findDelParticipante(@Param("perfilId") Long perfilId);
+    List<Conversacion> findDelParticipante(@Param("perfilId") Long perfilId,
+                                           @Param("rol") String rol);
 
     // Admin: listado con filtros opcionales y paginado.
     @Query("""

@@ -5,10 +5,14 @@ import com.alquilaya.serviciopropiedades.config.CurrentUser;
 import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.CrearReservaRequest;
 import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
+import com.alquilaya.serviciopropiedades.entities.Habitacion;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
+import com.alquilaya.serviciopropiedades.enums.EstadoHabitacion;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
+import com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion;
 import com.alquilaya.serviciopropiedades.kafka.ReservaEventProducer;
+import com.alquilaya.serviciopropiedades.repositories.HabitacionRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import com.alquilaya.serviciopropiedades.saga.service.SagaReservaPagoService;
@@ -33,9 +37,12 @@ public class ReservaService {
 
     private final ReservaRepository reservaRepository;
     private final PropiedadRepository propiedadRepository;
+    private final HabitacionRepository habitacionRepository;
+    private final HabitacionService habitacionService;
     private final UsuariosClient usuariosClient;
     private final ReservaEventProducer reservaEventProducer;
     private final SagaReservaPagoService sagaReservaPagoService;
+    private final ComisionService comisionService;
 
     private static final EnumSet<EstadoReserva> ESTADOS_BLOQUEANTES =
             EnumSet.of(EstadoReserva.SOLICITADA, EstadoReserva.APROBADA, EstadoReserva.PAGADA);
@@ -77,17 +84,42 @@ public class ReservaService {
             throw new IllegalStateException("La propiedad no está disponible");
         }
 
-        boolean solapada = reservaRepository
-                .existsByPropiedadIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
-                        propiedad.getId(), ESTADOS_BLOQUEANTES, req.getFechaFin(), req.getFechaInicio());
-        if (solapada) {
-            throw new IllegalStateException("Ya existe una reserva activa que se solapa con esas fechas");
+        // Resolución de la "unidad" reservada: el inmueble completo o una habitación concreta.
+        Long habitacionId = null;
+        BigDecimal precioBase;
+        if (Boolean.TRUE.equals(propiedad.getGestionPorHabitacion())) {
+            if (req.getHabitacionId() == null) {
+                throw new IllegalArgumentException("Debes elegir una habitación para reservar este inmueble");
+            }
+            Habitacion hab = habitacionRepository
+                    .findByIdAndPropiedadId(req.getHabitacionId(), propiedad.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("La habitación no existe en esta propiedad"));
+            if (hab.getEstado() == EstadoHabitacion.MANTENIMIENTO) {
+                throw new IllegalStateException("La habitación está en mantenimiento y no se puede reservar");
+            }
+            boolean solapada = reservaRepository
+                    .existsByHabitacionIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
+                            hab.getId(), ESTADOS_BLOQUEANTES, req.getFechaFin(), req.getFechaInicio());
+            if (solapada) {
+                throw new IllegalStateException("Esa habitación ya está reservada en esas fechas");
+            }
+            habitacionId = hab.getId();
+            precioBase = hab.getPrecio();
+        } else {
+            boolean solapada = reservaRepository
+                    .existsByPropiedadIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
+                            propiedad.getId(), ESTADOS_BLOQUEANTES, req.getFechaFin(), req.getFechaInicio());
+            if (solapada) {
+                throw new IllegalStateException("Ya existe una reserva activa que se solapa con esas fechas");
+            }
+            precioBase = propiedad.getPrecio();
         }
 
-        BigDecimal monto = calcularMonto(propiedad, req);
+        BigDecimal monto = calcularMonto(precioBase, propiedad.getPeriodoAlquiler(), req);
 
         Reserva reserva = Reserva.builder()
                 .propiedadId(propiedad.getId())
+                .habitacionId(habitacionId)
                 .estudianteId(current.getPerfilId())
                 .arrendadorId(propiedad.getArrendadorId())
                 .fechaInicio(req.getFechaInicio())
@@ -111,6 +143,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.APROBADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_APROBADA", guardada, current);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         // Ola 3 — Saga orquestada: al aprobarse la reserva se inicia el seguimiento del
         // ciclo de pago para detectar inconsistencias (refund automático si llega un pago
         // tardío sobre una reserva ya cancelada, o cancelación post-pago).
@@ -129,6 +162,7 @@ public class ReservaService {
         r.setMotivoRechazo(motivo);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_RECHAZADA", guardada, current);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         return guardada;
     }
 
@@ -141,6 +175,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.PAGADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_PAGADA", guardada, null);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         return guardada;
     }
 
@@ -164,12 +199,39 @@ public class ReservaService {
         r.setEstado(EstadoReserva.CANCELADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_CANCELADA", guardada, current);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         // Ola 3 — Si se cancela una reserva APROBADA (pago en curso) o PAGADA, hay
         // que emitir REFUND_REQUERIDO al servicio-pagos para reembolsar en MP.
-        if (estadoPrevio == EstadoReserva.APROBADA || estadoPrevio == EstadoReserva.PAGADA) {
+        if (estadoPrevio == EstadoReserva.PAGADA) {
+            // Política de cancelación: solo se reembolsa si se cancela con suficiente
+            // anticipación al check-in. Si no, no se emite el REFUND (cancelación tardía).
+            if (corresponderReembolso(guardada)) {
+                sagaReservaPagoService.manejarCancelacionReserva(guardada.getId());
+            } else {
+                log.info("[CANCELACION] Reserva {} cancelada SIN reembolso por política de la propiedad "
+                        + "(cancelación tardía respecto al check-in {})", guardada.getId(), guardada.getFechaInicio());
+            }
+        } else if (estadoPrevio == EstadoReserva.APROBADA) {
+            // Aún no hay pago confirmado; el saga no-opea si no hay nada que reembolsar.
             sagaReservaPagoService.manejarCancelacionReserva(guardada.getId());
         }
         return guardada;
+    }
+
+    /**
+     * Decide si una cancelación PAGADA corresponde reembolso, según la política de la
+     * propiedad y los días de anticipación al check-in. Si no encuentra la propiedad o
+     * la política es null, asume FLEXIBLE (reembolso completo) por compatibilidad.
+     */
+    private boolean corresponderReembolso(Reserva r) {
+        PoliticaCancelacion pol = propiedadRepository.findById(r.getPropiedadId())
+                .map(Propiedad::getPoliticaCancelacion)
+                .orElse(PoliticaCancelacion.FLEXIBLE);
+        if (pol == null) pol = PoliticaCancelacion.FLEXIBLE;
+        long diasHastaCheckIn = r.getFechaInicio() != null
+                ? ChronoUnit.DAYS.between(LocalDate.now(), r.getFechaInicio())
+                : 0;
+        return pol.permiteReembolso(diasHastaCheckIn);
     }
 
     @Transactional
@@ -182,6 +244,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.FINALIZADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_FINALIZADA", guardada, current);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         return guardada;
     }
 
@@ -217,6 +280,7 @@ public class ReservaService {
         extra.put("estado", guardada.getEstado().name());
         extra.put("montoTotal", guardada.getMontoTotal());
         reservaEventProducer.emitir("RESERVA_FINALIZADA", guardada.getId(), extra);
+        habitacionService.recomputarEstado(guardada.getHabitacionId());
         log.info("[FINALIZACION] Reserva {} FINALIZADA automáticamente (fechaFin={})",
                 guardada.getId(), guardada.getFechaFin());
         return true;
@@ -302,6 +366,17 @@ public class ReservaService {
                 .orElse("Propiedad");
     }
 
+    /**
+     * Comisión de plataforma para una venta de la propiedad dada sobre {@code montoTotal},
+     * según la zona en la que cae. 0 si la propiedad no tiene zona o la zona no cobra comisión.
+     */
+    public BigDecimal calcularComision(Long propiedadId, BigDecimal montoTotal) {
+        Long zonaId = propiedadRepository.findById(propiedadId)
+                .map(Propiedad::getZonaId)
+                .orElse(null);
+        return comisionService.calcular(zonaId, montoTotal);
+    }
+
     public EstudianteInfoDTO obtenerInfoEstudiante(Long estudianteId) {
         return usuariosClient.obtenerEstudiante(estudianteId);
     }
@@ -350,10 +425,14 @@ public class ReservaService {
     }
 
     private BigDecimal calcularMonto(Propiedad p, CrearReservaRequest req) {
+        return calcularMonto(p.getPrecio(), p.getPeriodoAlquiler(), req);
+    }
+
+    /** Calcula el monto a partir de un precio base (de la propiedad o de la habitación). */
+    private BigDecimal calcularMonto(BigDecimal precio, String periodoRaw, CrearReservaRequest req) {
         long dias = ChronoUnit.DAYS.between(req.getFechaInicio(), req.getFechaFin()) + 1;
         if (dias <= 0) dias = 1;
-        BigDecimal precio = p.getPrecio();
-        String periodo = p.getPeriodoAlquiler() != null ? p.getPeriodoAlquiler().toUpperCase() : "MENSUAL";
+        String periodo = periodoRaw != null ? periodoRaw.toUpperCase() : "MENSUAL";
 
         return switch (periodo) {
             case "DIARIO" -> precio.multiply(BigDecimal.valueOf(dias));

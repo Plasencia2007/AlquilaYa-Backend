@@ -100,6 +100,16 @@ export const propiedadService = {
   },
 
   /**
+   * Agrega una imagen por URL externa (host del arrendador), sin pasar por Cloudinary.
+   * POST /propiedades/{id}/imagenes/url  body: { url }. El backend valida que sea un
+   * enlace directo a imagen (.jpg/.png/.webp…).
+   */
+  async agregarImagenPorUrl(id: string | number, url: string): Promise<PropiedadImagen> {
+    const response = await api.post(`propiedades/${id}/imagenes/url`, { url });
+    return response.data;
+  },
+
+  /**
    * GET /propiedades/{id}/imagenes — lista imágenes con sus IDs reales para poder eliminarlas.
    */
   async obtenerImagenes(id: string | number): Promise<{ id: number; url: string; orden: number }[]> {

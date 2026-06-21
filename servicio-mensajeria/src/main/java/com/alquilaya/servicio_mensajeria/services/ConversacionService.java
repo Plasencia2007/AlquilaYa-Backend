@@ -154,7 +154,7 @@ public class ConversacionService {
         if (rol == null) return List.of();
         java.util.Set<Long> ocultas = new java.util.HashSet<>(
                 ocultaRepo.findConversacionIdsOcultasPara(user.getPerfilId(), rol));
-        List<Conversacion> conversaciones = conversacionRepo.findDelParticipante(user.getPerfilId());
+        List<Conversacion> conversaciones = conversacionRepo.findDelParticipante(user.getPerfilId(), user.getRol());
         return conversaciones.stream()
                 .filter(c -> !ocultas.contains(c.getId()))
                 .map(c -> toResumen(c, user))
@@ -211,7 +211,10 @@ public class ConversacionService {
     // =========================================================================
 
     private ConversacionResumenDTO toResumen(Conversacion c, CurrentUser user) {
-        boolean soyEstudiante = user.getPerfilId().equals(c.getEstudianteId());
+        // Quién es el caller dentro de la conversación se decide por ROL, no por
+        // perfilId (que colisiona entre roles).
+        RolEmisor miRol = rolEmisorDelUser(user);
+        boolean soyEstudiante = miRol == RolEmisor.ESTUDIANTE;
         Long contraparteId = soyEstudiante ? c.getArrendadorId() : c.getEstudianteId();
         String contraparteRol = soyEstudiante ? "ARRENDADOR" : "ESTUDIANTE";
         UsuarioPerfilDTO contraparte = soyEstudiante
@@ -220,8 +223,9 @@ public class ConversacionService {
 
         PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
 
-        long noLeidos = mensajeRepo.countByConversacionIdAndEmisorPerfilIdNotAndEstado(
-                c.getId(), user.getPerfilId(), EstadoMensaje.ENVIADO);
+        // No-leídos = mensajes del OTRO participante aún en estado ENVIADO.
+        long noLeidos = mensajeRepo.countByConversacionIdAndEmisorRolNotAndEstado(
+                c.getId(), miRol, EstadoMensaje.ENVIADO);
 
         return ConversacionResumenDTO.builder()
                 .id(c.getId())

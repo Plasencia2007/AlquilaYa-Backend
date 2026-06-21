@@ -33,6 +33,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/pagos/preferencia/**").authenticated()
                         // Simulación de pago exitoso: solo ADMIN
                         .requestMatchers("/api/v1/pagos/simular-exito/**").hasRole("ADMIN")
+                        // Resumen financiero de plataforma: solo ADMIN (además del @PreAuthorize)
+                        .requestMatchers("/api/v1/pagos/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))

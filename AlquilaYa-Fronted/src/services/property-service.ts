@@ -1,7 +1,12 @@
-import { Propiedad } from '@/types/propiedad';
+import {
+  Propiedad,
+  type BadgePropiedad,
+  type PoliticaCancelacion,
+  type ServicioConEstado,
+} from '@/types/propiedad';
 import { MOCK_PROPIEDADES } from '@/mocks/propiedades';
 import { api } from '@/lib/api';
-import { distanciaAUpeuKm } from '@/lib/geo';
+import { distanciaAUpeuKm, distanciaHaversineKm } from '@/lib/geo';
 import type { Filtros } from '@/schemas/search-schema';
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
@@ -11,11 +16,22 @@ export interface PropiedadPublicoDTO {
   titulo: string;
   descripcion?: string;
   precio: number;
+  precioAnterior?: number;
+  videoUrl?: string;
   direccion?: string;
   tipoPropiedad?: string;
   area?: number;
+  numDormitorios?: number;
+  numBanos?: number;
+  capacidadPersonas?: number;
+  tieneSala?: boolean;
+  tieneCocina?: boolean;
+  amoblado?: boolean;
+  gestionPorHabitacion?: boolean;
   estaDisponible?: boolean;
   serviciosIncluidos?: string[];
+  servicios?: ServicioConEstado[];
+  politicaCancelacion?: PoliticaCancelacion;
   latitud?: number;
   longitud?: number;
   calificacion?: number;
@@ -35,6 +51,14 @@ export interface PropiedadPublicoDTO {
   disponibleDesde?: string;
   vistas?: number;
   tiempoRespuestaArrendador?: number;
+  badges?: BadgePropiedad[];
+}
+
+/** Rango de fechas ocupado por una reserva activa (calendario de disponibilidad). */
+export interface RangoOcupado {
+  desde: string; // yyyy-MM-dd
+  hasta: string; // yyyy-MM-dd
+  estado: string;
 }
 
 export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
@@ -43,13 +67,22 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     titulo: dto.titulo ?? '',
     descripcion: dto.descripcion ?? '',
     precio: Number(dto.precio ?? 0),
+    precioAnterior: dto.precioAnterior != null ? Number(dto.precioAnterior) : undefined,
+    videoUrl: dto.videoUrl,
     ubicacion: dto.direccion ?? '',
     direccion: dto.direccion ?? '',
     imagenes: dto.imagenes ?? [],
-    habitaciones: 0,
-    baños: 0,
+    habitaciones: dto.numDormitorios ?? 0,
+    baños: dto.numBanos ?? 0,
+    capacidadPersonas: dto.capacidadPersonas,
+    tieneSala: dto.tieneSala,
+    tieneCocina: dto.tieneCocina,
+    amoblado: dto.amoblado,
+    gestionPorHabitacion: dto.gestionPorHabitacion,
     area: dto.area ?? 0,
     servicios: dto.serviciosIncluidos ?? [],
+    serviciosEstado: dto.servicios,
+    politicaCancelacion: dto.politicaCancelacion,
     propietarioId: dto.arrendadorId != null ? String(dto.arrendadorId) : '',
     propietarioNombre: dto.arrendadorNombre ?? '',
     calificacion: dto.calificacion ?? 0,
@@ -71,6 +104,7 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     disponibleDesde: dto.disponibleDesde,
     vistas: dto.vistas,
     tiempoRespuestaArrendador: dto.tiempoRespuestaArrendador,
+    badges: dto.badges,
   };
 }
 
@@ -82,7 +116,14 @@ export interface BusquedaParams {
   servicios?: string[];
   distanciaMaxKm?: number;
   calificacionMin?: number;
-  orden?: 'distancia' | 'precio' | 'calificacion';
+  universidadId?: number;
+  zonaId?: number;
+  capacidadMin?: number;
+  dormitoriosMin?: number;
+  orden?: 'distancia' | 'cercania' | 'precio' | 'calificacion';
+  /** Coordenadas del usuario (geolocalización) para ordenar por "cerca de mí". No viaja al backend. */
+  userLat?: number;
+  userLng?: number;
 }
 
 export interface PaginadoParams extends BusquedaParams {
@@ -151,6 +192,25 @@ function aplicarFiltrosClient(propiedades: Propiedad[], filtros: BusquedaParams)
     case 'calificacion':
       resultado.sort((a, b) => b.calificacion - a.calificacion);
       break;
+    case 'cercania': {
+      // "Cerca de mí": ordena por distancia a la ubicación del usuario (geolocalización).
+      // Si no hay coords (permiso negado / recarga), cae a distancia al campus.
+      if (typeof filtros.userLat === 'number' && typeof filtros.userLng === 'number') {
+        const yo = { lat: filtros.userLat, lng: filtros.userLng };
+        resultado.sort((a, b) => {
+          const da = a.coordenadas ? distanciaHaversineKm(a.coordenadas, yo) : Number.POSITIVE_INFINITY;
+          const db = b.coordenadas ? distanciaHaversineKm(b.coordenadas, yo) : Number.POSITIVE_INFINITY;
+          return da - db;
+        });
+        break;
+      }
+      resultado.sort((a, b) => {
+        const da = distanciaAUpeuKm(a.coordenadas) ?? Number.POSITIVE_INFINITY;
+        const db = distanciaAUpeuKm(b.coordenadas) ?? Number.POSITIVE_INFINITY;
+        return da - db;
+      });
+      break;
+    }
     case 'distancia':
     default: {
       resultado.sort((a, b) => {
@@ -183,6 +243,13 @@ export const servicioPropiedades = {
     return fromDTO(response.data);
   },
 
+  /** Rangos de fechas ocupados por reservas activas (para pintar disponibilidad en la ficha). */
+  obtenerCalendario: async (id: string | number): Promise<RangoOcupado[]> => {
+    if (USE_MOCKS) return [];
+    const { data } = await api.get<RangoOcupado[]>(`/propiedades/${id}/calendario`);
+    return Array.isArray(data) ? data : [];
+  },
+
   buscar: async (filtros: BusquedaParams = {}): Promise<Propiedad[]> => {
     if (USE_MOCKS) {
       await new Promise((resolve) => setTimeout(resolve, 400));
@@ -197,6 +264,10 @@ export const servicioPropiedades = {
     if (typeof filtros.calificacionMin === 'number' && filtros.calificacionMin > 0) {
       params.calificacionMin = filtros.calificacionMin;
     }
+    if (typeof filtros.universidadId === 'number') params.universidadId = filtros.universidadId;
+    if (typeof filtros.zonaId === 'number') params.zonaId = filtros.zonaId;
+    if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) params.capacidadMin = filtros.capacidadMin;
+    if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) params.dormitoriosMin = filtros.dormitoriosMin;
 
     const response = await api.get<PropiedadPublicoDTO[]>('/propiedades/buscar', { params });
     const propiedades = response.data.map(fromDTO);
@@ -204,6 +275,8 @@ export const servicioPropiedades = {
       servicios: filtros.servicios,
       distanciaMaxKm: filtros.distanciaMaxKm,
       orden: filtros.orden,
+      userLat: filtros.userLat,
+      userLng: filtros.userLng,
     });
   },
 
@@ -246,6 +319,8 @@ export function filtrosABusqueda(f: Filtros): BusquedaParams {
     servicios: f.servicios,
     distanciaMaxKm: f.distanciaMaxKm,
     calificacionMin: f.calificacionMin,
+    universidadId: f.universidadId,
+    zonaId: f.zonaId,
     orden: f.orden,
   };
 }

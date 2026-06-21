@@ -24,6 +24,8 @@ export interface Reserva {
   notaEstudiante?: string;
   motivoRechazo?: string;
   montoTotal: number;
+  /** Comisión de plataforma de esta venta (según la zona). El estudiante paga montoTotal + comisión; el arrendador recibe montoTotal. */
+  comision?: number;
   estado: EstadoReserva;
   fechaCreacion: string;
 }

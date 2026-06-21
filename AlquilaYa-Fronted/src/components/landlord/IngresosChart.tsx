@@ -55,7 +55,7 @@ export default function IngresosChart({ data }: IngresosChartProps) {
             }}
             formatter={(value) => [`S/ ${Number(value).toFixed(2)}`, 'Ingresos']}
           />
-          <Bar dataKey="monto" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="monto" fill="#8f0304" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

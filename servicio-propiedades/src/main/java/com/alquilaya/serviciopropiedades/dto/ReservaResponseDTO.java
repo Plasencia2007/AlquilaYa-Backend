@@ -14,11 +14,18 @@ import java.time.LocalDateTime;
 public class ReservaResponseDTO {
     private Long id;
     private Long propiedadId;
+    /** Habitación reservada (si la propiedad se gestiona por habitaciones). Null si es completa. */
+    private Long habitacionId;
     private Long estudianteId;
     private Long arrendadorId;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private BigDecimal montoTotal;
+    /**
+     * Comisión de plataforma para esta venta, según la zona de la propiedad. El estudiante paga
+     * {@code montoTotal + comision}; el arrendador recibe {@code montoTotal} íntegro. Puede ser 0.
+     */
+    private BigDecimal comision;
     /** Estado interno completo (SOLICITADA, APROBADA, RECHAZADA, PAGADA, FINALIZADA, CANCELADA). */
     private EstadoReserva estado;
     private String propiedadTitulo;
@@ -40,6 +47,7 @@ public class ReservaResponseDTO {
         return ReservaResponseDTO.builder()
                 .id(r.getId())
                 .propiedadId(r.getPropiedadId())
+                .habitacionId(r.getHabitacionId())
                 .propiedadTitulo(titulo)
                 .estudianteId(r.getEstudianteId())
                 .estudianteNombre(estNombre)

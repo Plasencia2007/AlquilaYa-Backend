@@ -39,17 +39,21 @@ import { useVerificationStatus } from '@/hooks/use-verification-status';
 import { reservationService } from '@/services/reservation-service';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
-import type { Propiedad } from '@/types/propiedad';
+import { POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
+import type { Habitacion, Propiedad } from '@/types/propiedad';
 
 interface Props {
   propiedad: Propiedad;
   trigger: ReactNode;
+  /** Si la propiedad se gestiona por habitaciones, la habitación elegida (precio + id). */
+  habitacion?: Habitacion;
 }
 
 const MESES_PRESET = [1, 3, 6, 12];
 const OCUPANTES_OPCIONES = [1, 2, 3, 4, 5];
 
-export function ReservationFormDialog({ propiedad, trigger }: Props) {
+export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props) {
+  const precioUnitario = habitacion?.precio ?? propiedad.precio;
   const router = useRouter();
   const { estaAutenticado, usuario } = useAuth();
   const { open: abrirAuth } = useAuthModal();
@@ -77,7 +81,7 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
   }, [open]);
 
   const fechaFin = fechaInicio ? addMonths(fechaInicio, meses) : undefined;
-  const total = propiedad.precio * meses;
+  const total = precioUnitario * meses;
 
   const handleTrigger = (e: React.MouseEvent) => {
     if (!estaAutenticado) {
@@ -109,6 +113,7 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
         propiedadId: propiedad.id,
         fechaInicio: format(fechaInicio, 'yyyy-MM-dd'),
         fechaFin: format(fechaFin, 'yyyy-MM-dd'),
+        habitacionId: habitacion?.id,
       });
       notify.success('Solicitud enviada', 'Te avisaremos cuando el arrendador responda.');
       setOpen(false);
@@ -280,7 +285,7 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
             <div className="rounded-xl bg-muted p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  S/ {propiedad.precio.toLocaleString('es-PE')} × {meses}
+                  {habitacion ? `${habitacion.nombre}: ` : ''}S/ {precioUnitario.toLocaleString('es-PE')} × {meses}
                 </span>
                 <span className="font-bold text-foreground">
                   S/ {total.toLocaleString('es-PE')}
@@ -293,6 +298,19 @@ export function ReservationFormDialog({ propiedad, trigger }: Props) {
                 </span>
               </div>
             </div>
+
+            {propiedad.politicaCancelacion && (
+              <div className="flex items-start gap-2 rounded-xl border border-border bg-background px-3 py-2.5">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  <span className="font-bold text-foreground">
+                    Cancelación{' '}
+                    {POLITICA_CANCELACION_INFO[propiedad.politicaCancelacion].label.toLowerCase()}:
+                  </span>{' '}
+                  {POLITICA_CANCELACION_INFO[propiedad.politicaCancelacion].descripcion}
+                </p>
+              </div>
+            )}
 
             <Button
               type="submit"

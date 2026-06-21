@@ -41,6 +41,10 @@ export function parseFiltros(params: URLSearchParams | null): Filtros {
     servicios,
     distanciaMaxKm: getNum('distanciaMaxKm'),
     calificacionMin: getNum('calificacionMin'),
+    universidadId: getNum('universidadId'),
+    zonaId: getNum('zonaId'),
+    capacidadMin: getNum('capacidadMin'),
+    dormitoriosMin: getNum('dormitoriosMin'),
     orden: ORDENES.includes(orden as never) ? orden : undefined,
     view: VISTAS.includes(view as never) ? view : undefined,
   };
@@ -87,6 +91,18 @@ export function serializarFiltros(filtros: Partial<Filtros>): string {
   ) {
     entries.push(['calificacionMin', String(filtros.calificacionMin)]);
   }
+  if (typeof filtros.universidadId === 'number' && Number.isFinite(filtros.universidadId)) {
+    entries.push(['universidadId', String(filtros.universidadId)]);
+  }
+  if (typeof filtros.zonaId === 'number' && Number.isFinite(filtros.zonaId)) {
+    entries.push(['zonaId', String(filtros.zonaId)]);
+  }
+  if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) {
+    entries.push(['capacidadMin', String(filtros.capacidadMin)]);
+  }
+  if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) {
+    entries.push(['dormitoriosMin', String(filtros.dormitoriosMin)]);
+  }
   if (filtros.orden && filtros.orden !== 'distancia') entries.push(['orden', filtros.orden]);
   if (filtros.view && filtros.view !== 'lista') entries.push(['view', filtros.view]);
 
@@ -107,5 +123,6 @@ export function contarFiltrosActivos(filtros: Filtros): number {
   if (filtros.servicios.length > 0) n++;
   if (typeof filtros.distanciaMaxKm === 'number') n++;
   if (typeof filtros.calificacionMin === 'number' && filtros.calificacionMin > 0) n++;
+  if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) n++;
   return n;
 }
