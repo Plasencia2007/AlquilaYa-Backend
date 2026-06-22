@@ -211,7 +211,7 @@ $env:Path = (Join-Path $javaHome 'bin') + ';' + $env:Path
 Write-Host "  JAVA_HOME = $javaHome" -ForegroundColor DarkGray
 
 # ---------------------------------------------------------------------------
-# 1. Infra Docker (postgres, mysql, kafka, [ngrok])
+# 1. Infra Docker (postgres, mysql, zookeeper, kafka, redis, zipkin, [ngrok])
 # ---------------------------------------------------------------------------
 if (-not $SkipDocker) {
     Write-Host ""
@@ -234,7 +234,7 @@ if (-not $SkipDocker) {
         exit 1
     }
 
-    $infra = @('postgres', 'mysql', 'zookeeper', 'kafka', 'redis')
+    $infra = @('postgres', 'mysql', 'zookeeper', 'kafka', 'redis', 'zipkin')
     if (-not $NoNgrok) { $infra += 'ngrok' }
 
     Push-Location $root

@@ -22,7 +22,7 @@ Doble-click (Windows) o desde consola:
 
 Levanta en este orden:
 
-1. **Infra Docker**: `postgres`, `mysql`, `zookeeper`, `kafka`, `ngrok`.
+1. **Infra Docker**: `postgres`, `mysql`, `zookeeper`, `kafka`, `redis`, `zipkin`, `ngrok`.
 2. **discovery-server** :8761 → espera 20s.
 3. **config-server** :8888 → espera 15s.
 4. **Paralelo**: `api-gateway` :8080, `servicio-usuarios` (random), `servicio-propiedades` :8082, `servicio-pagos` :8084, `servicio-catalogos` :8085, `servicio-mensajeria` :8086.
