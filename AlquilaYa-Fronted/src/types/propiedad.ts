@@ -106,6 +106,8 @@ export interface Propiedad {
   videoUrl?: string;
   /** Política de cancelación (default FLEXIBLE). */
   politicaCancelacion?: PoliticaCancelacion;
+  /** Precios por temporada/ciclo (solo en la ficha). */
+  temporadas?: PrecioTemporada[];
   ubicacion: string;
   direccion: string;
   imagenes: string[];
@@ -158,6 +160,8 @@ export interface Propiedad {
   reglas?: string[];
   /** Distintivos automáticos calculados por el backend (nuevo/popular/última plaza/rebaja). */
   badges?: BadgePropiedad[];
+  /** Aviso revisado y aprobado por un admin → sello "Verificado por AlquilaYa" (#47). */
+  verificado?: boolean;
 }
 
 // =============================================================================
@@ -221,6 +225,9 @@ export interface PropiedadBackend {
   aprobadoPorAdmin?: boolean;
   calificacion?: number;
   numResenas?: number;
+  /** Caducidad (#49): el aviso lleva demasiado sin reconfirmarse → pedir al dueño confirmar. */
+  requiereReconfirmacion?: boolean;
+  fechaUltimaConfirmacion?: string;
   fechaCreacion?: string;
   fechaActualizacion?: string;
 
@@ -346,6 +353,16 @@ export type BadgePropiedad = 'NUEVO' | 'POPULAR' | 'ULTIMA_PLAZA' | 'REBAJA';
 
 /** Política de cancelación de una propiedad (gobierna el reembolso al cancelar). */
 export type PoliticaCancelacion = 'FLEXIBLE' | 'MODERADA' | 'ESTRICTA';
+
+/** Precio por temporada/ciclo: en [fechaInicio, fechaFin] el precio es `precio`. */
+export interface PrecioTemporada {
+  id: number;
+  /** ISO yyyy-MM-dd */
+  fechaInicio: string;
+  fechaFin: string;
+  precio: number;
+  etiqueta?: string;
+}
 
 export type EstadoServicio = 'INCLUIDO' | 'APARTE' | 'NO_DISPONIBLE';
 

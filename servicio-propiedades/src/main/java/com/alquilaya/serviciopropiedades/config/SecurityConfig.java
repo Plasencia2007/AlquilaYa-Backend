@@ -29,6 +29,8 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .requestMatchers("/api/v1/propiedades/buscar").permitAll()
                         .requestMatchers("/api/v1/propiedades/*/publico").permitAll()
+                        .requestMatchers("/api/v1/propiedades/*/similares").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/propiedades/*/temporadas").permitAll()
                         .requestMatchers("/api/v1/propiedades/*/calendario").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/propiedades/*/habitaciones").permitAll()
                         .requestMatchers("/api/v1/propiedades/**").authenticated()

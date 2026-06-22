@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
+import { servicioAuth } from '@/services/auth-service';
 import { studentDetailsSchema, type StudentDetailsFormData } from '@/schemas/auth-schema';
 import { universidadService, type Universidad } from '@/services/universidad-service';
 import { carreraService, type Carrera } from '@/services/carrera-service';
@@ -69,7 +70,17 @@ export function StudentDetailsStep() {
         data,
         personal.telefono,
       );
-      setStep('otp');
+      // El siguiente paso depende del método elegido por el admin (#3):
+      // teléfono → OTP WhatsApp; solo email → código por correo; ninguno → directo.
+      let metodo: string = 'WHATSAPP_OTP';
+      try {
+        metodo = await servicioAuth.obtenerMetodoVerificacion();
+      } catch {
+        /* fallback seguro: comportamiento histórico (OTP) */
+      }
+      if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
+      else if (metodo === 'EMAIL') setStep('email-code');
+      else setStep('result');
     } catch (err) {
       notify.error(err, 'No se pudo completar el registro. Verifica tus datos.');
     }

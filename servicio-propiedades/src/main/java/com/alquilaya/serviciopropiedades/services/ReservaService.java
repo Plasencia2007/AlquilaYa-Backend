@@ -43,6 +43,7 @@ public class ReservaService {
     private final ReservaEventProducer reservaEventProducer;
     private final SagaReservaPagoService sagaReservaPagoService;
     private final ComisionService comisionService;
+    private final com.alquilaya.serviciopropiedades.repositories.PrecioTemporadaRepository precioTemporadaRepository;
 
     private static final EnumSet<EstadoReserva> ESTADOS_BLOQUEANTES =
             EnumSet.of(EstadoReserva.SOLICITADA, EstadoReserva.APROBADA, EstadoReserva.PAGADA);
@@ -112,7 +113,12 @@ public class ReservaService {
             if (solapada) {
                 throw new IllegalStateException("Ya existe una reserva activa que se solapa con esas fechas");
             }
-            precioBase = propiedad.getPrecio();
+            // Precio por temporada/ciclo: si una temporada cubre el CHECK-IN, su precio manda.
+            precioBase = precioTemporadaRepository
+                    .findFirstByPropiedadIdAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqualOrderByFechaInicioAsc(
+                            propiedad.getId(), req.getFechaInicio(), req.getFechaInicio())
+                    .map(com.alquilaya.serviciopropiedades.entities.PrecioTemporada::getPrecio)
+                    .orElse(propiedad.getPrecio());
         }
 
         BigDecimal monto = calcularMonto(precioBase, propiedad.getPeriodoAlquiler(), req);
@@ -428,23 +434,18 @@ public class ReservaService {
         return calcularMonto(p.getPrecio(), p.getPeriodoAlquiler(), req);
     }
 
-    /** Calcula el monto a partir de un precio base (de la propiedad o de la habitación). */
+    /**
+     * Calcula el monto de la reserva. El precio se trata como MENSUAL — toda la UI lo asume así
+     * (ficha "/mes", y el formulario cobra precio × meses). Cobramos por MESES COMPLETOS para que
+     * coincida exactamente con lo que muestra el formulario: "1 mes = 1 × precio" (sin prorrateo
+     * por día, que daba totales raros como S/1.03 o, con el divisor por período, S/0.17).
+     * {@code periodoRaw} queda como descriptor del aviso; ya no divide el precio.
+     */
     private BigDecimal calcularMonto(BigDecimal precio, String periodoRaw, CrearReservaRequest req) {
         long dias = ChronoUnit.DAYS.between(req.getFechaInicio(), req.getFechaFin()) + 1;
-        if (dias <= 0) dias = 1;
-        String periodo = periodoRaw != null ? periodoRaw.toUpperCase() : "MENSUAL";
-
-        return switch (periodo) {
-            case "DIARIO" -> precio.multiply(BigDecimal.valueOf(dias));
-            case "MENSUAL" -> precio.multiply(BigDecimal.valueOf(dias))
-                    .divide(BigDecimal.valueOf(30), 2, RoundingMode.HALF_UP);
-            case "SEMESTRAL" -> precio.multiply(BigDecimal.valueOf(dias))
-                    .divide(BigDecimal.valueOf(180), 2, RoundingMode.HALF_UP);
-            case "ANUAL" -> precio.multiply(BigDecimal.valueOf(dias))
-                    .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
-            default -> precio.multiply(BigDecimal.valueOf(dias))
-                    .divide(BigDecimal.valueOf(30), 2, RoundingMode.HALF_UP); // Default a mensual
-        };
+        // El formulario fija la duración en meses (fechaFin = fechaInicio + N meses); reconstruimos N.
+        long meses = Math.max(1, Math.round(dias / 30.0));
+        return precio.multiply(BigDecimal.valueOf(meses)).setScale(2, RoundingMode.HALF_UP);
     }
 
     private void emitirEvento(String tipo, Reserva r, CurrentUser current) {

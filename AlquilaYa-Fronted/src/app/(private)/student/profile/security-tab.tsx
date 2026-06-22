@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock } from 'lucide-react';
 import { PasswordStrength } from '@/components/auth/password-strength';
+import { ActiveSessions } from '@/components/auth/active-sessions';
 
 
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ export function SecurityTab() {
   };
 
   return (
+    <div className="space-y-8">
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-md space-y-4">
         <p className="text-sm text-muted-foreground">
@@ -103,5 +105,8 @@ export function SecurityTab() {
         </Button>
       </form>
     </Form>
+
+      <ActiveSessions />
+    </div>
   );
 }

@@ -2,11 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Eye, MapPin } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 import { cn } from '@/lib/cn';
-import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { distanciaHaversineKm, formatearDistancia, resolverZona } from '@/lib/geo';
+import { getZonasCached } from '@/lib/zonas-cache';
+import type { ZonaResolucion } from '@/services/universidad-service';
 import type { Propiedad } from '@/types/propiedad';
 
 import { FavoriteButton } from './favorite-button';
@@ -57,7 +60,7 @@ const variantConfig: Record<
     maxServiceBadges: 3,
   },
   full: {
-    aspect: 'aspect-[4/3]',
+    aspect: 'aspect-square',
     title: 'text-base md:text-lg',
     showBadges: true,
     titleClamp: 'line-clamp-2',
@@ -83,7 +86,28 @@ function PropertyCardImpl({
   const cfg = variantConfig[variant];
   const hayRebaja =
     (propiedad.badges?.includes('REBAJA') ?? false) && propiedad.precioAnterior != null;
-  const distancia = distanciaAUpeuKm(propiedad.coordenadas);
+
+  // Distancia a la universidad DE ESTA propiedad (resuelta de su zona), no a un campus global.
+  const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
+  useEffect(() => {
+    let cancelado = false;
+    getZonasCached().then((z) => {
+      if (!cancelado) setZonas(z);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+  const zonaProp = propiedad.coordenadas ? resolverZona(propiedad.coordenadas, zonas) : null;
+  const campusProp =
+    zonaProp && zonaProp.latitud != null && zonaProp.longitud != null
+      ? { lat: zonaProp.latitud, lng: zonaProp.longitud }
+      : null;
+  const distancia =
+    propiedad.coordenadas && campusProp
+      ? distanciaHaversineKm(propiedad.coordenadas, campusProp)
+      : null;
+  const campusNombre = zonaProp?.universidadNombre ?? 'el campus';
   const href = `/property/${propiedad.id}`;
   const isCompact = variant === 'compact';
   const showKebab = !isCompact;
@@ -91,6 +115,7 @@ function PropertyCardImpl({
   const showQuickView = !isCompact;
 
   const [quickViewOpen, setQuickViewOpen] = useState(false);
+  const router = useRouter();
 
   const sizes = isCompact
     ? '(min-width: 768px) 400px, 85vw'
@@ -104,7 +129,12 @@ function PropertyCardImpl({
         className,
       )}
     >
-      <div className={cn('relative w-full overflow-hidden', cfg.aspect)}>
+      {/* Click en cualquier parte de la imagen → entra al detalle. El swipe se conserva
+          (un swipe no dispara click); flechas/dots/corazón/kebab cortan la propagación. */}
+      <div
+        className={cn('relative w-full cursor-pointer overflow-hidden', cfg.aspect)}
+        onClick={() => router.push(href)}
+      >
         <PropertyCardImageCarousel
           imagenes={propiedad.imagenes}
           alt={propiedad.titulo}
@@ -128,7 +158,10 @@ function PropertyCardImpl({
         </div>
 
         {/* Esquina superior derecha: kebab (a la izquierda) + favorito */}
-        <div className="absolute right-3 top-3 z-[8] flex items-center gap-1.5">
+        <div
+          className="absolute right-3 top-3 z-[8] flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           {showKebab && (
             <PropertyCardKebabMenu propiedadId={propiedad.id} titulo={propiedad.titulo} />
           )}
@@ -159,15 +192,6 @@ function PropertyCardImpl({
           </button>
         )}
 
-        {cfg.showBadges && (propiedad.servicios?.length ?? 0) > 0 && (
-          <div className="absolute inset-x-3 bottom-3 z-[5]">
-            <ServiceBadges
-              servicios={propiedad.servicios}
-              max={cfg.maxServiceBadges}
-              variant="overlay"
-            />
-          </div>
-        )}
       </div>
 
       {/* Link solo sobre el bloque textual (evita anidamiento interactivo) */}
@@ -201,11 +225,20 @@ function PropertyCardImpl({
               <>
                 <span aria-hidden>·</span>
                 <span className="font-semibold text-primary">
-                  a {formatearDistancia(distancia)} de UPeU
+                  a {formatearDistancia(distancia)} de {campusNombre}
                 </span>
               </>
             )}
           </p>
+
+          {cfg.showBadges && (propiedad.servicios?.length ?? 0) > 0 && (
+            <ServiceBadges
+              servicios={propiedad.servicios}
+              max={cfg.maxServiceBadges}
+              variant="plain"
+              className="mt-1"
+            />
+          )}
 
           {showLandlord && propiedad.propietarioNombre && (
             <PropertyLandlordStrip

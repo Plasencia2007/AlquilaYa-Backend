@@ -10,15 +10,6 @@ import { universidadService, type ZonaResolucion } from '@/services/universidad-
 import type { Propiedad } from '@/types/propiedad';
 import { cn } from '@/lib/cn';
 
-const propiedadIcon = new L.Icon({
-  iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 40"><defs><filter id="s" x="-40%" y="-20%" width="180%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/></filter></defs><path d="M14 0C6.268 0 0 6.268 0 14c0 10 14 26 14 26S28 24 28 14C28 6.268 21.732 0 14 0z" fill="#8f0304" filter="url(#s)"/><circle cx="14" cy="14" r="7" fill="white" opacity="0.9"/></svg>`
-  )}`,
-  iconSize: [28, 40],
-  iconAnchor: [14, 40],
-  popupAnchor: [0, -44],
-});
-
 const upeuIcon = new L.Icon({
   iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 58"><defs><filter id="s" x="-30%" y="-20%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-opacity="0.4"/></filter></defs><path d="M20 0C8.954 0 0 8.954 0 20c0 14 20 38 20 38S40 34 40 20C40 8.954 31.046 0 20 0z" fill="#e53e3e" filter="url(#s)"/><circle cx="20" cy="20" r="11" fill="white" opacity="0.95"/></svg>`
@@ -31,6 +22,28 @@ const upeuIcon = new L.Icon({
 interface Props {
   propiedades: Propiedad[];
   className?: string;
+  /** id de la propiedad resaltada (hover desde el grid) — su pastilla se destaca. */
+  activeId?: string | null;
+  /** Notifica hover sobre un marcador (para resaltar la card correspondiente). */
+  onHover?: (id: string | null) => void;
+}
+
+/** Pastilla de precio estilo Airbnb como marcador del mapa. */
+function precioDivIcon(precio: number, activo: boolean): L.DivIcon {
+  const txt = `S/ ${Math.round(precio).toLocaleString('es-PE')}`;
+  const w = Math.max(48, txt.length * 8 + 18);
+  const bg = activo ? '#1d1b19' : '#ffffff';
+  const fg = activo ? '#ffffff' : '#1d1b19';
+  return L.divIcon({
+    className: '',
+    html:
+      `<div style="display:flex;align-items:center;justify-content:center;height:28px;padding:0 10px;` +
+      `border-radius:9999px;background:${bg};color:${fg};font-weight:800;font-size:12px;white-space:nowrap;` +
+      `box-shadow:0 2px 6px rgba(0,0,0,0.25);border:1px solid rgba(0,0,0,0.08);` +
+      `transform:scale(${activo ? 1.1 : 1});transition:transform .12s;cursor:pointer;">${txt}</div>`,
+    iconSize: [w, 28],
+    iconAnchor: [w / 2, 14],
+  });
 }
 
 /** Vértices del polígono ({ lat, lng }) parseados a tuplas [lat, lng] de Leaflet. */
@@ -83,7 +96,7 @@ function FitBounds({
   return null;
 }
 
-export default function PropertiesMap({ propiedades, className }: Props) {
+export default function PropertiesMap({ propiedades, className, activeId, onHover }: Props) {
   const propiedadesConCoords = propiedades.filter((p) => p.coordenadas);
 
   const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
@@ -159,11 +172,17 @@ export default function PropertiesMap({ propiedades, className }: Props) {
         {propiedadesConCoords.map((p) => {
           const distancia = distanciaAUpeuKm(p.coordenadas);
           const imagen = p.imagenes[0] ?? '/rooms/placeholder.jpg';
+          const activo = activeId === p.id;
           return (
             <Marker
               key={p.id}
               position={[p.coordenadas!.lat, p.coordenadas!.lng]}
-              icon={propiedadIcon}
+              icon={precioDivIcon(p.precio, activo)}
+              zIndexOffset={activo ? 1000 : 0}
+              eventHandlers={{
+                mouseover: () => onHover?.(p.id),
+                mouseout: () => onHover?.(null),
+              }}
             >
               <Popup minWidth={190} maxWidth={190} closeButton={false}>
                 <a

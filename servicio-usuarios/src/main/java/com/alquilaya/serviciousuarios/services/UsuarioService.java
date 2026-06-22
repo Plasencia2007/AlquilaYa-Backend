@@ -10,6 +10,7 @@ import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.exceptions.CorreoYaRegistradoException;
+import com.alquilaya.serviciousuarios.exceptions.DniYaRegistradoException;
 import com.alquilaya.serviciousuarios.exceptions.TelefonoYaRegistradoException;
 import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
@@ -34,6 +35,7 @@ public class UsuarioService {
     private final EstudianteRepository estudianteRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
+    private final ConfiguracionAuthService configuracionAuthService;
     private final CloudinaryDocumentService cloudinaryDocumentService;
 
     @Transactional
@@ -67,6 +69,14 @@ public class UsuarioService {
         // Sin esto se crean cuentas duplicadas y findByTelefono lanza NonUniqueResultException al verificar.
         if (request.getTelefono() != null && usuarioRepository.existsByTelefono(request.getTelefono())) {
             throw new TelefonoYaRegistradoException("El teléfono " + request.getTelefono() + " ya está registrado en AlquilaYa. Si ya tienes cuenta, intenta iniciar sesión.");
+        }
+
+        // El DNI identifica a la persona: una persona = una cuenta (#8). Excluye el placeholder
+        // "00000000" de las cuentas creadas por Google.
+        if (request.getDni() != null && !request.getDni().isBlank()
+                && !"00000000".equals(request.getDni())
+                && usuarioRepository.existsByDni(request.getDni())) {
+            throw new DniYaRegistradoException("El DNI " + request.getDni() + " ya está registrado en AlquilaYa. Si ya tienes cuenta, inicia sesión.");
         }
 
         Rol rol = Rol.valueOf(request.getRol().toUpperCase());
@@ -120,7 +130,9 @@ public class UsuarioService {
             // No se requieren detalles adicionales para ADMIN
         }
 
-        if (usuario.getTelefono() != null && rol != Rol.ADMIN) {
+        // Envía OTP solo si el método de verificación elegido por el admin exige teléfono (#3).
+        if (usuario.getTelefono() != null && rol != Rol.ADMIN
+                && configuracionAuthService.getMetodo().requiereTelefono()) {
             log.debug("Enviando OTP a {}", LogMask.phone(usuario.getTelefono()));
             otpService.generarYEnviarOtp(usuario.getTelefono());
         }

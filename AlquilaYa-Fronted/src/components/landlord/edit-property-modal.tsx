@@ -13,7 +13,7 @@ import {
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
 import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
-import type { PropiedadUpdate } from '@/types/propiedad';
+import type { PrecioTemporada, PropiedadUpdate } from '@/types/propiedad';
 
 /* ── Icon mapper (FA → Material Symbols) ──────────────────── */
 const FA_TO_MATERIAL: Record<string, string> = {
@@ -169,6 +169,8 @@ interface EditPropertyModalProps {
 
 type Tab = 'info' | 'servicios' | 'fotos';
 
+const MAX_FOTOS = 6;
+
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'info',      label: 'Información', icon: 'info' },
   { id: 'servicios', label: 'Servicios',   icon: 'checklist' },
@@ -195,6 +197,15 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
   const [imagenesExistentes, setImagenesExistentes] = useState<ImagenExistente[]>([]);
   const [imagenesParaEliminar, setImagenesParaEliminar] = useState<number[]>([]);
   const [imagenesNuevas, setImagenesNuevas] = useState<File[]>([]);
+  /** URLs externas pendientes de adjuntar (se aplican al guardar). */
+  const [imageUrlsNuevas, setImageUrlsNuevas] = useState<string[]>([]);
+  const [urlInput, setUrlInput] = useState('');
+  /** El arrendador reordenó las fotos existentes (se persiste al guardar). */
+  const [ordenCambiado, setOrdenCambiado] = useState(false);
+  /** Precios por temporada (se gestionan en caliente, con sus propios endpoints). */
+  const [temporadas, setTemporadas] = useState<PrecioTemporada[]>([]);
+  const [tForm, setTForm] = useState({ fechaInicio: '', fechaFin: '', precio: '', etiqueta: '' });
+  const [tBusy, setTBusy] = useState(false);
   // Servicios que se pagan aparte (estado separado del form, que solo guarda los incluidos).
   const [serviciosAparte, setServiciosAparte] = useState<string[]>([]);
   // Snapshot del formulario al cargar, para detectar cambios sin guardar al cerrar.
@@ -266,16 +277,21 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
     setImagenesParaEliminar([]);
     setImagenesNuevas([]);
     setPreviewNuevas([]);
+    setImageUrlsNuevas([]);
+    setUrlInput('');
+    setOrdenCambiado(false);
     setForm(EMPTY_FORM);
     setImagenesExistentes([]);
 
     const load = async () => {
       setLoading(true);
       try {
-        const [completo, imagenes] = await Promise.all([
+        const [completo, imagenes, temps] = await Promise.all([
           propiedadService.obtenerCompleto(prop.id),
           propiedadService.obtenerImagenes(prop.id),
+          propiedadService.listarTemporadas(prop.id).catch(() => [] as PrecioTemporada[]),
         ]);
+        setTemporadas(temps);
         const cargado: PropiedadUpdate = {
           titulo:             completo.titulo ?? '',
           descripcion:        completo.descripcion ?? '',
@@ -331,8 +347,43 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
     const formCambiado = baselineRef.current !== '' && JSON.stringify(form) !== baselineRef.current;
     const aparteCambiado =
       serviciosAparteBaseRef.current !== '' && JSON.stringify(serviciosAparte) !== serviciosAparteBaseRef.current;
-    return formCambiado || aparteCambiado || imagenesNuevas.length > 0 || imagenesParaEliminar.length > 0;
-  }, [form, serviciosAparte, imagenesNuevas, imagenesParaEliminar]);
+    return (
+      formCambiado ||
+      aparteCambiado ||
+      imagenesNuevas.length > 0 ||
+      imagenesParaEliminar.length > 0 ||
+      imageUrlsNuevas.length > 0 ||
+      ordenCambiado
+    );
+  }, [form, serviciosAparte, imagenesNuevas, imagenesParaEliminar, imageUrlsNuevas, ordenCambiado]);
+
+  /** Valida un enlace DIRECTO a imagen (https + extensión). Refleja al backend. */
+  const esUrlImagenDirecta = (url: string): boolean => {
+    try {
+      const u = new URL(url);
+      return u.protocol === 'https:' && /\.(jpe?g|png|webp|gif|avif)$/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  };
+
+  const agregarImagenUrl = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    if (totalFotos() >= MAX_FOTOS) {
+      notify.error(null, `Máximo ${MAX_FOTOS} fotos.`);
+      return;
+    }
+    if (!esUrlImagenDirecta(url)) {
+      notify.error(
+        null,
+        'Pega un enlace DIRECTO a una imagen (.jpg/.png/.webp). Los de Google/Drive no sirven.',
+      );
+      return;
+    }
+    setImageUrlsNuevas((prev) => [...prev, url]);
+    setUrlInput('');
+  };
 
   const intentarCerrar = useCallback(() => {
     if (saving) return;
@@ -354,12 +405,92 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
     setImagenesParaEliminar((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
   };
 
+  /** Mueve una foto existente una posición arriba (-1) o abajo (+1). */
+  const moverImagenExistente = (idx: number, dir: -1 | 1) => {
+    const destino = idx + dir;
+    setImagenesExistentes((prev) => {
+      if (destino < 0 || destino >= prev.length) return prev;
+      const next = prev.slice();
+      [next[idx], next[destino]] = [next[destino], next[idx]];
+      return next;
+    });
+    setOrdenCambiado(true);
+  };
+
+  const agregarTemporada = async () => {
+    if (!prop?.id) return;
+    const precio = parseFloat(tForm.precio);
+    if (!tForm.fechaInicio || !tForm.fechaFin || tForm.fechaFin < tForm.fechaInicio) {
+      notify.error(null, 'Indica un rango de fechas válido.');
+      return;
+    }
+    if (Number.isNaN(precio) || precio <= 0) {
+      notify.error(null, 'Indica un precio mayor a 0.');
+      return;
+    }
+    setTBusy(true);
+    try {
+      await propiedadService.crearTemporada(prop.id, {
+        fechaInicio: tForm.fechaInicio,
+        fechaFin: tForm.fechaFin,
+        precio,
+        etiqueta: tForm.etiqueta.trim() || undefined,
+      });
+      const lista = await propiedadService.listarTemporadas(prop.id);
+      setTemporadas(lista);
+      setTForm({ fechaInicio: '', fechaFin: '', precio: '', etiqueta: '' });
+      notify.success('Temporada agregada');
+    } catch (err) {
+      notify.error(err, 'No se pudo agregar la temporada');
+    } finally {
+      setTBusy(false);
+    }
+  };
+
+  const eliminarTemporada = async (tid: number) => {
+    if (!prop?.id) return;
+    setTBusy(true);
+    try {
+      await propiedadService.eliminarTemporada(prop.id, tid);
+      setTemporadas((prev) => prev.filter((t) => t.id !== tid));
+    } catch (err) {
+      notify.error(err, 'No se pudo eliminar la temporada');
+    } finally {
+      setTBusy(false);
+    }
+  };
+
+  /** Mueve una foto existente al frente (posición 0 = portada). */
+  const hacerPortadaExistente = (idx: number) => {
+    if (idx === 0) return;
+    setImagenesExistentes((prev) => {
+      const next = prev.slice();
+      const [moved] = next.splice(idx, 1);
+      next.unshift(moved);
+      return next;
+    });
+    setOrdenCambiado(true);
+  };
+
+  /** Fotos que quedarán = existentes (no marcadas para borrar) + nuevas (archivo) + nuevas (URL). */
+  const totalFotos = () =>
+    imagenesExistentes.filter((i) => !imagenesParaEliminar.includes(i.id)).length +
+    imagenesNuevas.length +
+    imageUrlsNuevas.length;
+
   const handleNuevasImagenes = (files: FileList | null) => {
     if (!files) return;
-    Array.from(files).forEach((f) => {
-      setImagenesNuevas((p) => [...p, f]);
-      setPreviewNuevas((p) => [...p, URL.createObjectURL(f)]);
-    });
+    const restante = MAX_FOTOS - totalFotos();
+    if (restante <= 0) {
+      notify.error(null, `Máximo ${MAX_FOTOS} fotos.`);
+      return;
+    }
+    Array.from(files)
+      .slice(0, restante)
+      .forEach((f) => {
+        setImagenesNuevas((p) => [...p, f]);
+        setPreviewNuevas((p) => [...p, URL.createObjectURL(f)]);
+      });
   };
 
   const quitarNueva = (idx: number) => {
@@ -401,6 +532,15 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
         await Promise.all(imagenesParaEliminar.map((id) => propiedadService.eliminarImagen(prop.id, id)));
       if (imagenesNuevas.length > 0)
         await propiedadService.subirImagenes(prop.id, imagenesNuevas);
+      for (const url of imageUrlsNuevas)
+        await propiedadService.agregarImagenPorUrl(prop.id, url);
+      // Persistir el reorden de las fotos existentes (las nuevas quedan al final).
+      if (ordenCambiado) {
+        const ordenIds = imagenesExistentes
+          .filter((i) => i.id > 0 && !imagenesParaEliminar.includes(i.id))
+          .map((i) => i.id);
+        if (ordenIds.length > 0) await propiedadService.reordenarImagenes(prop.id, ordenIds);
+      }
       notify.success('Propiedad actualizada');
       onSaved();
       onClose();
@@ -451,9 +591,10 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
         {/* Tabs */}
         <div className="flex gap-1">
           {TABS.map((tab) => {
+            const agregadas = imagenesNuevas.length + imageUrlsNuevas.length;
             const badge =
-              tab.id === 'fotos' && (imagenesParaEliminar.length > 0 || imagenesNuevas.length > 0)
-                ? imagenesNuevas.length > 0 ? `+${imagenesNuevas.length}` : `-${imagenesParaEliminar.length}`
+              tab.id === 'fotos' && (imagenesParaEliminar.length > 0 || agregadas > 0)
+                ? agregadas > 0 ? `+${agregadas}` : `-${imagenesParaEliminar.length}`
                 : null;
             return (
               <button
@@ -671,6 +812,56 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
                 <RoomManager propiedadId={prop.id} />
               )}
             </div>
+
+            {/* Precios por temporada/ciclo (solo unidad completa) */}
+            {!form.gestionPorHabitacion && prop?.id != null && (
+              <div className="sm:col-span-2 space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+                <label className={labelCls}>Precios por temporada / ciclo (opcional)</label>
+                {temporadas.length > 0 && (
+                  <div className="space-y-1.5">
+                    {temporadas.map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                      >
+                        <span className="truncate text-card-foreground">
+                          {t.etiqueta ? `${t.etiqueta} · ` : ''}
+                          {t.fechaInicio} → {t.fechaFin} ·{' '}
+                          <span className="font-bold text-primary">S/{t.precio.toLocaleString('es-PE')}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => eliminarTemporada(t.id)}
+                          disabled={tBusy}
+                          className="shrink-0 text-destructive hover:text-destructive/80 disabled:opacity-50"
+                          title="Eliminar temporada"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <input type="date" aria-label="Desde" value={tForm.fechaInicio} onChange={(e) => setTForm((f) => ({ ...f, fechaInicio: e.target.value }))} className={inputCls} />
+                  <input type="date" aria-label="Hasta" value={tForm.fechaFin} onChange={(e) => setTForm((f) => ({ ...f, fechaFin: e.target.value }))} className={inputCls} />
+                  <input type="number" min="0" step="0.01" placeholder="Precio" value={tForm.precio} onChange={(e) => setTForm((f) => ({ ...f, precio: e.target.value }))} className={inputCls} />
+                  <input type="text" maxLength={60} placeholder="Etiqueta (ej. Ciclo I)" value={tForm.etiqueta} onChange={(e) => setTForm((f) => ({ ...f, etiqueta: e.target.value }))} className={inputCls} />
+                </div>
+                <button
+                  type="button"
+                  onClick={agregarTemporada}
+                  disabled={tBusy}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                >
+                  {tBusy ? 'Guardando…' : 'Agregar temporada'}
+                </button>
+                <p className="text-[11px] text-muted-foreground">
+                  El precio de la temporada que cubra la <span className="font-semibold">fecha de ingreso</span> del
+                  estudiante manda. Se guardan al instante (no requieren "Guardar cambios").
+                </p>
+              </div>
+            )}
           </div>
 
         ) : activeTab === 'servicios' ? (
@@ -744,33 +935,98 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
         ) : (
           /* ── Tab Fotos ────────────────────────────────────── */
           <div className="space-y-5">
+            {/* Resumen: cuántas fotos, portada y dónde reordenar */}
+            <div className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 border border-border px-3.5 py-2.5">
+              <div>
+                <p className="text-xs font-bold text-foreground">
+                  {totalFotos()}/{MAX_FOTOS} fotos
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Usa <span className="font-semibold">↑ ↓</span> o <span className="font-semibold">⭐</span> sobre
+                  cada foto para ordenar. La primera es la{' '}
+                  <span className="font-semibold text-primary">portada</span>.
+                </p>
+              </div>
+              <a
+                href={`/landlord/details/gallery?propiedad=${prop?.id ?? ''}`}
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                title="Reordenar arrastrando en la Galería"
+              >
+                Galería
+                <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+              </a>
+            </div>
+
             {imagenesExistentes.length > 0 && (
               <div>
                 <p className={labelCls}>Fotos actuales</p>
                 <div className="grid grid-cols-3 gap-3">
-                  {imagenesExistentes.map((img) => {
-                    const marcada = imagenesParaEliminar.includes(img.id);
-                    const sinId = img.id < 0;
-                    return (
-                      <div key={img.id} className="relative group/img aspect-square rounded-2xl overflow-hidden bg-muted">
-                        <img src={img.url} alt="foto" className={cn('w-full h-full object-cover transition-all duration-300', marcada ? 'opacity-30 scale-95' : 'group-hover/img:scale-105')} />
-                        {!sinId && (
-                          <button
-                            type="button"
-                            onClick={() => toggleEliminarImagen(img.id)}
-                            className={cn('absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-all', marcada ? 'bg-destructive text-destructive-foreground scale-110' : 'bg-card/90 text-card-foreground opacity-0 group-hover/img:opacity-100')}
-                          >
-                            <span className="material-symbols-outlined text-[15px]">{marcada ? 'undo' : 'delete'}</span>
-                          </button>
-                        )}
-                        {marcada && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="bg-destructive/90 text-destructive-foreground text-[10px] font-black px-2 py-0.5 rounded-full">SE ELIMINARÁ</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {(() => {
+                    const coverId = imagenesExistentes.find(
+                      (i) => !imagenesParaEliminar.includes(i.id),
+                    )?.id;
+                    return imagenesExistentes.map((img, idx) => {
+                      const marcada = imagenesParaEliminar.includes(img.id);
+                      const sinId = img.id < 0;
+                      const esPortada = img.id === coverId;
+                      return (
+                        <div key={img.id} className="relative group/img aspect-square rounded-2xl overflow-hidden bg-muted">
+                          <img src={img.url} alt="foto" className={cn('w-full h-full object-cover transition-all duration-300', marcada ? 'opacity-30 scale-95' : 'group-hover/img:scale-105')} />
+                          {esPortada && !marcada && (
+                            <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-[9px] font-black px-2 py-0.5 rounded-full leading-none select-none">
+                              Portada
+                            </div>
+                          )}
+                          {!sinId && (
+                            <button
+                              type="button"
+                              onClick={() => toggleEliminarImagen(img.id)}
+                              className={cn('absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-all', marcada ? 'bg-destructive text-destructive-foreground scale-110' : 'bg-card/90 text-card-foreground opacity-0 group-hover/img:opacity-100')}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">{marcada ? 'undo' : 'delete'}</span>
+                            </button>
+                          )}
+                          {marcada && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="bg-destructive/90 text-destructive-foreground text-[10px] font-black px-2 py-0.5 rounded-full">SE ELIMINARÁ</span>
+                            </div>
+                          )}
+                          {/* Controles de orden: subir / bajar / hacer portada */}
+                          {!sinId && !marcada && (
+                            <div className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-lg bg-background/85 px-1 py-0.5 opacity-100 md:opacity-0 md:group-hover/img:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => moverImagenExistente(idx, -1)}
+                                disabled={idx === 0}
+                                title="Subir"
+                                className="p-1 rounded hover:bg-muted disabled:opacity-30"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">arrow_upward</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moverImagenExistente(idx, 1)}
+                                disabled={idx === imagenesExistentes.length - 1}
+                                title="Bajar"
+                                className="p-1 rounded hover:bg-muted disabled:opacity-30"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">arrow_downward</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => hacerPortadaExistente(idx)}
+                                disabled={esPortada}
+                                title="Hacer portada"
+                                className="p-1 rounded hover:bg-muted disabled:opacity-30"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">star</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
@@ -796,17 +1052,78 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
 
             <div>
               <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleNuevasImagenes(e.target.files)} />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 hover:border-primary hover:bg-accent transition-all group/upload"
-              >
-                <div className="w-12 h-12 rounded-full bg-accent group-hover/upload:bg-primary/10 flex items-center justify-center transition-colors">
-                  <span className="material-symbols-outlined text-primary text-[24px]">add_photo_alternate</span>
+              {totalFotos() < MAX_FOTOS ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-primary/30 rounded-2xl py-8 flex flex-col items-center gap-2 hover:border-primary hover:bg-accent transition-all group/upload"
+                >
+                  <div className="w-12 h-12 rounded-full bg-accent group-hover/upload:bg-primary/10 flex items-center justify-center transition-colors">
+                    <span className="material-symbols-outlined text-primary text-[24px]">add_photo_alternate</span>
+                  </div>
+                  <p className="text-sm font-bold text-primary">Agregar fotos</p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG o WEBP · Máximo 10 MB c/u</p>
+                </button>
+              ) : (
+                <div className="w-full rounded-2xl border-2 border-dashed border-border py-6 text-center text-xs font-semibold text-muted-foreground">
+                  Llegaste al máximo de {MAX_FOTOS} fotos. Elimina alguna para agregar otra.
                 </div>
-                <p className="text-sm font-bold text-primary">Agregar fotos</p>
-                <p className="text-xs text-muted-foreground">JPG, PNG o WEBP · Máximo 10 MB c/u</p>
-              </button>
+              )}
+            </div>
+
+            {/* Enlaces externos a agregar (se aplican al guardar) */}
+            {imageUrlsNuevas.length > 0 && (
+              <div>
+                <p className={labelCls}>Enlaces a agregar</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {imageUrlsNuevas.map((url, idx) => (
+                    <div key={idx} className="relative group/url aspect-square rounded-2xl overflow-hidden ring-2 ring-primary/60">
+                      <img src={url} alt="enlace" className="w-full h-full object-cover" />
+                      <div className="absolute top-2 left-2">
+                        <span className="bg-foreground/70 text-background text-[10px] font-black px-2 py-0.5 rounded-full">URL</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setImageUrlsNuevas((prev) => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-card/90 text-card-foreground flex items-center justify-center shadow-lg opacity-0 group-hover/url:opacity-100 transition-opacity"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      agregarImagenUrl();
+                    }
+                  }}
+                  placeholder="o pega el enlace de una imagen (.jpg/.png)"
+                  disabled={totalFotos() >= MAX_FOTOS}
+                  className="flex-1 rounded-xl border border-border bg-input px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={agregarImagenUrl}
+                  disabled={!urlInput.trim() || totalFotos() >= MAX_FOTOS}
+                  className="shrink-0 rounded-xl border border-border px-4 text-xs font-bold text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                >
+                  Agregar
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Reusa una imagen ya alojada en otro host (no usa tu almacenamiento). Enlace
+                directo, no Google/Drive.
+              </p>
             </div>
           </div>
         )}
@@ -817,7 +1134,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
         <p className="text-xs text-muted-foreground hidden sm:block">
           {activeTab === 'info'      && '* Campos obligatorios'}
           {activeTab === 'servicios' && `${(form.serviciosIncluidos ?? []).length} servicio(s) · ${(form.reglas ?? []).length} regla(s)`}
-          {activeTab === 'fotos'     && `${imagenesExistentes.length - imagenesParaEliminar.length + imagenesNuevas.length} foto(s) quedarán`}
+          {activeTab === 'fotos'     && `${imagenesExistentes.length - imagenesParaEliminar.length + imagenesNuevas.length + imageUrlsNuevas.length} foto(s) quedarán`}
         </p>
         <div className="flex gap-2 ml-auto">
           <Button type="button" variant="ghost" size="sm" onClick={intentarCerrar} disabled={saving} className="rounded-xl px-5">

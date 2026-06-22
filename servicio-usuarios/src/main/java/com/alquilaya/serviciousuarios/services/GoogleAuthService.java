@@ -115,6 +115,7 @@ public class GoogleAuthService {
                 .password(passwordRandom)
                 .rol(rol)
                 .estado(EstadoUsuario.ACTIVE) // Google verificó email
+                .emailVerificado(true) // Google ya verifica el correo (#3)
                 .telefonoVerificado(false) // Sin teléfono aún
                 .build();
 

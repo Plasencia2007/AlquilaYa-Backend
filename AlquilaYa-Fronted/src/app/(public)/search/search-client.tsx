@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
-import { SearchBar } from '@/components/search/search-bar';
+import { WhereSearch } from '@/components/search/where-search';
 import { FilterChips } from '@/components/search/filter-chips';
 import { FiltersSheet } from '@/components/search/filters-sheet';
 import { SortDropdown } from '@/components/search/sort-dropdown';
-import { UniversidadZonaFilter } from '@/components/search/universidad-zona-filter';
 import { ViewToggle } from '@/components/search/view-toggle';
 import { ResultsGrid } from '@/components/search/results-grid';
 import { MapResults } from '@/components/search/map-results';
@@ -15,6 +14,7 @@ import { usePropertiesSearch } from '@/hooks/use-properties-search';
 import { useAuth } from '@/hooks/use-auth';
 import { studentProfileService } from '@/services/student-profile-service';
 import { notify } from '@/lib/notify';
+import { cn } from '@/lib/cn';
 import type { Orden } from '@/schemas/search-schema';
 
 export function SearchClient() {
@@ -22,6 +22,9 @@ export function SearchClient() {
 
   // Coordenadas del usuario (geolocalización) para el orden "Cerca de mí". Fuera de la URL.
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Propiedad resaltada: sincroniza hover entre el grid y el mapa (estilo Airbnb).
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const { items, total, hasMore, cargando, cargandoMas, error, cargarMas, reintentar } =
     usePropertiesSearch(filtros, userCoords);
@@ -65,42 +68,28 @@ export function SearchClient() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 pb-20 pt-20 sm:px-12 md:pt-24">
+    <main className="mx-auto max-w-[1600px] px-6 pb-20 pt-20 sm:px-12 md:pt-24">
       <header className="space-y-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
-              Cuartos cerca de UPeU
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground md:text-base">
-              {cargando
-                ? 'Cargando…'
-                : total === 0
-                  ? 'Sin resultados'
-                  : `${total} cuarto${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}`}
-            </p>
-          </div>
-
-          <div className="hidden md:block">
-            <ViewToggle
-              value={filtros.view}
-              onChange={(v) => setFiltros({ view: v })}
-            />
-          </div>
+        {/* Toggle Lista/Mapa solo en tablet (md); en móvil lo cubre el FAB y en lg+ el split. */}
+        <div className="hidden justify-end md:flex lg:hidden">
+          <ViewToggle
+            value={filtros.view}
+            onChange={(v) => setFiltros({ view: v })}
+          />
         </div>
 
-        <SearchBar
-          initialValue={filtros.zona ?? ''}
-          onSubmit={(zona) => setFiltros({ zona: zona || undefined })}
+        <WhereSearch
+          universidadId={filtros.universidadId}
+          zonaId={filtros.zonaId}
+          zonaTexto={filtros.zona}
+          ordenCercania={filtros.orden === 'cercania'}
+          onSelectUniversidad={(universidadId, zonaId) => setFiltros({ universidadId, zonaId })}
+          onSelectTexto={(zona) => setFiltros({ zona: zona || undefined })}
+          onCercaDeMi={() => handleOrden('cercania')}
+          defaultUniversidadNombre={uniEstudiante}
         />
 
         <div className="flex flex-wrap items-center gap-3">
-          <UniversidadZonaFilter
-            universidadId={filtros.universidadId}
-            zonaId={filtros.zonaId}
-            onChange={(next) => setFiltros(next)}
-            defaultUniversidadNombre={uniEstudiante}
-          />
           <FiltersSheet
             filtros={filtros}
             onApply={(next) => setFiltros(next)}
@@ -120,10 +109,16 @@ export function SearchClient() {
         />
       </header>
 
-      <section className="mt-8">
-        {filtros.view === 'mapa' ? (
-          <MapResults propiedades={items} />
-        ) : (
+      {/* Split estilo Airbnb: en desktop la columna de cards tiene SU PROPIO scroll y el
+          mapa queda fijo a pantalla completa (no depende de sticky → funciona con pocas o
+          muchas tarjetas). En móvil/tablet el toggle muestra uno u otro y la página scrollea. */}
+      <section className="mt-6 lg:grid lg:grid-cols-[1fr_minmax(0,44%)] lg:gap-6 lg:h-[calc(100vh-14rem)]">
+        <div
+          className={cn(
+            'lg:h-full lg:overflow-y-auto lg:pr-1',
+            filtros.view === 'mapa' ? 'hidden lg:block' : 'block',
+          )}
+        >
           <ResultsGrid
             items={items}
             cargando={cargando}
@@ -133,8 +128,25 @@ export function SearchClient() {
             onCargarMas={cargarMas}
             onReintentar={reintentar}
             onLimpiarFiltros={limpiarFiltros}
+            gridClassName="grid grid-cols-1 gap-5 sm:grid-cols-2"
+            activeId={activeId}
+            onHover={setActiveId}
           />
-        )}
+        </div>
+
+        <div
+          className={cn(
+            'overflow-hidden rounded-2xl lg:h-full',
+            filtros.view === 'mapa' ? 'h-[72vh]' : 'hidden lg:block',
+          )}
+        >
+          <MapResults
+            propiedades={items}
+            className="h-full"
+            activeId={activeId}
+            onHover={setActiveId}
+          />
+        </div>
       </section>
 
       <ViewToggle

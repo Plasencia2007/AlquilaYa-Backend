@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export type AuthView = 'login' | 'register' | 'forgot-password';
 
 export type AuthRole = 'ESTUDIANTE' | 'ARRENDADOR';
-export type RegisterStep = 'personal' | 'details' | 'otp' | 'result';
+export type RegisterStep = 'personal' | 'details' | 'otp' | 'email-code' | 'result';
 
 export interface PersonalData {
   nombre: string;

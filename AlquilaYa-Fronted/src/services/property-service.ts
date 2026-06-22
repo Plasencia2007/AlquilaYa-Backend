@@ -2,6 +2,7 @@ import {
   Propiedad,
   type BadgePropiedad,
   type PoliticaCancelacion,
+  type PrecioTemporada,
   type ServicioConEstado,
 } from '@/types/propiedad';
 import { MOCK_PROPIEDADES } from '@/mocks/propiedades';
@@ -32,6 +33,7 @@ export interface PropiedadPublicoDTO {
   serviciosIncluidos?: string[];
   servicios?: ServicioConEstado[];
   politicaCancelacion?: PoliticaCancelacion;
+  temporadas?: PrecioTemporada[];
   latitud?: number;
   longitud?: number;
   calificacion?: number;
@@ -52,6 +54,8 @@ export interface PropiedadPublicoDTO {
   vistas?: number;
   tiempoRespuestaArrendador?: number;
   badges?: BadgePropiedad[];
+  /** Aviso aprobado por admin → sello "Verificado" (#47). */
+  aprobadoPorAdmin?: boolean;
 }
 
 /** Rango de fechas ocupado por una reserva activa (calendario de disponibilidad). */
@@ -83,6 +87,7 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     servicios: dto.serviciosIncluidos ?? [],
     serviciosEstado: dto.servicios,
     politicaCancelacion: dto.politicaCancelacion,
+    temporadas: dto.temporadas,
     propietarioId: dto.arrendadorId != null ? String(dto.arrendadorId) : '',
     propietarioNombre: dto.arrendadorNombre ?? '',
     calificacion: dto.calificacion ?? 0,
@@ -105,6 +110,7 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     vistas: dto.vistas,
     tiempoRespuestaArrendador: dto.tiempoRespuestaArrendador,
     badges: dto.badges,
+    verificado: dto.aprobadoPorAdmin ?? false,
   };
 }
 
@@ -243,6 +249,15 @@ export const servicioPropiedades = {
     return fromDTO(response.data);
   },
 
+  /** Propiedades similares para la sección "También te puede interesar" de la ficha. */
+  obtenerSimilares: async (id: string | number, limit = 4): Promise<Propiedad[]> => {
+    if (USE_MOCKS) return [];
+    const { data } = await api.get<PropiedadPublicoDTO[]>(
+      `/propiedades/${id}/similares?limit=${limit}`,
+    );
+    return Array.isArray(data) ? data.map(fromDTO) : [];
+  },
+
   /** Rangos de fechas ocupados por reservas activas (para pintar disponibilidad en la ficha). */
   obtenerCalendario: async (id: string | number): Promise<RangoOcupado[]> => {
     if (USE_MOCKS) return [];
@@ -310,6 +325,39 @@ export const servicioPropiedades = {
 };
 
 /** Helper para convertir `Filtros` (URL) en `BusquedaParams` (servicio). */
+/** Motivos de denuncia de una publicación (#46), espejo del enum del backend. */
+export type MotivoDenuncia =
+  | 'FRAUDE'
+  | 'INFO_FALSA'
+  | 'DUPLICADO'
+  | 'CONTACTO_EXTERNO'
+  | 'INAPROPIADO'
+  | 'OTRO';
+
+/**
+ * Denuncia una publicación (requiere sesión). Lanza si el usuario ya la había
+ * reportado (el backend responde 409).
+ */
+export async function denunciarPropiedad(
+  id: string | number,
+  motivo: MotivoDenuncia,
+  descripcion?: string,
+): Promise<void> {
+  await api.post(`propiedades/${id}/denuncias`, { motivo, descripcion });
+}
+
+/**
+ * Registra un evento de contacto para la analítica del arrendador (#52). Best-effort:
+ * nunca debe romper el flujo de mensajería, por eso se traga cualquier error.
+ */
+export async function registrarContacto(id: string | number): Promise<void> {
+  try {
+    await api.post(`propiedades/${id}/contacto`);
+  } catch {
+    /* no-op: el evento es solo analítica */
+  }
+}
+
 export function filtrosABusqueda(f: Filtros): BusquedaParams {
   return {
     zona: f.zona,

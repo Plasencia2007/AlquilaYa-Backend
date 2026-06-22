@@ -6,8 +6,14 @@ import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
+import com.alquilaya.serviciousuarios.enums.MetodoVerificacion;
+import com.alquilaya.serviciousuarios.exceptions.EmailNoVerificadoException;
+import com.alquilaya.serviciousuarios.services.ConfiguracionAuthService;
+import com.alquilaya.serviciousuarios.services.EmailVerificationService;
+import com.alquilaya.serviciousuarios.dto.SesionDTO;
 import com.alquilaya.serviciousuarios.services.GoogleAuthService;
 import com.alquilaya.serviciousuarios.services.JwtBlacklistService;
+import com.alquilaya.serviciousuarios.services.SesionService;
 import com.alquilaya.serviciousuarios.services.LoginAttemptService;
 import com.alquilaya.serviciousuarios.services.OtpService;
 import com.alquilaya.serviciousuarios.services.PasswordResetService;
@@ -18,9 +24,11 @@ import com.alquilaya.serviciousuarios.exceptions.TelefonoNoVerificadoException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -33,16 +41,24 @@ public class AuthController {
     private final ArrendadorRepository arrendadorRepository;
     private final EstudianteRepository estudianteRepository;
     private final PasswordResetService passwordResetService;
+    private final EmailVerificationService emailVerificationService;
+    private final ConfiguracionAuthService configuracionAuthService;
     private final LoginAttemptService loginAttemptService;
     private final OtpService otpService;
     private final GoogleAuthService googleAuthService;
     private final JwtBlacklistService jwtBlacklistService;
+    private final SesionService sesionService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
         Usuario usuarioCreado = usuarioService.registrarUsuario(request);
+        // Dispara el email de verificación solo si el método elegido lo exige (#3).
+        if (configuracionAuthService.getMetodo().requiereEmail()) {
+            emailVerificationService.enviar(usuarioCreado);
+        }
         Long perfilId = obtenerPerfilId(usuarioCreado);
         String token = jwtService.generateToken(usuarioCreado, perfilId);
+        sesionService.registrar(usuarioCreado.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
@@ -92,15 +108,21 @@ public class AuthController {
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
 
-        if (!usuario.isTelefonoVerificado()) {
-            // No contar como fallo de login: las credenciales eran correctas.
+        // Gate de verificación según el método elegido por el admin (#3).
+        // No cuenta como fallo de login: las credenciales eran correctas.
+        MetodoVerificacion metodo = configuracionAuthService.getMetodo();
+        if (metodo.requiereTelefono() && !usuario.isTelefonoVerificado()) {
             throw new TelefonoNoVerificadoException("Debes verificar tu número de WhatsApp antes de iniciar sesión. Revisa tu WhatsApp para el código OTP.");
+        }
+        if (metodo.requiereEmail() && !usuario.isEmailVerificado()) {
+            throw new EmailNoVerificadoException("Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada (y spam).");
         }
 
         loginAttemptService.registrarExito(usuario.getCorreo(), ip);
 
         Long perfilId = obtenerPerfilId(usuario);
         String token = jwtService.generateToken(usuario, perfilId);
+        sesionService.registrar(usuario.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
@@ -167,6 +189,7 @@ public class AuthController {
 
         Long perfilId = obtenerPerfilId(usuario);
         String token = jwtService.generateToken(usuario, perfilId);
+        sesionService.registrar(usuario.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
@@ -214,6 +237,26 @@ public class AuthController {
         ));
     }
 
+    /** Verifica el correo con el código de 6 dígitos enviado por email (#3). */
+    @PostMapping("/verify-email")
+    public ResponseEntity<Map<String, String>> verifyEmail(@Valid @RequestBody VerificarEmailRequest request) {
+        emailVerificationService.verificarCodigo(request.getCorreo(), request.getCodigo());
+        return ResponseEntity.ok(Map.of("mensaje", "Correo verificado correctamente."));
+    }
+
+    /**
+     * Reenvía el email de verificación. 200 idempotente (no revela si el correo existe
+     * ni si ya estaba verificado), igual que forgot-password.
+     */
+    @PostMapping("/resend-email-verification")
+    public ResponseEntity<Map<String, String>> resendEmailVerification(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        emailVerificationService.solicitar(request.getCorreo());
+        return ResponseEntity.ok(Map.of(
+                "mensaje", "Si el correo está registrado y sin verificar, te enviamos un enlace."
+        ));
+    }
+
     /**
      * Cierra la sesión revocando el JWT enviado en el header Authorization.
      *
@@ -232,12 +275,61 @@ public class AuthController {
             try {
                 java.util.Date exp = jwtService.getExpiration(token);
                 jwtBlacklistService.blacklist(token, exp);
+                // También quita esta sesión del registro de dispositivos (#10).
+                String jti = jwtService.extractJti(token);
+                Long userId = userIdDe(req);
+                if (jti != null && userId != null) sesionService.revocar(userId, jti);
             } catch (Exception e) {
                 // Token malformado / firma inválida / expirado: no revelamos detalles.
                 // El cliente igual recibe 200.
             }
         }
         return ResponseEntity.ok(Map.of("mensaje", "Sesión cerrada correctamente."));
+    }
+
+    // ===== Sesiones / dispositivos + cierre remoto (#10) =====
+
+    @GetMapping("/sesiones")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<SesionDTO>> misSesiones(HttpServletRequest req) {
+        return ResponseEntity.ok(sesionService.listar(userIdDe(req), jtiDe(req)));
+    }
+
+    @DeleteMapping("/sesiones/{jti}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> cerrarSesion(@PathVariable String jti, HttpServletRequest req) {
+        Long userId = userIdDe(req);
+        if (userId != null) sesionService.revocar(userId, jti);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/sesiones/cerrar-otras")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> cerrarOtrasSesiones(HttpServletRequest req) {
+        Long userId = userIdDe(req);
+        int n = userId != null ? sesionService.revocarOtras(userId, jtiDe(req)) : 0;
+        return ResponseEntity.ok(Map.of("cerradas", n));
+    }
+
+    private String bearer(HttpServletRequest req) {
+        String h = req.getHeader("Authorization");
+        return (h != null && h.startsWith("Bearer ")) ? h.substring(7) : null;
+    }
+
+    private Long userIdDe(HttpServletRequest req) {
+        String token = bearer(req);
+        if (token == null) return null;
+        try {
+            return usuarioService.buscarPorCorreo(jwtService.extractUsername(token))
+                    .map(Usuario::getId).orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String jtiDe(HttpServletRequest req) {
+        String token = bearer(req);
+        return token == null ? null : jwtService.extractJti(token);
     }
 
     private Long obtenerPerfilId(Usuario usuario) {

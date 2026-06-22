@@ -19,6 +19,24 @@ export interface UsuarioMaster {
   perfilArrendadorId?: number;
 }
 
+export interface CuentaDuplicada {
+  id: number;
+  nombre: string;
+  apellido: string;
+  correo: string;
+  dni: string;
+  telefono?: string;
+  rol: string;
+  estado: 'PENDING' | 'ACTIVE' | 'BANNED';
+  fechaCreacion?: string;
+}
+
+export interface ClusterDuplicado {
+  criterio: 'DNI' | 'TELEFONO' | 'EMAIL';
+  valor: string;
+  cuentas: CuentaDuplicada[];
+}
+
 export const usuarioMasterService = {
   obtenerPorRol: async (rol: string): Promise<UsuarioMaster[]> => {
     const response = await api.get<UsuarioMaster[]>(`usuarios/rol/${rol}`);
@@ -45,5 +63,11 @@ export const usuarioMasterService = {
 
   activarUsuario: async (id: number): Promise<UsuarioMaster> => {
     return usuarioMasterService.actualizarUsuario(id, { estado: 'ACTIVE' });
+  },
+
+  /** Grupos de cuentas duplicadas (mismo DNI/teléfono/email canónico). #8 */
+  detectarDuplicados: async (): Promise<ClusterDuplicado[]> => {
+    const response = await api.get<ClusterDuplicado[]>('usuarios/admin/duplicados');
+    return response.data;
   },
 };

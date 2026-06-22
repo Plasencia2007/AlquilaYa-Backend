@@ -79,6 +79,85 @@ export function formatearDistancia(km: number | null | undefined): string {
   return `${km.toFixed(1)} km`;
 }
 
+export interface GeocodeResult {
+  lat: number;
+  lng: number;
+  displayName: string;
+}
+
+/**
+ * Geocodifica una dirección a coordenadas con Nominatim (OpenStreetMap) — gratis, sin API key,
+ * acotado a Perú. Devuelve el primer resultado o null. Pensado para uso de baja frecuencia
+ * (un arrendador escribiendo una dirección, con debounce); respeta la política de Nominatim.
+ */
+// Bounding box de Lima metropolitana como sesgo suave (viewbox=lon_min,lat_max,lon_max,lat_min).
+// Con bounded=0 solo PRIORIZA resultados ahí, sin excluir el resto del país.
+const VIEWBOX_LIMA = '-77.25,-11.65,-76.60,-12.35';
+
+export async function geocodificarDireccion(direccion: string): Promise<GeocodeResult | null> {
+  const q = direccion.trim();
+  if (q.length < 5) return null;
+  const url =
+    'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe' +
+    `&viewbox=${VIEWBOX_LIMA}&bounded=0&q=` +
+    encodeURIComponent(q);
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const r = data[0] as { lat?: string; lon?: string; display_name?: string };
+    const lat = parseFloat(r.lat ?? '');
+    const lng = parseFloat(r.lon ?? '');
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng, displayName: r.display_name ?? '' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reverse geocoding (coordenadas → dirección) con Nominatim. Devuelve el display_name
+ * o null. Sirve para autocompletar la dirección al mover el pin o usar el GPS.
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const url =
+    `https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=0&lat=${lat}&lon=${lng}`;
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const d = (await res.json()) as { display_name?: string };
+    return d?.display_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Minutos estimados a pie desde una distancia en km (velocidad media ~4.5 km/h).
+ * Es una ESTIMACIÓN sobre la línea recta; la ruta real (Google Maps) puede variar.
+ */
+export function minutosCaminando(km: number | null | undefined): number | null {
+  if (km === null || km === undefined || Number.isNaN(km)) return null;
+  return Math.max(1, Math.round((km / 4.5) * 60));
+}
+
+/**
+ * URL de "cómo llegar" en Google Maps: abre la ruta REAL + tiempo, sin API key ni costo.
+ */
+export function googleMapsRutaUrl(
+  origen: LatLng,
+  destino: LatLng,
+  modo: 'walking' | 'driving' | 'transit' = 'walking',
+): string {
+  return (
+    'https://www.google.com/maps/dir/?api=1' +
+    `&origin=${origen.lat},${origen.lng}` +
+    `&destination=${destino.lat},${destino.lng}` +
+    `&travelmode=${modo}`
+  );
+}
+
 /** Geometría mínima de una zona de cobertura para resolución punto-en-zona. */
 export interface ZonaGeo {
   id?: number;

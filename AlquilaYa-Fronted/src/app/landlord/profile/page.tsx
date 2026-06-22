@@ -11,6 +11,8 @@ import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { profileService } from '@/services/profile-service';
 import { documentsService } from '@/services/documents-service';
+import { EmailVerificationBanner } from '@/components/auth/email-verification-banner';
+import { ActiveSessions } from '@/components/auth/active-sessions';
 import { UPEU_COORDS } from '@/lib/geo';
 import type { Perfil, Documento, TipoDocumento, EstadoUsuario } from '@/types/profile';
 
@@ -404,6 +406,8 @@ export default function LandlordProfilePage() {
   return (
     <div className="space-y-6 max-w-3xl animate-fade-in pb-12">
 
+      <EmailVerificationBanner />
+
       {/* ── Header card ─────────────────────────────────────────────────────── */}
       <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-6">
         <div className="flex items-start gap-5 flex-wrap">
@@ -602,6 +606,8 @@ export default function LandlordProfilePage() {
           </div>
         </form>
       </SectionCard>
+
+      <ActiveSessions />
 
     </div>
   );

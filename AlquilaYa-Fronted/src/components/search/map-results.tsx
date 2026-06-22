@@ -3,12 +3,13 @@
 import dynamic from 'next/dynamic';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
 import type { Propiedad } from '@/types/propiedad';
 
 const PropertiesMap = dynamic(() => import('@/components/shared/PropertiesMap'), {
   ssr: false,
   loading: () => (
-    <div className="mx-auto aspect-square w-full max-w-2xl overflow-hidden rounded-2xl border border-border">
+    <div className="h-full w-full overflow-hidden rounded-2xl border border-border">
       <Skeleton className="h-full w-full" />
     </div>
   ),
@@ -16,14 +17,24 @@ const PropertiesMap = dynamic(() => import('@/components/shared/PropertiesMap'),
 
 interface Props {
   propiedades: Propiedad[];
+  className?: string;
+  activeId?: string | null;
+  onHover?: (id: string | null) => void;
 }
 
-export function MapResults({ propiedades }: Props) {
+export function MapResults({ propiedades, className, activeId, onHover }: Props) {
   return (
-    <div className="mx-auto aspect-square w-full max-w-2xl overflow-hidden rounded-2xl border border-border shadow-sm">
+    <div
+      className={cn(
+        'h-full w-full overflow-hidden rounded-2xl border border-border shadow-sm',
+        className,
+      )}
+    >
       <PropertiesMap
         propiedades={propiedades}
         className="h-full w-full"
+        activeId={activeId}
+        onHover={onHover}
       />
     </div>
   );

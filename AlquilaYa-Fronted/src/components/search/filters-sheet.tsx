@@ -1,29 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { SlidersHorizontal } from 'lucide-react';
+import {
+  SlidersHorizontal, Minus, Plus, Star,
+  Wifi, ShowerHead, CookingPot, Shirt, Snowflake, Car, Dumbbell, ShieldCheck, PawPrint, Tv,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   filtrosFormSchema,
   PRECIO_MAX_DEFAULT,
@@ -33,21 +27,20 @@ import {
   type FiltrosFormData,
   type Filtros,
 } from '@/schemas/search-schema';
-import { useMediaQuery } from '@/hooks/use-media-query';
 import { contarFiltrosActivos } from '@/lib/search-url';
 import { cn } from '@/lib/cn';
 
-const SERVICIOS_OPCIONES = [
-  'Wi-Fi',
-  'Baño privado',
-  'Cocina',
-  'Lavandería',
-  'Aire acondicionado',
-  'Estacionamiento',
-  'Gimnasio',
-  'Seguridad',
-  'Mascotas',
-  'Cable',
+const SERVICIOS: { nombre: string; icon: LucideIcon }[] = [
+  { nombre: 'Wi-Fi', icon: Wifi },
+  { nombre: 'Cocina', icon: CookingPot },
+  { nombre: 'Baño privado', icon: ShowerHead },
+  { nombre: 'Lavandería', icon: Shirt },
+  { nombre: 'Aire acondicionado', icon: Snowflake },
+  { nombre: 'Estacionamiento', icon: Car },
+  { nombre: 'Gimnasio', icon: Dumbbell },
+  { nombre: 'Seguridad', icon: ShieldCheck },
+  { nombre: 'Mascotas', icon: PawPrint },
+  { nombre: 'Cable', icon: Tv },
 ];
 
 const TIPO_LABELS: Record<string, string> = {
@@ -82,7 +75,6 @@ function defaultsDesde(filtros: Filtros): FiltrosFormData {
 
 export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
   const [open, setOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
   const activos = contarFiltrosActivos(filtros);
 
   const form = useForm<FiltrosFormData>({
@@ -90,7 +82,6 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
     defaultValues: defaultsDesde(filtros),
   });
 
-  // Cuando se abre, sincroniza el draft con los filtros vigentes en URL
   useEffect(() => {
     if (open) form.reset(defaultsDesde(filtros));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,8 +118,8 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button
           type="button"
           variant="outline"
@@ -143,24 +134,42 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
             </span>
           )}
         </Button>
-      </SheetTrigger>
-      <SheetContent
-        side={isDesktop ? 'right' : 'bottom'}
-        className={cn(
-          'flex flex-col gap-0 bg-background p-0',
-          isDesktop ? 'w-full max-w-md' : 'h-[88vh] rounded-t-3xl',
-        )}
-      >
-        <SheetHeader className="border-b border-border px-6 py-4 text-left">
-          <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
-        </SheetHeader>
+      </DialogTrigger>
 
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-1 flex-col overflow-hidden"
-        >
-          <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6">
-            {/* Precio */}
+      <DialogContent className="flex max-h-[85vh] w-[calc(100%-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
+          <DialogTitle className="text-center text-base font-bold">Filtros</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 py-6">
+            {/* Tipo de alojamiento */}
+            <Controller
+              control={form.control}
+              name="tipo"
+              render={({ field }) => (
+                <Seccion titulo="Tipo de alojamiento">
+                  <div className="flex flex-wrap gap-2">
+                    <Pill active={!field.value} onClick={() => field.onChange(undefined)}>
+                      Cualquier tipo
+                    </Pill>
+                    {TIPOS_PROPIEDAD.map((t) => (
+                      <Pill
+                        key={t}
+                        active={field.value === t}
+                        onClick={() => field.onChange(field.value === t ? undefined : t)}
+                      >
+                        {TIPO_LABELS[t]}
+                      </Pill>
+                    ))}
+                  </div>
+                </Seccion>
+              )}
+            />
+
+            <Hr />
+
+            {/* Rango de precios */}
             <Controller
               control={form.control}
               name="precioMin"
@@ -169,10 +178,7 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                   control={form.control}
                   name="precioMax"
                   render={({ field: maxField }) => (
-                    <fieldset className="space-y-3">
-                      <legend className="text-sm font-bold text-foreground">
-                        Precio mensual (S/)
-                      </legend>
+                    <Seccion titulo="Rango de precios" subtitulo="Precio mensual (S/)">
                       <Slider
                         min={PRECIO_MIN_DEFAULT}
                         max={PRECIO_MAX_DEFAULT}
@@ -183,25 +189,28 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                           maxField.onChange(vals[1]);
                         }}
                       />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>S/ {minField.value}</span>
-                        <span>S/ {maxField.value}</span>
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <RangoPill label="Mínimo" value={`S/ ${minField.value}`} />
+                        <span className="h-px w-4 bg-border" />
+                        <RangoPill
+                          label="Máximo"
+                          value={`S/ ${maxField.value}${maxField.value >= PRECIO_MAX_DEFAULT ? '+' : ''}`}
+                        />
                       </div>
-                    </fieldset>
+                    </Seccion>
                   )}
                 />
               )}
             />
+
+            <Hr />
 
             {/* Distancia a UPeU */}
             <Controller
               control={form.control}
               name="distanciaMaxKm"
               render={({ field }) => (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-bold text-foreground">
-                    Distancia máxima a UPeU
-                  </legend>
+                <Seccion titulo="Distancia máxima a UPeU">
                   <Slider
                     min={1}
                     max={DISTANCIA_MAX_DEFAULT}
@@ -209,162 +218,214 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                     value={[field.value]}
                     onValueChange={(vals) => field.onChange(vals[0])}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Hasta <span className="font-semibold text-foreground">{field.value} km</span>
                   </p>
-                </fieldset>
+                </Seccion>
               )}
             />
 
-            {/* Tipo */}
-            <Controller
-              control={form.control}
-              name="tipo"
-              render={({ field }) => (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-bold text-foreground">Tipo de espacio</legend>
-                  <RadioGroup
-                    value={field.value ?? ''}
-                    onValueChange={(v) => field.onChange(v || undefined)}
-                    className="grid grid-cols-2 gap-2"
-                  >
-                    {TIPOS_PROPIEDAD.map((t) => (
-                      <Label
-                        key={t}
-                        htmlFor={`tipo-${t}`}
-                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium hover:border-primary"
-                      >
-                        <RadioGroupItem value={t} id={`tipo-${t}`} />
-                        {TIPO_LABELS[t]}
-                      </Label>
-                    ))}
-                  </RadioGroup>
-                  {field.value && (
-                    <button
-                      type="button"
-                      onClick={() => field.onChange(undefined)}
-                      className="text-xs font-semibold text-primary hover:underline"
-                    >
-                      Cualquier tipo
-                    </button>
-                  )}
-                </fieldset>
-              )}
-            />
+            <Hr />
 
-            {/* Capacidad (personas) — útil para departamentos/casas en grupo */}
+            {/* Capacidad (steppers) */}
             <Controller
               control={form.control}
               name="capacidadMin"
               render={({ field }) => (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-bold text-foreground">¿Para cuántas personas?</legend>
-                  <div className="flex flex-wrap gap-2">
-                    {[1, 2, 3, 4, 5].map((n) => {
-                      const activo = field.value === n;
-                      return (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => field.onChange(activo ? undefined : n)}
-                          className={
-                            'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ' +
-                            (activo
-                              ? 'border-primary bg-primary/10 text-primary'
-                              : 'border-border bg-card text-foreground hover:border-primary')
-                          }
-                        >
-                          {n}{n === 5 ? '+' : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {field.value && (
-                    <button
-                      type="button"
-                      onClick={() => field.onChange(undefined)}
-                      className="text-xs font-semibold text-primary hover:underline"
-                    >
-                      Cualquier capacidad
-                    </button>
-                  )}
-                </fieldset>
+                <Seccion titulo="Capacidad">
+                  <FilaStepper
+                    label="Personas"
+                    value={field.value}
+                    onChange={field.onChange}
+                    max={10}
+                  />
+                </Seccion>
               )}
             />
 
-            {/* Servicios */}
+            <Hr />
+
+            {/* Servicios (chips con íconos) */}
             <Controller
               control={form.control}
               name="servicios"
               render={({ field }) => (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-bold text-foreground">Servicios</legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    {SERVICIOS_OPCIONES.map((s) => {
-                      const checked = field.value.includes(s);
+                <Seccion titulo="Servicios">
+                  <div className="flex flex-wrap gap-2">
+                    {SERVICIOS.map(({ nombre, icon: Icon }) => {
+                      const checked = field.value.includes(nombre);
                       return (
-                        <Label
-                          key={s}
-                          htmlFor={`serv-${s}`}
-                          className="flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium hover:border-primary"
+                        <button
+                          key={nombre}
+                          type="button"
+                          onClick={() =>
+                            checked
+                              ? field.onChange(field.value.filter((x) => x !== nombre))
+                              : field.onChange([...field.value, nombre])
+                          }
+                          className={cn(
+                            'flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
+                            checked
+                              ? 'border-foreground bg-foreground/5 text-foreground'
+                              : 'border-border bg-card text-foreground hover:border-foreground/40',
+                          )}
                         >
-                          <Checkbox
-                            id={`serv-${s}`}
-                            checked={checked}
-                            onCheckedChange={(c) => {
-                              if (c) field.onChange([...field.value, s]);
-                              else field.onChange(field.value.filter((x) => x !== s));
-                            }}
-                          />
-                          {s}
-                        </Label>
+                          <Icon className="size-4" />
+                          {nombre}
+                        </button>
                       );
                     })}
                   </div>
-                </fieldset>
+                </Seccion>
               )}
             />
+
+            <Hr />
 
             {/* Calificación mínima */}
             <Controller
               control={form.control}
               name="calificacionMin"
               render={({ field }) => (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-bold text-foreground">Calificación mínima</legend>
-                  <Select
-                    value={String(field.value)}
-                    onValueChange={(v) => field.onChange(Number(v))}
-                  >
-                    <SelectTrigger className="bg-card">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Cualquiera</SelectItem>
-                      <SelectItem value="3">★ 3.0 o más</SelectItem>
-                      <SelectItem value="4">★ 4.0 o más</SelectItem>
-                      <SelectItem value="4.5">★ 4.5 o más</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </fieldset>
+                <Seccion titulo="Calificación mínima">
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 3, 4, 4.5].map((n) => (
+                      <Pill
+                        key={n}
+                        active={field.value === n}
+                        onClick={() => field.onChange(n)}
+                      >
+                        {n === 0 ? (
+                          'Cualquiera'
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <Star className="size-3.5 fill-current" /> {n.toFixed(1)}+
+                          </span>
+                        )}
+                      </Pill>
+                    ))}
+                  </div>
+                </Seccion>
               )}
             />
           </div>
 
-          <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-border bg-background px-6 py-4">
-            <Button type="button" variant="ghost" onClick={onLimpiar} className="text-sm font-bold">
-              Limpiar
-            </Button>
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-6 py-4">
+            <button
+              type="button"
+              onClick={onLimpiar}
+              className="text-sm font-bold text-foreground underline-offset-4 hover:underline"
+            >
+              Limpiar filtros
+            </button>
             <Button
               type="submit"
               size="lg"
-              className="flex-1 rounded-full text-sm font-bold shadow-lg shadow-primary/20"
+              className="rounded-xl px-6 text-sm font-bold"
             >
               {total > 0 ? `Mostrar ${total} resultado${total === 1 ? '' : 's'}` : 'Aplicar filtros'}
             </Button>
           </footer>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Seccion({
+  titulo,
+  subtitulo,
+  children,
+}: {
+  titulo: string;
+  subtitulo?: string;
+  children: ReactNode;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-lg font-bold text-foreground">{titulo}</legend>
+      {subtitulo && <p className="mb-3 mt-0.5 text-sm text-muted-foreground">{subtitulo}</p>}
+      <div className={subtitulo ? '' : 'mt-3'}>{children}</div>
+    </fieldset>
+  );
+}
+
+function Hr() {
+  return <div className="h-px bg-border" />;
+}
+
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+        active
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-border bg-card text-foreground hover:border-foreground/40',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RangoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-bold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function FilaStepper({
+  label,
+  value,
+  onChange,
+  max = 10,
+}: {
+  label: string;
+  value?: number;
+  onChange: (v: number | undefined) => void;
+  max?: number;
+}) {
+  const actual = value ?? 0;
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          aria-label="Disminuir"
+          disabled={actual <= 0}
+          onClick={() => onChange(actual <= 1 ? undefined : actual - 1)}
+          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-40"
+        >
+          <Minus className="size-4" />
+        </button>
+        <span className="min-w-[5rem] text-center text-sm font-semibold text-foreground">
+          {actual === 0 ? 'Cualquiera' : `${actual}${actual >= max ? '+' : ''}`}
+        </span>
+        <button
+          type="button"
+          aria-label="Aumentar"
+          disabled={actual >= max}
+          onClick={() => onChange(actual + 1)}
+          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-40"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+    </div>
   );
 }

@@ -20,6 +20,8 @@ export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Si el login se bloquea por correo sin verificar, guardamos el correo para ofrecer verificación.
+  const [correoSinVerificar, setCorreoSinVerificar] = useState<string | null>(null);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -41,13 +43,28 @@ export function LoginForm() {
   };
 
   const onSubmit = async (data: LoginFormData) => {
+    setCorreoSinVerificar(null);
     try {
       const usuario = await iniciarSesion(data.correo, data.password);
       if (!usuario) return;
       redirigirPorRol(usuario.rol);
     } catch (err) {
+      // Bloqueo por correo sin verificar (el gate manda 403 con mensaje sobre el correo):
+      // ofrecemos reenviar el link en vez de un error seco, para que nadie quede encerrado.
+      const resp = (err as { response?: { status?: number; data?: unknown } })?.response;
+      const texto = JSON.stringify(resp?.data ?? '').toLowerCase();
+      if (resp?.status === 403 && texto.includes('correo')) {
+        setCorreoSinVerificar(data.correo);
+        return;
+      }
       notify.error(err, 'Credenciales incorrectas');
     }
+  };
+
+  const irAVerificar = () => {
+    if (!correoSinVerificar) return;
+    close();
+    router.push(`/verify-email?correo=${encodeURIComponent(correoSinVerificar)}`);
   };
 
 
@@ -59,6 +76,23 @@ export function LoginForm() {
           Ingresa para gestionar tus favoritos y mensajes.
         </p>
       </header>
+
+      {correoSinVerificar && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">
+          <p className="font-semibold text-amber-800">Verifica tu correo para entrar</p>
+          <p className="mt-0.5 text-xs text-amber-700">
+            Tu cuenta requiere verificar <strong>{correoSinVerificar}</strong>. Revisa tu bandeja
+            (y spam) o reenvía el enlace.
+          </p>
+          <Button
+            type="button"
+            onClick={irAVerificar}
+            className="mt-2 h-8 rounded-lg bg-amber-500 text-xs font-bold text-white hover:bg-amber-600"
+          >
+            Verificar correo
+          </Button>
+        </div>
+      )}
 
       <Form {...form}>
         <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>

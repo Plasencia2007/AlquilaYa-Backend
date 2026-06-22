@@ -26,6 +26,8 @@ public class PropiedadPublicoDTO {
     private BigDecimal precio;
     /** Precio antes de la última rebaja (para tachado en UI). Null si no hubo rebaja. */
     private BigDecimal precioAnterior;
+    /** Precios por temporada/ciclo (solo se cargan en la ficha, no en el listado). */
+    private List<PrecioTemporadaDTO> temporadas;
     /** Enlace de video (YouTube/Vimeo/.mp4). Null si no tiene. */
     private String videoUrl;
     private String direccion;

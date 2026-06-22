@@ -1,6 +1,7 @@
 package com.alquilaya.serviciousuarios.config;
 
 import com.alquilaya.serviciousuarios.services.JwtBlacklistService;
+import com.alquilaya.serviciousuarios.services.SesionService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final JwtBlacklistService jwtBlacklistService;
+    private final SesionService sesionService;
 
     @Override
     protected void doFilterInternal(
@@ -50,6 +52,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             response.setContentType("application/json");
             response.getWriter().write(
                     "{\"error\":\"Token revocado. Inicia sesión nuevamente.\"}");
+            return;
+        }
+
+        // Cierre remoto de sesión (#10): si el jti fue revocado desde otro dispositivo,
+        // rechazar. Tokens legacy sin jti pasan (no rompe); fail-open si Redis cae.
+        final String jti = jwtService.extractJti(jwt);
+        if (jti != null && sesionService.estaRevocada(jti)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write(
+                    "{\"error\":\"Esta sesión fue cerrada. Inicia sesión nuevamente.\"}");
             return;
         }
 

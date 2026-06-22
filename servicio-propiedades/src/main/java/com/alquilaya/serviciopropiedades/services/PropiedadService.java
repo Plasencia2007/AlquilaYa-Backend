@@ -40,6 +40,8 @@ public class PropiedadService {
 
     private final PropiedadRepository propiedadRepository;
     private final HabitacionRepository habitacionRepository;
+    private final com.alquilaya.serviciopropiedades.repositories.PrecioTemporadaRepository precioTemporadaRepository;
+    private final com.alquilaya.serviciopropiedades.repositories.EventoPropiedadRepository eventoPropiedadRepository;
     private final DistanciaService distanciaService;
     private final UsuariosClient usuariosClient;
 
@@ -104,11 +106,22 @@ public class PropiedadService {
      * Para listados, preferir {@link #toPublicoBatch(List)} para evitar N+1.
      */
     public PropiedadPublicoDTO toPublico(Propiedad p) {
-        return toPublicoBuilder(p, null, contarLibres(p)).build();
+        // Carga única (ficha): incluye temporadas. El batch del listado NO las carga (anti N+1).
+        return toPublicoBuilder(p, null, contarLibres(p), temporadasDe(p.getId())).build();
+    }
+
+    /** Temporadas de una propiedad como DTO (vacío si no tiene). */
+    private List<com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO> temporadasDe(Long propiedadId) {
+        return precioTemporadaRepository.findByPropiedadIdOrderByFechaInicioAsc(propiedadId).stream()
+                .map(t -> com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO.builder()
+                        .id(t.getId()).fechaInicio(t.getFechaInicio()).fechaFin(t.getFechaFin())
+                        .precio(t.getPrecio()).etiqueta(t.getEtiqueta()).build())
+                .toList();
     }
 
     private PropiedadPublicoDTO.PropiedadPublicoDTOBuilder toPublicoBuilder(Propiedad p, ArrendadorInfoDTO info,
-                                                                            Long habitacionesLibres) {
+                                                                            Long habitacionesLibres,
+                                                                            List<com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO> temporadas) {
         PropiedadPublicoDTO.PropiedadPublicoDTOBuilder b = PropiedadPublicoDTO.builder()
                 .id(p.getId())
                 .titulo(p.getTitulo())
@@ -149,7 +162,8 @@ public class PropiedadService {
                 .fechaCreacion(p.getFechaCreacion())
                 .ultimaActualizacion(p.getFechaActualizacion())
                 .vistas(p.getVistas() != null ? p.getVistas() : 0L)
-                .badges(new ArrayList<>(BadgeCalculator.calcular(p, habitacionesLibres)));
+                .badges(new ArrayList<>(BadgeCalculator.calcular(p, habitacionesLibres)))
+                .temporadas(temporadas);
 
         if (info != null) {
             b.arrendadorNombre(componerNombre(info))
@@ -174,7 +188,7 @@ public class PropiedadService {
         Map<Long, Long> libresPorId = contarLibresBatch(propiedades);
         return propiedades.stream()
                 .map(p -> toPublicoBuilder(p, infoPorId.get(p.getArrendadorId()),
-                        libresPorId.get(p.getId())).build())
+                        libresPorId.get(p.getId()), null).build())
                 .toList();
     }
 
@@ -276,6 +290,77 @@ public class PropiedadService {
         defaultInfo.setNombre("Arrendador");
         defaultInfo.setApellido("(no disponible)");
         return CompletableFuture.completedFuture(defaultInfo);
+    }
+
+    /**
+     * Propiedades similares a {@code id}, para la sección "También te puede interesar" de la ficha.
+     * Candidatos: aprobadas + disponibles + misma universidad. Ranking (más similar primero):
+     * misma zona → precio más cercano → mismo tipo → mejor calificación.
+     */
+    public List<PropiedadPublicoDTO> similares(Long id, int limit) {
+        Propiedad actual = propiedadRepository.findById(id).orElse(null);
+        if (actual == null) return Collections.emptyList();
+
+        List<Propiedad> pool = propiedadRepository.candidatosSimilares(id, actual.getUniversidadId());
+        if (pool.isEmpty()) return Collections.emptyList();
+
+        final double precioActual = actual.getPrecio() != null ? actual.getPrecio().doubleValue() : 0.0;
+        final Long zona = actual.getZonaId();
+        final String tipo = actual.getTipoPropiedad();
+        int n = Math.min(Math.max(limit, 1), 12);
+
+        List<Propiedad> top = pool.stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((Propiedad p) -> Objects.equals(p.getZonaId(), zona) ? 0 : 1)
+                        .thenComparingDouble(p -> Math.abs(
+                                (p.getPrecio() != null ? p.getPrecio().doubleValue() : 0.0) - precioActual))
+                        .thenComparingInt(p -> Objects.equals(p.getTipoPropiedad(), tipo) ? 0 : 1)
+                        .thenComparing(p -> p.getCalificacion() != null ? p.getCalificacion() : 0.0,
+                                java.util.Comparator.reverseOrder()))
+                .limit(n)
+                .toList();
+
+        return toPublicoBatch(top);
+    }
+
+    /**
+     * Precio sugerido al publicar: estadísticas de avisos parecidos. Va de lo más específico a
+     * lo más amplio hasta encontrar datos: zona+tipo → universidad+tipo → universidad.
+     */
+    public com.alquilaya.serviciopropiedades.dto.PrecioSugeridoDTO precioSugerido(
+            Long zonaId, Long universidadId, String tipo) {
+        var porZonaTipo = statsPrecio(zonaId, null, tipo, "ZONA");
+        if (porZonaTipo != null) return porZonaTipo;
+        var porUniTipo = statsPrecio(null, universidadId, tipo, "UNIVERSIDAD");
+        if (porUniTipo != null) return porUniTipo;
+        var porUni = statsPrecio(null, universidadId, null, "UNIVERSIDAD");
+        if (porUni != null) return porUni;
+        return com.alquilaya.serviciopropiedades.dto.PrecioSugeridoDTO.builder().cantidad(0).ambito("").build();
+    }
+
+    private com.alquilaya.serviciopropiedades.dto.PrecioSugeridoDTO statsPrecio(
+            Long zonaId, Long universidadId, String tipo, String ambito) {
+        if (zonaId == null && universidadId == null) return null;
+        List<Object[]> rows = propiedadRepository.estadisticasPrecio(zonaId, universidadId, tipo);
+        if (rows == null || rows.isEmpty() || rows.get(0) == null) return null;
+        Object[] r = rows.get(0);
+        long count = r[3] instanceof Number n ? n.longValue() : 0;
+        if (count == 0) return null;
+        return com.alquilaya.serviciopropiedades.dto.PrecioSugeridoDTO.builder()
+                .min(aBigDecimal(r[0]))
+                .promedio(aBigDecimal(r[1]) != null
+                        ? aBigDecimal(r[1]).setScale(0, java.math.RoundingMode.HALF_UP) : null)
+                .max(aBigDecimal(r[2]))
+                .cantidad((int) count)
+                .ambito(ambito)
+                .build();
+    }
+
+    private static BigDecimal aBigDecimal(Object o) {
+        if (o == null) return null;
+        if (o instanceof BigDecimal b) return b;
+        if (o instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
+        return null;
     }
 
     public PropiedadCompletoDTO toCompleto(Propiedad p) {
@@ -406,7 +491,14 @@ public class PropiedadService {
             int filas = propiedadRepository.incrementarVistas(propiedadId);
             if (filas == 0) {
                 log.debug("[VISTAS] Propiedad {} no encontrada al incrementar vistas", propiedadId);
+                return;
             }
+            // Log del evento para la analítica por ventana (#51). Best-effort.
+            eventoPropiedadRepository.save(
+                    com.alquilaya.serviciopropiedades.entities.EventoPropiedad.builder()
+                            .propiedadId(propiedadId)
+                            .tipo(com.alquilaya.serviciopropiedades.enums.TipoEvento.VISTA)
+                            .build());
         } catch (Exception e) {
             log.warn("[VISTAS] No se pudo incrementar vistas de propiedad {}: {}",
                     propiedadId, e.getMessage());

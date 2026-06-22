@@ -54,6 +54,7 @@ public class PropiedadController {
 
     private final PropiedadRepository propiedadRepository;
     private final PropiedadImagenRepository propiedadImagenRepository;
+    private final com.alquilaya.serviciopropiedades.repositories.PrecioTemporadaRepository precioTemporadaRepository;
     private final HabitacionRepository habitacionRepository;
     private final ReservaRepository reservaRepository;
     private final KafkaProducerService kafkaProducerService;
@@ -64,6 +65,8 @@ public class PropiedadController {
     private final ZonaResolver zonaResolver;
     private final CampusProvider campusProvider;
     private final com.alquilaya.serviciopropiedades.services.PublicacionService publicacionService;
+    private final com.alquilaya.serviciopropiedades.services.AnaliticaPropiedadService analiticaPropiedadService;
+    private final com.alquilaya.serviciopropiedades.repositories.EventoPropiedadRepository eventoPropiedadRepository;
     private final Validator validator;
 
     /**
@@ -405,6 +408,55 @@ public class PropiedadController {
         return ResponseEntity.ok(publicacionService.publicarBorrador(id));
     }
 
+    /**
+     * El arrendador confirma que su aviso sigue vigente (#49 caducidad). Renueva la fecha
+     * de confirmación y quita la marca de "requiere reconfirmación".
+     */
+    @PostMapping("/{id}/confirmar-disponibilidad")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
+    public ResponseEntity<Propiedad> confirmarDisponibilidad(@PathVariable Long id) {
+        Propiedad p = propiedadRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Propiedad no encontrada"));
+        verificarPropietarioOAdmin(p);
+        p.setFechaUltimaConfirmacion(java.time.LocalDateTime.now());
+        p.setRequiereReconfirmacion(false);
+        log.info("[CADUCIDAD] Propiedad {} reconfirmada por su dueño", id);
+        return ResponseEntity.ok(propiedadRepository.save(p));
+    }
+
+    /** Analítica de una propiedad (#51–#55). Solo el dueño (o admin). */
+    @GetMapping("/{id}/analitica")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<com.alquilaya.serviciopropiedades.dto.AnaliticaPropiedadDTO> analitica(
+            @PathVariable Long id) {
+        Propiedad p = propiedadRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Propiedad no encontrada"));
+        verificarPropietarioOAdmin(p);
+        return ResponseEntity.ok(analiticaPropiedadService.calcular(p));
+    }
+
+    /**
+     * Registra un evento de CONTACTO (estudiante inició conversación). Alimenta el embudo
+     * de analítica (#52). Best-effort: cualquier usuario autenticado, no falla la UX.
+     */
+    @PostMapping("/{id}/contacto")
+    public ResponseEntity<Void> registrarContacto(@PathVariable Long id) {
+        if (!propiedadRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        Long perfilId = CurrentUserProvider.get() != null ? CurrentUserProvider.get().getPerfilId() : null;
+        eventoPropiedadRepository.save(
+                com.alquilaya.serviciopropiedades.entities.EventoPropiedad.builder()
+                        .propiedadId(id)
+                        .tipo(com.alquilaya.serviciopropiedades.enums.TipoEvento.CONTACTO)
+                        .perfilId(perfilId)
+                        .build());
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+    }
+
     /** Programa la publicación de un borrador para una fecha/hora futura (ISO yyyy-MM-ddTHH:mm). */
     @PostMapping("/borradores/{id}/programar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
@@ -700,10 +752,95 @@ public class PropiedadController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /** Precio sugerido al publicar: estadísticas de avisos parecidos (zona/universidad/tipo). */
+    @GetMapping("/precio-sugerido")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<com.alquilaya.serviciopropiedades.dto.PrecioSugeridoDTO> precioSugerido(
+            @RequestParam(required = false) Long zonaId,
+            @RequestParam(required = false) Long universidadId,
+            @RequestParam(required = false) String tipo) {
+        return ResponseEntity.ok(propiedadService.precioSugerido(zonaId, universidadId, tipo));
+    }
+
+    // ===== Precios por temporada/ciclo =====
+
+    /** Lista las temporadas de precio de una propiedad. Público (se muestran en la ficha). */
+    @GetMapping("/{id}/temporadas")
+    public ResponseEntity<List<com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO>> listarTemporadas(
+            @PathVariable Long id) {
+        var lista = precioTemporadaRepository.findByPropiedadIdOrderByFechaInicioAsc(id)
+                .stream().map(this::toTemporadaDTO).toList();
+        return ResponseEntity.ok(lista);
+    }
+
+    /** Crea una temporada de precio (solo el arrendador dueño). Valida fechas, precio y no-solape. */
+    @PostMapping("/{id}/temporadas")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO> crearTemporada(
+            @PathVariable Long id,
+            @RequestBody com.alquilaya.serviciopropiedades.entities.PrecioTemporada body) {
+        Propiedad propiedad = propiedadRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "No existe propiedad con ID " + id));
+        verificarPropietarioOAdmin(propiedad);
+        if (body.getFechaInicio() == null || body.getFechaFin() == null
+                || body.getFechaFin().isBefore(body.getFechaInicio())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Rango de fechas inválido.");
+        }
+        if (body.getPrecio() == null || body.getPrecio().signum() <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "El precio debe ser mayor a 0.");
+        }
+        boolean solapa = precioTemporadaRepository
+                .existsByPropiedadIdAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
+                        id, body.getFechaFin(), body.getFechaInicio());
+        if (solapa) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Esa temporada se solapa con otra existente.");
+        }
+        com.alquilaya.serviciopropiedades.entities.PrecioTemporada t =
+                com.alquilaya.serviciopropiedades.entities.PrecioTemporada.builder()
+                        .propiedadId(id)
+                        .fechaInicio(body.getFechaInicio())
+                        .fechaFin(body.getFechaFin())
+                        .precio(body.getPrecio())
+                        .etiqueta(body.getEtiqueta())
+                        .build();
+        return ResponseEntity.ok(toTemporadaDTO(precioTemporadaRepository.save(t)));
+    }
+
+    /** Elimina una temporada de precio (solo el arrendador dueño). */
+    @DeleteMapping("/{id}/temporadas/{temporadaId}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    public ResponseEntity<Void> eliminarTemporada(@PathVariable Long id, @PathVariable Long temporadaId) {
+        propiedadRepository.findById(id).ifPresent(this::verificarPropietarioOAdmin);
+        precioTemporadaRepository.findByIdAndPropiedadId(temporadaId, id)
+                .ifPresent(precioTemporadaRepository::delete);
+        return ResponseEntity.noContent().build();
+    }
+
+    private com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO toTemporadaDTO(
+            com.alquilaya.serviciopropiedades.entities.PrecioTemporada t) {
+        return com.alquilaya.serviciopropiedades.dto.PrecioTemporadaDTO.builder()
+                .id(t.getId()).fechaInicio(t.getFechaInicio()).fechaFin(t.getFechaFin())
+                .precio(t.getPrecio()).etiqueta(t.getEtiqueta()).build();
+    }
+
+    /** Propiedades similares (sección "También te puede interesar" de la ficha). Público. */
+    @GetMapping("/{id}/similares")
+    public ResponseEntity<List<com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO>> similares(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "4") int limit) {
+        return ResponseEntity.ok(propiedadService.similares(id, limit));
+    }
+
     // ===== Imágenes múltiples =====
 
     @PostMapping(value = "/{id}/imagenes", consumes = {"multipart/form-data"})
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<List<PropiedadImagen>> subirImagenes(
             @PathVariable Long id,
             @RequestPart("files") List<MultipartFile> files
@@ -739,6 +876,7 @@ public class PropiedadController {
                     .build();
             creadas.add(propiedadImagenRepository.save(img));
         }
+        sincronizarPortada(id);
         return ResponseEntity.ok(creadas);
     }
 
@@ -749,6 +887,7 @@ public class PropiedadController {
      */
     @PostMapping("/{id}/imagenes/url")
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<PropiedadImagen> agregarImagenPorUrl(
             @PathVariable Long id,
             @RequestBody Map<String, String> body
@@ -766,7 +905,9 @@ public class PropiedadController {
                 .orden(orden)
                 .externa(true)
                 .build();
-        return ResponseEntity.ok(propiedadImagenRepository.save(img));
+        PropiedadImagen guardada = propiedadImagenRepository.save(img);
+        sincronizarPortada(id);
+        return ResponseEntity.ok(guardada);
     }
 
     @GetMapping("/{id}/imagenes")
@@ -777,6 +918,7 @@ public class PropiedadController {
 
     @DeleteMapping("/{id}/imagenes/{imagenId}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('PUBLICAR_CUARTOS')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<Void> eliminarImagen(@PathVariable Long id, @PathVariable Long imagenId) {
         propiedadRepository.findById(id).ifPresent(this::verificarPropietarioOAdmin);
         propiedadImagenRepository.findById(imagenId).ifPresent(img -> {
@@ -792,7 +934,24 @@ public class PropiedadController {
             }
             propiedadImagenRepository.delete(img);
         });
+        sincronizarPortada(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Mantiene el {@code imagenUrl} legacy (portada / thumbnail del card) en sincronía con
+     * la primera imagen por orden de {@code propiedad_imagenes}. Null si ya no quedan imágenes.
+     * Evita que la portada quede apuntando a una foto borrada al subir/agregar/eliminar.
+     */
+    private void sincronizarPortada(Long propiedadId) {
+        List<PropiedadImagen> imgs = propiedadImagenRepository.findByPropiedadIdOrderByOrdenAsc(propiedadId);
+        String nuevaPortada = imgs.isEmpty() ? null : imgs.get(0).getUrl();
+        propiedadRepository.findById(propiedadId).ifPresent(p -> {
+            if (!java.util.Objects.equals(p.getImagenUrl(), nuevaPortada)) {
+                p.setImagenUrl(nuevaPortada);
+                propiedadRepository.save(p);
+            }
+        });
     }
 
     @PatchMapping("/{id}/imagenes/reordenar")

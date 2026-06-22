@@ -27,6 +27,17 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> findByEstadoAndFechaPublicacionProgramadaLessThanEqual(
             EstadoPropiedad estado, java.time.LocalDateTime momento);
 
+    /** Avisos aprobados sin reconfirmar desde antes de {@code limite} y aún sin marcar (#49). */
+    @Query("""
+            SELECT p FROM Propiedad p
+            WHERE p.estado = :estado AND p.aprobadoPorAdmin = true
+              AND p.requiereReconfirmacion = false
+              AND p.fechaUltimaConfirmacion IS NOT NULL
+              AND p.fechaUltimaConfirmacion < :limite
+            """)
+    List<Propiedad> findCaducados(@Param("estado") EstadoPropiedad estado,
+                                  @Param("limite") java.time.LocalDateTime limite);
+
     List<Propiedad> findByEstadoOrderByFechaCreacionAsc(EstadoPropiedad estado);
 
     // Lock pesimista para serializar creaciones de reserva concurrentes sobre la misma propiedad.
@@ -42,6 +53,34 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     @Transactional
     @Query("UPDATE Propiedad p SET p.vistas = COALESCE(p.vistas, 0) + 1 WHERE p.id = :id")
     int incrementarVistas(@Param("id") Long id);
+
+    /**
+     * Candidatos para "propiedades similares": aprobadas, disponibles, distintas de la
+     * actual y (si se conoce) de la misma universidad. El ranking fino se hace en el service.
+     */
+    @Query("""
+            SELECT p FROM Propiedad p
+            WHERE p.id <> :id
+              AND p.aprobadoPorAdmin = true
+              AND p.estaDisponible = true
+              AND (:universidadId IS NULL OR p.universidadId = :universidadId)
+            """)
+    List<Propiedad> candidatosSimilares(@Param("id") Long id, @Param("universidadId") Long universidadId);
+
+    /**
+     * Estadísticas de precio (min, promedio, max, conteo) de avisos aprobados+disponibles que
+     * matcheen zona/universidad/tipo (cada filtro opcional). Para el "precio sugerido al publicar".
+     */
+    @Query("""
+            SELECT MIN(p.precio), AVG(p.precio), MAX(p.precio), COUNT(p) FROM Propiedad p
+            WHERE p.aprobadoPorAdmin = true AND p.estaDisponible = true
+              AND (:zonaId IS NULL OR p.zonaId = :zonaId)
+              AND (:universidadId IS NULL OR p.universidadId = :universidadId)
+              AND (:tipo IS NULL OR p.tipoPropiedad = :tipo)
+            """)
+    List<Object[]> estadisticasPrecio(@Param("zonaId") Long zonaId,
+                                      @Param("universidadId") Long universidadId,
+                                      @Param("tipo") String tipo);
 
     @Query("""
             SELECT DISTINCT p FROM Propiedad p

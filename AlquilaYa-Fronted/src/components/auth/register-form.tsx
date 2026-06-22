@@ -21,6 +21,7 @@ import { registerSchema, type RegisterFormData } from '@/schemas/auth-schema';
 
 import { LandlordDetailsStep } from './landlord-details-step';
 import { OtpStep } from './otp-step';
+import { EmailCodeStep } from './email-code-step';
 import { ResultStep } from './result-step';
 import { RoleStep } from './role-step';
 import { StudentDetailsStep } from './student-details-step';
@@ -64,6 +65,7 @@ export function RegisterForm() {
     return targetRole === 'ARRENDADOR' ? <LandlordDetailsStep /> : <StudentDetailsStep />;
   }
   if (step === 'otp') return <OtpStep />;
+  if (step === 'email-code') return <EmailCodeStep />;
   if (step === 'result') return <ResultStep />;
 
   return (

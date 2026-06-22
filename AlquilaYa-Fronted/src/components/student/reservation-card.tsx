@@ -44,8 +44,9 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
   const handlePagar = async () => {
     setPagando(true);
     try {
-      const { init_point } = await pagoService.crearPreferencia(reserva.id);
-      window.location.href = init_point;
+      const { url } = await pagoService.crearPreferencia(reserva.id);
+      if (!url) throw new Error('Sin URL de checkout');
+      window.location.href = url;
     } catch (err) {
       notify.error(err, 'No pudimos iniciar el pago. Inténtalo de nuevo.');
       setPagando(false);

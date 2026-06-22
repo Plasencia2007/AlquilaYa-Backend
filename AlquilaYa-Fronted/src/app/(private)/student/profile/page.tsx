@@ -6,6 +6,7 @@ import { GraduationCap, Lock, ShieldCheck, User } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VerificationPanel from '@/components/auth/verification-panel';
+import { EmailVerificationBanner } from '@/components/auth/email-verification-banner';
 
 import { AcademicTab } from './academic-tab';
 import { PersonalTab } from './personal-tab';
@@ -73,6 +74,10 @@ export default function StudentProfilePage() {
           Gestiona tus datos, contraseña y verificación de identidad.
         </p>
       </header>
+
+      <div className="mb-6 empty:hidden">
+        <EmailVerificationBanner />
+      </div>
 
       <Suspense fallback={<div className="h-12 animate-pulse rounded-2xl bg-muted" />}>
         <ProfileTabs />

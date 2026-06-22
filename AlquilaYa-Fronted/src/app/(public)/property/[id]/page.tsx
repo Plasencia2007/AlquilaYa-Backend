@@ -12,8 +12,10 @@ import {
   CalendarDays,
   Check,
   Eye,
+  Flag,
   MapPin,
   MessageCircle,
+  Footprints,
   Ruler,
   Share2,
   ShieldCheck,
@@ -30,14 +32,23 @@ import { PropertyReviews } from '@/components/property/property-reviews';
 import { PropertyVideo } from '@/components/property/property-video';
 import { ServiceBadges } from '@/components/student/service-badges';
 import { PropertyBadges } from '@/components/student/property-badges';
+import { PropertyCard } from '@/components/student/property-card';
 import { POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
 import { AvailabilityPanel } from '@/components/student/availability-panel';
 import { RoomList } from '@/components/student/room-list';
 import { FavoriteButton } from '@/components/student/favorite-button';
+import { ReportListingDialog } from '@/components/student/report-listing-dialog';
 import { ReservationFormDialog } from '@/components/student/reservation-form-dialog';
 import { ContactLandlordDialog } from '@/components/student/contact-landlord-dialog';
 import { servicioPropiedades } from '@/services/property-service';
-import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import {
+  distanciaHaversineKm,
+  formatearDistancia,
+  googleMapsRutaUrl,
+  minutosCaminando,
+  resolverZona,
+} from '@/lib/geo';
+import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import { useHistory } from '@/hooks/use-history';
 import { cn } from '@/lib/cn';
 import { REGLAS_CATALOGO } from '@/types/propiedad';
@@ -67,9 +78,40 @@ interface Props {
 export default function PropertyDetailPage({ params }: Props) {
   const { id } = use(params);
   const [propiedad, setPropiedad] = useState<Propiedad | null>(null);
+  const [similares, setSimilares] = useState<Propiedad[]>([]);
+  const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-encontrado' | 'error'>('cargando');
   const [copiado, setCopiado] = useState(false);
   const { registrar } = useHistory();
+
+  useEffect(() => {
+    let cancelado = false;
+    setSimilares([]);
+    servicioPropiedades
+      .obtenerSimilares(id, 4)
+      .then((data) => {
+        if (!cancelado) setSimilares(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [id]);
+
+  // Zonas de cobertura: para resolver a qué UNIVERSIDAD pertenece esta propiedad y rutear ahí
+  // (no al "campus principal" global, que con multi-universidad sería el equivocado).
+  useEffect(() => {
+    let cancelado = false;
+    universidadService
+      .listarZonasActivas()
+      .then((data) => {
+        if (!cancelado) setZonas(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelado = false;
@@ -144,7 +186,17 @@ export default function PropertyDetailPage({ params }: Props) {
     );
   }
 
-  const distancia = distanciaAUpeuKm(propiedad.coordenadas);
+  // Universidad/campus de ESTA propiedad (resuelto de su zona), no el ancla global.
+  const zonaResuelta = propiedad.coordenadas ? resolverZona(propiedad.coordenadas, zonas) : null;
+  const campusDestino =
+    zonaResuelta && zonaResuelta.latitud != null && zonaResuelta.longitud != null
+      ? { lat: zonaResuelta.latitud, lng: zonaResuelta.longitud }
+      : null;
+  const campusNombre = zonaResuelta?.universidadNombre ?? 'el campus';
+  const distancia =
+    propiedad.coordenadas && campusDestino
+      ? distanciaHaversineKm(propiedad.coordenadas, campusDestino)
+      : null;
   const tipoLabel = TIPO_LABEL[propiedad.tipo] ?? propiedad.tipo;
 
   return (
@@ -185,6 +237,14 @@ export default function PropertyDetailPage({ params }: Props) {
                     {tipoLabel}
                   </span>
                   <PropertyBadges badges={propiedad.badges} orientation="horizontal" max={4} />
+                  {propiedad.verificado && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary"
+                      title="Esta publicación fue revisada y aprobada por nuestro equipo"
+                    >
+                      <BadgeCheck className="size-3.5" aria-hidden /> Verificado por AlquilaYa
+                    </span>
+                  )}
                 </div>
                 <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
                   {propiedad.titulo}
@@ -193,7 +253,7 @@ export default function PropertyDetailPage({ params }: Props) {
                   <MapPin className="size-4" aria-hidden /> {propiedad.direccion}
                   {distancia !== null && (
                     <span className="font-semibold text-primary">
-                      · a {formatearDistancia(distancia)} de UPeU
+                      · a {formatearDistancia(distancia)} de {campusNombre}
                     </span>
                   )}
                 </p>
@@ -213,6 +273,19 @@ export default function PropertyDetailPage({ params }: Props) {
                   )}
                 </button>
                 <FavoriteButton propiedadId={propiedad.id} size="lg" />
+                <ReportListingDialog
+                  propiedadId={propiedad.id}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label="Reportar publicación"
+                      title="Reportar publicación"
+                      className="flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Flag className="size-4" aria-hidden />
+                    </button>
+                  }
+                />
               </div>
             </div>
 
@@ -396,9 +469,42 @@ export default function PropertyDetailPage({ params }: Props) {
           {propiedad.coordenadas && (
             <section className="space-y-3">
               <h2 className="font-headline text-xl font-bold">Ubicación</h2>
+
+              {/* Tiempo estimado + cómo llegar (ruta real en Google Maps) */}
+              {distancia !== null && campusDestino && propiedad.coordenadas && (
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Footprints className="size-4 text-primary" aria-hidden />
+                    <span className="text-muted-foreground">
+                      <span className="font-bold text-foreground">
+                        ~{minutosCaminando(distancia)} min
+                      </span>{' '}
+                      a pie a {campusNombre}
+                      <span className="text-muted-foreground/70"> · {formatearDistancia(distancia)}</span>
+                    </span>
+                  </div>
+                  <div className="ml-auto flex gap-2">
+                    {(['walking', 'transit', 'driving'] as const).map((modo) => (
+                      <a
+                        key={modo}
+                        href={googleMapsRutaUrl(propiedad.coordenadas!, campusDestino, modo)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary"
+                      >
+                        {modo === 'walking' ? 'A pie' : modo === 'transit' ? 'En bus' : 'En auto'}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-hidden rounded-2xl border border-border">
                 <PropertiesMap propiedades={[propiedad]} className="h-[320px] w-full" />
               </div>
+              <p className="text-[11px] text-muted-foreground/70">
+                El tiempo a pie es estimado; toca un modo para ver la ruta y el tiempo reales en Google Maps.
+              </p>
             </section>
           )}
         </div>
@@ -423,6 +529,27 @@ export default function PropertyDetailPage({ params }: Props) {
               S/ {propiedad.precio.toLocaleString('es-PE')}
               <span className="ml-1 text-sm font-normal text-muted-foreground">/mes</span>
             </p>
+
+            {propiedad.temporadas && propiedad.temporadas.length > 0 && (
+              <div className="mt-3 space-y-1.5 rounded-xl border border-border bg-muted/30 p-3">
+                <p className="text-[11px] font-bold text-foreground">Precios por temporada</p>
+                {propiedad.temporadas.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="truncate text-muted-foreground">
+                      {t.etiqueta ? `${t.etiqueta} · ` : ''}
+                      {new Date(t.fechaInicio).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}–
+                      {new Date(t.fechaFin).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span className="shrink-0 font-bold text-foreground">
+                      S/{t.precio.toLocaleString('es-PE')}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-muted-foreground/70">
+                  Se aplica según tu fecha de ingreso.
+                </p>
+              </div>
+            )}
 
             {propiedad.gestionPorHabitacion ? (
               <a href="#habitaciones">
@@ -500,6 +627,18 @@ export default function PropertyDetailPage({ params }: Props) {
           </div>
         </aside>
       </div>
+
+      {/* Propiedades similares */}
+      {similares.length > 0 && (
+        <section className="mt-12 space-y-4">
+          <h2 className="font-headline text-xl font-bold">También te puede interesar</h2>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {similares.map((s) => (
+              <PropertyCard key={s.id} propiedad={s} variant="compact" />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

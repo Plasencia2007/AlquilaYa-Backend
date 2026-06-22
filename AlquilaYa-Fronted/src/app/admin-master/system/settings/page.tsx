@@ -12,6 +12,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { adminSettingsService } from '@/services/admin-settings-service';
+import { MetodoVerificacionCard } from '@/components/admin/metodo-verificacion-card';
 
 const MIN_HORAS = 1;
 const MAX_HORAS = 720; // 30 días
@@ -159,6 +160,9 @@ export default function AdminSettingsPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Método de verificación (#3) */}
+      <MetodoVerificacionCard />
     </div>
   );
 }

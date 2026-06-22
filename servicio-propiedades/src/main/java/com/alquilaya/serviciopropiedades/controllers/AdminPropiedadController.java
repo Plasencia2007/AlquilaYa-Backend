@@ -1,12 +1,15 @@
 package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.dto.PropiedadAdminDTO;
+import com.alquilaya.serviciopropiedades.dto.SenalFraudeDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
 import com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion;
 import com.alquilaya.serviciopropiedades.repositories.HabitacionRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
+import com.alquilaya.serviciopropiedades.services.DenunciaService;
 import com.alquilaya.serviciopropiedades.services.PropiedadService;
+import com.alquilaya.serviciopropiedades.services.SenalesFraudeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -28,6 +31,21 @@ public class AdminPropiedadController {
     private final PropiedadRepository propiedadRepository;
     private final PropiedadService propiedadService;
     private final HabitacionRepository habitacionRepository;
+    private final SenalesFraudeService senalesFraudeService;
+    private final DenunciaService denunciaService;
+
+    /** Resumen de confianza de una propiedad: señales de fraude (#48/#50) + denuncias pendientes (#46). */
+    public record ConfianzaDTO(List<SenalFraudeDTO> senales, long denunciasPendientes) {}
+
+    @GetMapping("/{id}/confianza")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ConfianzaDTO> confianza(@PathVariable Long id) {
+        return propiedadRepository.findById(id)
+                .map(p -> ResponseEntity.ok(new ConfianzaDTO(
+                        senalesFraudeService.calcular(p),
+                        denunciaService.contarPendientes(id))))
+                .orElse(ResponseEntity.notFound().build());
+    }
 
     @GetMapping("/pendientes")
     @PreAuthorize("hasRole('ADMIN')")
@@ -62,6 +80,9 @@ public class AdminPropiedadController {
                     }
                     p.setAprobadoPorAdmin(true);
                     p.setEstado(EstadoPropiedad.APROBADO);
+                    // Reinicia el reloj de caducidad (#49): aviso recién validado = vigente.
+                    p.setFechaUltimaConfirmacion(java.time.LocalDateTime.now());
+                    p.setRequiereReconfirmacion(false);
                     log.info("[ADMIN] Propiedad {} aprobada", id);
                     return ResponseEntity.ok(propiedadRepository.save(p));
                 }).orElse(ResponseEntity.notFound().build());

@@ -22,7 +22,14 @@ interface Props {
   onReintentar: () => void;
   onLimpiarFiltros: () => void;
   className?: string;
+  /** Clases de la grilla (columnas/gap). Por defecto 3 columnas; en el split se pasa 2. */
+  gridClassName?: string;
+  /** id resaltado (hover desde el mapa) + callback de hover (para sincronizar con el mapa). */
+  activeId?: string | null;
+  onHover?: (id: string | null) => void;
 }
+
+const GRID_DEFAULT = 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3';
 
 export function ResultsGrid({
   items,
@@ -34,6 +41,9 @@ export function ResultsGrid({
   onReintentar,
   onLimpiarFiltros,
   className,
+  gridClassName = GRID_DEFAULT,
+  activeId,
+  onHover,
 }: Props) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   useInfiniteScroll(sentinelRef, onCargarMas, {
@@ -58,7 +68,7 @@ export function ResultsGrid({
 
   if (cargando && items.length === 0) {
     return (
-      <div className={cn('grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3', className)}>
+      <div className={cn(gridClassName, className)}>
         {Array.from({ length: 8 }).map((_, i) => (
           <SkeletonCard key={i} />
         ))}
@@ -89,9 +99,19 @@ export function ResultsGrid({
 
   return (
     <div className={className}>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={gridClassName}>
         {visible.map((p) => (
-          <PropertyCard key={p.id} propiedad={p} variant="full" />
+          <div
+            key={p.id}
+            onMouseEnter={() => onHover?.(p.id)}
+            onMouseLeave={() => onHover?.(null)}
+            className={cn(
+              'rounded-2xl transition-shadow',
+              activeId === p.id && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+            )}
+          >
+            <PropertyCard propiedad={p} variant="full" />
+          </div>
         ))}
         {cargandoMas &&
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`load-${i}`} />)}

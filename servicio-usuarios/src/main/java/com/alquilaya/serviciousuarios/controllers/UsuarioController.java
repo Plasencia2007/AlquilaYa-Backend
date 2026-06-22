@@ -45,6 +45,7 @@ public class UsuarioController {
     private final ArrendadorRepository arrendadorRepository;
     private final EstudianteRepository estudianteRepository;
     private final UsuarioRepository usuarioRepository;
+    private final com.alquilaya.serviciousuarios.services.DeteccionDuplicadosService deteccionDuplicadosService;
 
     /** Usuario autenticado, resuelto por el correo que el JWT pone como principal. */
     private Usuario usuarioActual() {
@@ -130,6 +131,13 @@ public class UsuarioController {
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
     public ResponseEntity<List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO>> listarArrendadoresAdmin() {
         return ResponseEntity.ok(usuarioService.listarArrendadoresAdmin());
+    }
+
+    /** Detección de cuentas duplicadas (#8): grupos que comparten DNI/teléfono/email canónico. */
+    @GetMapping("/admin/duplicados")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
+    public ResponseEntity<List<com.alquilaya.serviciousuarios.dto.ClusterDuplicadoDTO>> detectarDuplicados() {
+        return ResponseEntity.ok(deteccionDuplicadosService.detectar());
     }
 
     @PutMapping("/{id}")

@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import type {
   CrearPropiedadRequest,
+  PrecioTemporada,
   PropiedadBackend,
   PropiedadCompleta,
   PropiedadImagen,
@@ -14,7 +15,52 @@ import type {
  */
 export type PropiedadRequest = CrearPropiedadRequest;
 
+/** Sugerencia de precio al publicar (estadísticas de avisos parecidos). */
+export interface PrecioSugerido {
+  min?: number;
+  promedio?: number;
+  max?: number;
+  cantidad: number;
+  /** "ZONA" | "UNIVERSIDAD" | "" según de dónde salieron los datos. */
+  ambito: string;
+}
+
 export const propiedadService = {
+  // ── Precios por temporada/ciclo ──
+  async listarTemporadas(propiedadId: string | number): Promise<PrecioTemporada[]> {
+    const { data } = await api.get<PrecioTemporada[]>(`propiedades/${propiedadId}/temporadas`);
+    return Array.isArray(data) ? data : [];
+  },
+
+  async crearTemporada(
+    propiedadId: string | number,
+    body: { fechaInicio: string; fechaFin: string; precio: number; etiqueta?: string },
+  ): Promise<PrecioTemporada> {
+    const { data } = await api.post<PrecioTemporada>(`propiedades/${propiedadId}/temporadas`, body);
+    return data;
+  },
+
+  async eliminarTemporada(propiedadId: string | number, temporadaId: number): Promise<void> {
+    await api.delete(`propiedades/${propiedadId}/temporadas/${temporadaId}`);
+  },
+
+  /**
+   * Precio sugerido al publicar: estadísticas de avisos aprobados parecidos
+   * (zona/universidad/tipo). GET /propiedades/precio-sugerido.
+   */
+  async obtenerPrecioSugerido(params: {
+    zonaId?: number;
+    universidadId?: number;
+    tipo?: string;
+  }): Promise<PrecioSugerido> {
+    const qs = new URLSearchParams();
+    if (params.zonaId != null) qs.set('zonaId', String(params.zonaId));
+    if (params.universidadId != null) qs.set('universidadId', String(params.universidadId));
+    if (params.tipo) qs.set('tipo', params.tipo);
+    const { data } = await api.get<PrecioSugerido>(`propiedades/precio-sugerido?${qs.toString()}`);
+    return data;
+  },
+
   /**
    * Crea una nueva propiedad vía `POST /api/v1/propiedades`.
    *
@@ -77,6 +123,16 @@ export const propiedadService = {
    */
   async eliminar(id: string | number): Promise<void> {
     await api.delete(`propiedades/${id}`);
+  },
+
+  /**
+   * Confirma que el aviso sigue vigente (#49 caducidad). Renueva la fecha de confirmación
+   * y limpia la marca de "requiere reconfirmación".
+   * POST /propiedades/{id}/confirmar-disponibilidad
+   */
+  async confirmarDisponibilidad(id: string | number): Promise<PropiedadBackend> {
+    const response = await api.post(`propiedades/${id}/confirmar-disponibilidad`);
+    return response.data;
   },
 
   /**

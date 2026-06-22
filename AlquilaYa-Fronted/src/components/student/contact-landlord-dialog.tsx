@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { conversationService } from '@/services/conversation-service';
+import { registrarContacto } from '@/services/property-service';
 import { notify } from '@/lib/notify';
 import type { Propiedad } from '@/types/propiedad';
 
@@ -64,6 +65,7 @@ export function ContactLandlordDialog({ propiedad, trigger }: Props) {
         Number(propiedad.id),
       );
       await conversationService.enviarMensaje(conv.id, mensaje.trim());
+      void registrarContacto(propiedad.id); // analítica del arrendador (#52)
       notify.success('Mensaje enviado');
       setOpen(false);
       router.push(`/student/messages/${conv.id}`);

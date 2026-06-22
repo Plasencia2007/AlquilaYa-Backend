@@ -29,12 +29,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     // POST paths protegidos con su bandwidth (requests / ventana).
-    private static final Map<String, Bandwidth> LIMITS = Map.of(
-            "/api/v1/usuarios/auth/login",          limit(5,  Duration.ofMinutes(1)),
-            "/api/v1/usuarios/auth/login-admin",    limit(5,  Duration.ofMinutes(1)),
-            "/api/v1/usuarios/auth/register",       limit(3,  Duration.ofMinutes(1)),
-            "/api/v1/usuarios/auth/register-admin", limit(2,  Duration.ofMinutes(1)),
-            "/api/v1/usuarios/auth/verify-otp",     limit(10, Duration.ofMinutes(1))
+    // Los que ENVÍAN correo (forgot-password, resend-email-verification) van con límite
+    // estricto para evitar email-bombing a una víctima o quemar el cupo de Gmail.
+    private static final Map<String, Bandwidth> LIMITS = Map.ofEntries(
+            Map.entry("/api/v1/usuarios/auth/login",                    limit(5,  Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/login-admin",              limit(5,  Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/register",                 limit(3,  Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/register-admin",           limit(2,  Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/verify-otp",               limit(10, Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/verify-email",             limit(10, Duration.ofMinutes(1))),
+            Map.entry("/api/v1/usuarios/auth/forgot-password",          limit(3,  Duration.ofMinutes(5))),
+            Map.entry("/api/v1/usuarios/auth/resend-email-verification", limit(3,  Duration.ofMinutes(5)))
     );
 
     private static Bandwidth limit(long capacity, Duration refillPeriod) {

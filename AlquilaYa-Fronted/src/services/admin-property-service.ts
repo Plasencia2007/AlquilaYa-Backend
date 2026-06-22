@@ -67,4 +67,21 @@ export const adminPropertyService = {
   ): Promise<void> => {
     await api.patch(`admin/propiedades/${id}/politica-cancelacion`, { politica });
   },
+
+  /** Señales de fraude/catfishing (#48/#50) + denuncias pendientes (#46) de una propiedad. */
+  obtenerConfianza: async (id: number): Promise<ConfianzaDTO> => {
+    const res = await api.get<ConfianzaDTO>(`admin/propiedades/${id}/confianza`);
+    return res.data;
+  },
 };
+
+export interface SenalFraude {
+  codigo: 'PRECIO_SOSPECHOSO' | 'CONTACTO_EXTERNO' | 'IMAGEN_DUPLICADA';
+  mensaje: string;
+  severidad: 'ALTA' | 'MEDIA';
+}
+
+export interface ConfianzaDTO {
+  senales: SenalFraude[];
+  denunciasPendientes: number;
+}

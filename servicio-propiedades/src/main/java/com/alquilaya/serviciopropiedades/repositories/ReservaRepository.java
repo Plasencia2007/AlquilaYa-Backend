@@ -23,6 +23,12 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     List<Reserva> findByPropiedadIdAndEstadoIn(Long propiedadId, Collection<EstadoReserva> estados);
 
+    /** Total de reservas de una propiedad (cualquier estado) — embudo de analítica. */
+    long countByPropiedadId(Long propiedadId);
+
+    /** Reserva más reciente de una propiedad (para la alerta "30 días sin reservas"). */
+    Reserva findFirstByPropiedadIdOrderByFechaCreacionDesc(Long propiedadId);
+
     boolean existsByEstudianteIdAndPropiedadIdAndEstado(Long estudianteId, Long propiedadId, EstadoReserva estado);
 
     boolean existsByPropiedadIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(

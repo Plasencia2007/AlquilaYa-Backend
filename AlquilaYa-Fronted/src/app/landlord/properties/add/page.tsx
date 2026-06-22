@@ -10,9 +10,13 @@ import {
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+// Leaflet necesita el navegador → carga sin SSR.
+const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), { ssr: false });
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { propiedadService } from '@/services/landlord-property-service';
+import { propiedadService, type PrecioSugerido } from '@/services/landlord-property-service';
 import {
   catalogosService,
   type CatalogosActivos,
@@ -27,7 +31,9 @@ import {
   UPEU_RADIO_MAX_KM,
   distanciaHaversineKm,
   formatearDistancia,
+  geocodificarDireccion,
   resolverZona,
+  reverseGeocode,
 } from '@/lib/geo';
 import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import { cn } from '@/lib/cn';
@@ -648,11 +654,16 @@ export default function AddPropertyPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [coverIndex, setCoverIndex] = useState(0);
+  /** Imágenes agregadas por URL externa (no consumen Cloudinary). Se adjuntan tras crear. */
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [urlInput, setUrlInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const MAX_IMAGES = 6;
 
   const [requestingGeo, setRequestingGeo] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geoMsg, setGeoMsg] = useState<string | null>(null);
   const [catalogos, setCatalogos] = useState<CatalogosActivos | null>(null);
   const [cargandoCat, setCargandoCat] = useState(true);
   const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
@@ -793,6 +804,41 @@ export default function AddPropertyPage() {
     });
   };
 
+  /** Valida un enlace DIRECTO a imagen (https + extensión). Refleja al backend. */
+  const esUrlImagenDirecta = (url: string): boolean => {
+    try {
+      const u = new URL(url);
+      return u.protocol === 'https:' && /\.(jpe?g|png|webp|gif|avif)$/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  };
+
+  const agregarImagenUrl = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    if (imageFiles.length + imageUrls.length >= MAX_IMAGES) {
+      setErrores((p) => ({ ...p, imagen: `Máximo ${MAX_IMAGES} fotos.` }));
+      return;
+    }
+    if (!esUrlImagenDirecta(url)) {
+      setErrores((p) => ({
+        ...p,
+        imagen: 'Pega un enlace DIRECTO a una imagen (.jpg/.png/.webp). Los de Google/Drive no sirven.',
+      }));
+      return;
+    }
+    setImageUrls((prev) => [...prev, url]);
+    setUrlInput('');
+    setErrores((p) => {
+      const { imagen: _omit, ...rest } = p;
+      return rest;
+    });
+  };
+
+  const removeImagenUrl = (index: number) =>
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
+
   const usarMiUbicacion = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setErrores((p) => ({ ...p, latitud: 'Tu navegador no soporta geolocalización.' }));
@@ -801,8 +847,7 @@ export default function AddPropertyPage() {
     setRequestingGeo(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setField('latitud', pos.coords.latitude.toFixed(6));
-        setField('longitud', pos.coords.longitude.toFixed(6));
+        void onPinChange(pos.coords.latitude, pos.coords.longitude);
         setRequestingGeo(false);
       },
       () => {
@@ -815,6 +860,64 @@ export default function AddPropertyPage() {
       { enableHighAccuracy: true, timeout: 10000 },
     );
   };
+
+  /** Geocodifica la dirección escrita y coloca el pin (re-ubicación a demanda). */
+  const ubicarDireccion = async () => {
+    const dir = form.direccion.trim();
+    if (dir.length < 5) {
+      setGeoMsg('Escribe una dirección más completa para ubicarla.');
+      return;
+    }
+    setGeocoding(true);
+    setGeoMsg(null);
+    try {
+      const r = await geocodificarDireccion(dir);
+      if (r) {
+        setField('latitud', r.lat.toFixed(6));
+        setField('longitud', r.lng.toFixed(6));
+        setGeoMsg('Ubicación encontrada. Ajusta el pin en el mapa si hace falta.');
+      } else {
+        setGeoMsg('No se encontró la dirección. Ubícala manualmente en el mapa.');
+      }
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  /**
+   * El arrendador movió el pin (arrastrar/clic en el mapa). Fija las coordenadas y, si la
+   * dirección está vacía, la autocompleta con reverse geocoding (no pisa una ya escrita).
+   */
+  const onPinChange = async (lat: number, lng: number) => {
+    setField('latitud', lat.toFixed(6));
+    setField('longitud', lng.toFixed(6));
+    if (!form.direccion.trim()) {
+      const dir = await reverseGeocode(lat, lng);
+      if (dir) {
+        setField('direccion', dir.slice(0, 255));
+        setGeoMsg('Dirección autocompletada del pin. Ajústala si hace falta.');
+      }
+    }
+  };
+
+  // Auto-geocoding al escribir (debounced): solo si AÚN no hay pin, para no pisar uno
+  // colocado a mano. Da el punto inicial; el arrendador lo ajusta arrastrando el pin.
+  useEffect(() => {
+    if (form.latitud || form.longitud) return;
+    const dir = form.direccion.trim();
+    if (dir.length < 10) return;
+    const t = setTimeout(async () => {
+      setGeocoding(true);
+      const r = await geocodificarDireccion(dir);
+      setGeocoding(false);
+      if (r) {
+        setField('latitud', r.lat.toFixed(6));
+        setField('longitud', r.lng.toFixed(6));
+        setGeoMsg('Ubicación detectada de la dirección. Ajusta el pin si hace falta.');
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [form.direccion, form.latitud, form.longitud]);
 
   const distanciaUpeu = useMemo(() => {
     const lat = parseFloat(form.latitud);
@@ -831,6 +934,29 @@ export default function AddPropertyPage() {
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
     return resolverZona({ lat, lng }, zonas);
   }, [form.latitud, form.longitud, zonas]);
+
+  // Precio sugerido: estadísticas de avisos parecidos según la zona resuelta + el tipo.
+  const [precioSugerido, setPrecioSugerido] = useState<PrecioSugerido | null>(null);
+  useEffect(() => {
+    const zid = zonaActual?.id;
+    const uid = zonaActual?.universidadId;
+    if (zid == null && uid == null) {
+      setPrecioSugerido(null);
+      return;
+    }
+    let cancel = false;
+    propiedadService
+      .obtenerPrecioSugerido({ zonaId: zid, universidadId: uid, tipo: form.tipoPropiedad || undefined })
+      .then((d) => {
+        if (!cancel) setPrecioSugerido(d && d.cantidad > 0 ? d : null);
+      })
+      .catch(() => {
+        if (!cancel) setPrecioSugerido(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [zonaActual?.id, zonaActual?.universidadId, form.tipoPropiedad]);
 
   const validar = (): Errores => {
     const e: Errores = {};
@@ -888,7 +1014,8 @@ export default function AddPropertyPage() {
           e.longitud = `La ubicación está a ${formatearDistancia(km)} de UPeU. Máx: ${UPEU_RADIO_MAX_KM} km.`;
       }
     }
-    if (imageFiles.length === 0) e.imagen = 'Sube al menos una foto.';
+    if (imageFiles.length === 0 && imageUrls.length === 0)
+      e.imagen = 'Agrega al menos una foto (archivo o enlace).';
     return e;
   };
 
@@ -1091,13 +1218,16 @@ export default function AddPropertyPage() {
         await borradorService.actualizar(draftId, construirBorradorPayload());
         const publicada = await borradorService.publicar(draftId);
         const ordenadas = [coverFile, ...extraFiles].filter(Boolean) as File[];
-        if (ordenadas.length > 0 && publicada?.id) {
-          await propiedadService.subirImagenes(publicada.id, ordenadas);
+        if (publicada?.id) {
+          if (ordenadas.length > 0) await propiedadService.subirImagenes(publicada.id, ordenadas);
+          for (const url of imageUrls) await propiedadService.agregarImagenPorUrl(publicada.id, url);
         }
       } else {
         const nuevaPropiedad = await propiedadService.crearPropiedad(payload, coverFile);
-        if (extraFiles.length > 0 && nuevaPropiedad?.id) {
-          await propiedadService.subirImagenes(nuevaPropiedad.id, extraFiles);
+        if (nuevaPropiedad?.id) {
+          if (extraFiles.length > 0) await propiedadService.subirImagenes(nuevaPropiedad.id, extraFiles);
+          // Las imágenes por URL se adjuntan después de crear (necesitan el ID).
+          for (const url of imageUrls) await propiedadService.agregarImagenPorUrl(nuevaPropiedad.id, url);
         }
       }
       limpiarDraft(); // publicado con éxito → descartar la copia local
@@ -1230,6 +1360,30 @@ export default function AddPropertyPage() {
                     error={!!errores.precio}
                   />
                 </Field>
+                {precioSugerido && (
+                  <button
+                    type="button"
+                    onClick={() => setField('precio', String(precioSugerido.promedio ?? ''))}
+                    title="Usar el precio promedio"
+                    className="mt-1.5 flex w-full items-start gap-2 rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-2 text-left transition-colors hover:bg-primary/10"
+                  >
+                    <span className="material-symbols-outlined mt-0.5 text-[16px] text-primary">lightbulb</span>
+                    <span className="text-[11px] leading-snug text-muted-foreground">
+                      Avisos parecidos{' '}
+                      {precioSugerido.ambito === 'ZONA' ? 'en esta zona' : 'cerca de tu universidad'}:{' '}
+                      <span className="font-bold text-foreground">
+                        S/{Math.round(precioSugerido.min ?? 0).toLocaleString('es-PE')}–S/
+                        {Math.round(precioSugerido.max ?? 0).toLocaleString('es-PE')}
+                      </span>{' '}
+                      (promedio{' '}
+                      <span className="font-bold text-primary">
+                        S/{Math.round(precioSugerido.promedio ?? 0).toLocaleString('es-PE')}
+                      </span>{' '}
+                      · {precioSugerido.cantidad} {precioSugerido.cantidad === 1 ? 'aviso' : 'avisos'}).
+                      Toca para usar el promedio.
+                    </span>
+                  </button>
+                )}
               </div>
               <div data-field="periodoAlquiler">
                 <Field label="Período de alquiler">
@@ -1280,34 +1434,39 @@ export default function AddPropertyPage() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div data-field="latitud">
-                <Field label="Latitud" hint="-90 a 90" error={errores.latitud}>
-                  <InputField
-                    type="number"
-                    step="0.000001"
-                    name="latitud"
-                    value={form.latitud}
-                    onChange={onInput}
-                    placeholder="-11.987800"
-                    error={!!errores.latitud}
-                  />
-                </Field>
+            <details className="rounded-xl border border-border bg-card/40 px-3 py-2">
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">
+                Coordenadas exactas (avanzado)
+              </summary>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div data-field="latitud">
+                  <Field label="Latitud" hint="-90 a 90" error={errores.latitud}>
+                    <InputField
+                      type="number"
+                      step="0.000001"
+                      name="latitud"
+                      value={form.latitud}
+                      onChange={onInput}
+                      placeholder="-11.987800"
+                      error={!!errores.latitud}
+                    />
+                  </Field>
+                </div>
+                <div data-field="longitud">
+                  <Field label="Longitud" hint="-180 a 180" error={errores.longitud}>
+                    <InputField
+                      type="number"
+                      step="0.000001"
+                      name="longitud"
+                      value={form.longitud}
+                      onChange={onInput}
+                      placeholder="-76.898000"
+                      error={!!errores.longitud}
+                    />
+                  </Field>
+                </div>
               </div>
-              <div data-field="longitud">
-                <Field label="Longitud" hint="-180 a 180" error={errores.longitud}>
-                  <InputField
-                    type="number"
-                    step="0.000001"
-                    name="longitud"
-                    value={form.longitud}
-                    onChange={onInput}
-                    placeholder="-76.898000"
-                    error={!!errores.longitud}
-                  />
-                </Field>
-              </div>
-            </div>
+            </details>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -1321,6 +1480,21 @@ export default function AddPropertyPage() {
                 </span>
                 {requestingGeo ? 'Buscando…' : 'Usar mi ubicación'}
               </button>
+
+              <button
+                type="button"
+                onClick={ubicarDireccion}
+                disabled={geocoding || form.direccion.trim().length < 5}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card text-sm font-semibold text-foreground hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Ubicar la dirección escrita en el mapa"
+              >
+                <span className={cn('material-symbols-outlined text-[16px]', geocoding && 'animate-spin')}>
+                  {geocoding ? 'autorenew' : 'pin_drop'}
+                </span>
+                {geocoding ? 'Ubicando…' : 'Ubicar dirección'}
+              </button>
+
+              {geoMsg && <span className="text-[11px] text-muted-foreground">{geoMsg}</span>}
 
               {/* Distancia al campus: solo en modo fallback (sin zonas cargadas). Con zonas, manda
                   el badge de zona de abajo y este indicador de un solo campus sería contradictorio. */}
@@ -1356,10 +1530,19 @@ export default function AddPropertyPage() {
               )}
             </div>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Las coordenadas son opcionales pero recomendadas: tu propiedad aparecerá en el mapa
-              y los estudiantes podrán filtrarla por cercanía.
-            </p>
+            {/* Mapa interactivo: pin arrastrable + zonas de cobertura sombreadas */}
+            <div>
+              <MapPicker
+                lat={Number.isNaN(parseFloat(form.latitud)) ? UPEU_COORDS.lat : parseFloat(form.latitud)}
+                lng={Number.isNaN(parseFloat(form.longitud)) ? UPEU_COORDS.lng : parseFloat(form.longitud)}
+                onPositionChange={onPinChange}
+                zonas={zonas}
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                Arrastra el pin o haz clic en el mapa para ubicar tu propiedad. El área sombreada
+                es la zona de cobertura de cada universidad — tu propiedad debe caer dentro.
+              </p>
+            </div>
           </Section>
 
           {/* 03 — Detalles */}
@@ -1715,7 +1898,7 @@ export default function AddPropertyPage() {
                 </p>
               </div>
               <span className="text-xs font-semibold text-muted-foreground tabular-nums">
-                {imageFiles.length}/{MAX_IMAGES}
+                {imageFiles.length + imageUrls.length}/{MAX_IMAGES}
               </span>
             </div>
 
@@ -1762,7 +1945,7 @@ export default function AddPropertyPage() {
                     </div>
                   ))}
 
-                  {imageFiles.length < MAX_IMAGES && (
+                  {imageFiles.length + imageUrls.length < MAX_IMAGES && (
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -1818,6 +2001,60 @@ export default function AddPropertyPage() {
                 onChange={onFileInput}
                 className="hidden"
               />
+
+              {/* Miniaturas de imágenes agregadas por URL */}
+              {imageUrls.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {imageUrls.map((url, i) => (
+                    <div key={i} className="relative aspect-[4/3] rounded-lg overflow-hidden group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Enlace ${i + 1}`} className="w-full h-full object-cover" />
+                      <div className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none select-none">
+                        URL
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => removeImagenUrl(i)}
+                          title="Quitar"
+                          className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/80 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">close</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Agregar imagen por URL externa */}
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      agregarImagenUrl();
+                    }
+                  }}
+                  placeholder="o pega el enlace de una imagen (.jpg/.png)"
+                  className="flex-1 rounded-lg border border-border bg-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={agregarImagenUrl}
+                  disabled={!urlInput.trim()}
+                  className="shrink-0 rounded-lg border border-border px-3 text-xs font-bold text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                >
+                  Agregar
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                Reusa una imagen ya alojada en otro host (no usa tu almacenamiento). Debe ser un
+                enlace <span className="font-semibold">directo</span> a la imagen — los de Google/Drive no funcionan.
+              </p>
 
               {errores.imagen && (
                 <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 animate-fade-in">

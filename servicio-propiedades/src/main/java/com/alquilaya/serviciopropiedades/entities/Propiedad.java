@@ -213,6 +213,20 @@ public class Propiedad {
      */
     private LocalDateTime fechaPublicacionProgramada;
 
+    /**
+     * Última vez que el arrendador confirmó que el aviso sigue vigente (#49 caducidad).
+     * Se setea al crear/aprobar y se renueva con "Confirmar disponibilidad".
+     */
+    private LocalDateTime fechaUltimaConfirmacion;
+
+    /**
+     * Marca puesta por el scheduler cuando el aviso lleva demasiado sin reconfirmarse.
+     * No oculta la propiedad (no destructivo): solo pide al arrendador re-confirmar.
+     */
+    @Builder.Default
+    @org.hibernate.annotations.ColumnDefault("false")
+    private Boolean requiereReconfirmacion = false;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -227,6 +241,8 @@ public class Propiedad {
         if (calificacion == null)     calificacion = 5.0;
         if (numResenas == null)       numResenas = 0;
         if (vistas == null)           vistas = 0L;
+        if (requiereReconfirmacion == null) requiereReconfirmacion = false;
+        if (fechaUltimaConfirmacion == null) fechaUltimaConfirmacion = fechaCreacion;
         if (politicaCancelacion == null)
             politicaCancelacion = com.alquilaya.serviciopropiedades.enums.PoliticaCancelacion.FLEXIBLE;
     }

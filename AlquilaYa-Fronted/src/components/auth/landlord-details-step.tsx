@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
+import { servicioAuth } from '@/services/auth-service';
 import { landlordDetailsSchema, type LandlordDetailsFormData } from '@/schemas/auth-schema';
 
 const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), {
@@ -120,7 +121,16 @@ export function LandlordDetailsStep() {
         },
         personal.telefono,
       );
-      setStep('otp');
+      // teléfono → OTP WhatsApp; solo email → código por correo; ninguno → directo (#3).
+      let metodo: string = 'WHATSAPP_OTP';
+      try {
+        metodo = await servicioAuth.obtenerMetodoVerificacion();
+      } catch {
+        /* fallback seguro: comportamiento histórico (OTP) */
+      }
+      if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
+      else if (metodo === 'EMAIL') setStep('email-code');
+      else setStep('result');
     } catch (err) {
       notify.error(err, 'No se pudo completar el registro. Verifica tus datos.');
     }

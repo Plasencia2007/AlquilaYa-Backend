@@ -60,6 +60,7 @@ const NAVIGATION: NavCategory[] = [
         label: 'Reportes y denuncias',
         icon: 'report',
         subItems: [
+          { label: 'Denuncias de avisos', href: '/admin-master/reports/listings' },
           { label: 'Sin gestionar', href: '/admin-master/reports/pending' },
           { label: 'Baneos activos', href: '/admin-master/reports/active-bans' },
         ],
@@ -76,6 +77,7 @@ const NAVIGATION: NavCategory[] = [
           { label: 'Estudiantes', href: '/admin-master/clients/students' },
           { label: 'Arrendadores', href: '/admin-master/clients/providers' },
           { label: 'Staff / admins', href: '/admin-master/clients/staff' },
+          { label: 'Cuentas duplicadas', href: '/admin-master/clients/duplicates' },
         ],
       },
     ],

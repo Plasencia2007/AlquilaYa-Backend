@@ -9,6 +9,8 @@ export interface Usuario {
   avatar?: string;
   telefono?: string;
   biografia?: string;
+  /** Correo confirmado vía link de verificación (o Google). #3 */
+  emailVerificado?: boolean;
 }
 
 export interface PayloadJWT {

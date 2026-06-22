@@ -34,8 +34,11 @@ export default function GalleryPage() {
         const data = await propiedadService.obtenerPorArrendador(String(usuario.perfilId));
         setPropiedades(data);
         if (data.length > 0) {
-          setPropiedadId(String(data[0].id));
-          aplicarImagenes(data[0]);
+          // Si vienen con ?propiedad=ID (ej. desde el modal de edición), preseleccionar esa.
+          const pedido = new URLSearchParams(window.location.search).get('propiedad');
+          const elegida = data.find((p) => String(p.id) === pedido) ?? data[0];
+          setPropiedadId(String(elegida.id));
+          aplicarImagenes(elegida);
         }
       } catch (err) {
         notify.error(err, 'No se pudieron cargar tus propiedades');

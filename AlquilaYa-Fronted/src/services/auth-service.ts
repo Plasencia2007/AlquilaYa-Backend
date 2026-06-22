@@ -4,6 +4,15 @@ import { api } from '@/lib/api';
 
 const NOMBRE_COOKIE_AUTH = 'auth-token';
 
+/** Sesión/dispositivo activo (#10). */
+export interface SesionDispositivo {
+  jti: string;
+  dispositivo: string;
+  ip: string;
+  creado: number | null; // epoch ms
+  actual: boolean;
+}
+
 // Token temporal durante el registro, antes de verificar OTP.
 // No se guarda en cookie hasta que el OTP sea confirmado.
 let _pendingToken: string | null = null;
@@ -84,7 +93,8 @@ export const servicioAuth = {
         perfilId: payload.perfilId,
         correo: payload.sub,
         nombre: payload.nombre,
-        rol: payload.rol
+        rol: payload.rol,
+        emailVerificado: payload.emailVerificado
       };
     } catch {
       return null;
@@ -110,6 +120,42 @@ export const servicioAuth = {
 
   resetearPassword: async (token: string, nuevaPassword: string): Promise<string> => {
     const response = await api.post('usuarios/auth/reset-password', { token, nuevaPassword });
+    return response.data.mensaje;
+  },
+
+  /** Verifica el correo con el código de 6 dígitos recibido por email. */
+  verificarCodigoEmail: async (correo: string, codigo: string): Promise<string> => {
+    const response = await api.post('usuarios/auth/verify-email', { correo, codigo });
+    return response.data.mensaje;
+  },
+
+  /** Sesiones/dispositivos activos del usuario (#10). */
+  obtenerSesiones: async (): Promise<SesionDispositivo[]> => {
+    const response = await api.get<SesionDispositivo[]>('usuarios/auth/sesiones');
+    return response.data;
+  },
+
+  /** Cierra una sesión en remoto por su id (jti). */
+  cerrarSesionRemota: async (jti: string): Promise<void> => {
+    await api.delete(`usuarios/auth/sesiones/${jti}`);
+  },
+
+  /** Cierra todas las sesiones excepto la actual. */
+  cerrarOtrasSesiones: async (): Promise<number> => {
+    const response = await api.post<{ cerradas: number }>('usuarios/auth/sesiones/cerrar-otras');
+    return response.data.cerradas;
+  },
+
+  /** Método de verificación vigente (público), para adaptar el flujo de registro. */
+  obtenerMetodoVerificacion: async (): Promise<'EMAIL' | 'WHATSAPP_OTP' | 'AMBOS' | 'NINGUNO'> => {
+    const response = await api.get<{ metodo: 'EMAIL' | 'WHATSAPP_OTP' | 'AMBOS' | 'NINGUNO' }>(
+      'usuarios/auth/configuracion/verificacion',
+    );
+    return response.data.metodo;
+  },
+
+  reenviarVerificacionEmail: async (correo: string): Promise<string> => {
+    const response = await api.post('usuarios/auth/resend-email-verification', { correo });
     return response.data.mensaje;
   },
 

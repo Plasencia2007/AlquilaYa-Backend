@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { adminPropertyService, type PropiedadAdminDTO } from '@/services/admin-property-service';
+import { ConfianzaSection } from '@/components/admin/confianza-section';
 import { catalogosService } from '@/services/catalogos-service';
 import { catalogService, type ItemCatalogoInput } from '@/services/catalog-service';
 import { cn } from '@/lib/cn';
@@ -261,6 +262,9 @@ function PropertyReviewPanel({
 
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
+
+          {/* Confianza: señales de fraude/catfishing + denuncias (#46/#48/#50) */}
+          <ConfianzaSection propiedadId={prop.id} />
 
           {/* Imagen */}
           {(prop.imagenes ?? []).length > 0 && (

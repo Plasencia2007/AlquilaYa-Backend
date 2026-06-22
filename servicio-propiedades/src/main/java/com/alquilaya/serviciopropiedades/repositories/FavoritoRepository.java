@@ -24,6 +24,9 @@ public interface FavoritoRepository extends JpaRepository<Favorito, Long> {
 
     boolean existsByEstudianteIdAndPropiedadId(Long estudianteId, Long propiedadId);
 
+    /** Cuántos estudiantes marcaron como favorita esta propiedad (embudo de analítica). */
+    long countByPropiedadId(Long propiedadId);
+
     @Modifying
     @Query("DELETE FROM Favorito f WHERE f.estudianteId = :estudianteId AND f.propiedadId = :propiedadId")
     int deleteByEstudianteIdAndPropiedadId(Long estudianteId, Long propiedadId);

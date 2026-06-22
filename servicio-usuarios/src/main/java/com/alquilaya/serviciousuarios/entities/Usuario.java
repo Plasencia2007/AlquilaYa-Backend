@@ -52,6 +52,12 @@ public class Usuario {
     @Builder.Default
     private boolean telefonoVerificado = false;
 
+    /** Correo confirmado (link de verificación, o Google que ya lo verifica). #3 */
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Builder.Default
+    private boolean emailVerificado = false;
+
     @Column(name = "foto_url", length = 512)
     private String fotoUrl;
 

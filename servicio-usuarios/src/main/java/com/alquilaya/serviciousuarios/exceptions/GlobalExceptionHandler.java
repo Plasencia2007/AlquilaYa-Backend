@@ -54,7 +54,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }
 
-    @ExceptionHandler({ CorreoYaRegistradoException.class, TelefonoYaRegistradoException.class })
+    @ExceptionHandler({ CorreoYaRegistradoException.class, TelefonoYaRegistradoException.class, DniYaRegistradoException.class })
     public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest req) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), req, null);
@@ -86,7 +86,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), req, null);
     }
 
-    @ExceptionHandler({ TelefonoNoVerificadoException.class, AccesoDenegadoException.class })
+    @ExceptionHandler({ TelefonoNoVerificadoException.class, EmailNoVerificadoException.class, AccesoDenegadoException.class })
     public ResponseEntity<ErrorResponse> handleForbidden(
             RuntimeException ex, HttpServletRequest req) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, null);

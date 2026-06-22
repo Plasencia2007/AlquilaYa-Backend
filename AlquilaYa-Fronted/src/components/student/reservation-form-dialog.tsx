@@ -53,7 +53,6 @@ const MESES_PRESET = [1, 3, 6, 12];
 const OCUPANTES_OPCIONES = [1, 2, 3, 4, 5];
 
 export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props) {
-  const precioUnitario = habitacion?.precio ?? propiedad.precio;
   const router = useRouter();
   const { estaAutenticado, usuario } = useAuth();
   const { open: abrirAuth } = useAuthModal();
@@ -79,6 +78,17 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
       setNota('');
     }
   }, [open]);
+
+  // Precio por temporada: si el CHECK-IN cae en una temporada, su precio manda (solo unidad
+  // completa; en modo habitación manda el precio del cuarto). Refleja el cálculo del backend.
+  const temporadaAplicable =
+    !habitacion && fechaInicio && propiedad.temporadas?.length
+      ? propiedad.temporadas.find((t) => {
+          const f = format(fechaInicio, 'yyyy-MM-dd');
+          return t.fechaInicio <= f && f <= t.fechaFin;
+        })
+      : undefined;
+  const precioUnitario = temporadaAplicable?.precio ?? habitacion?.precio ?? propiedad.precio;
 
   const fechaFin = fechaInicio ? addMonths(fechaInicio, meses) : undefined;
   const total = precioUnitario * meses;
@@ -283,6 +293,12 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
             </div>
 
             <div className="rounded-xl bg-muted p-4">
+              {temporadaAplicable && (
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                  <CalendarDays className="size-3.5" aria-hidden />
+                  Precio de temporada{temporadaAplicable.etiqueta ? ` · ${temporadaAplicable.etiqueta}` : ''} (según tu fecha de ingreso)
+                </p>
+              )}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
                   {habitacion ? `${habitacion.nombre}: ` : ''}S/ {precioUnitario.toLocaleString('es-PE')} × {meses}

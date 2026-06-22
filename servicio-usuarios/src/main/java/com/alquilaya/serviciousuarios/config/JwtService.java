@@ -27,6 +27,9 @@ public class JwtService {
     @Value("${password-reset.token-expiration-ms:900000}")
     private long resetExpiration;
 
+    @Value("${email-verification.token-expiration-ms:86400000}")
+    private long emailVerificationExpiration;
+
     public String generateToken(Usuario usuario, Long perfilId) {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", usuario.getId());
@@ -35,7 +38,19 @@ public class JwtService {
         }
         extraClaims.put("rol", usuario.getRol().name());
         extraClaims.put("nombre", usuario.getNombre());
+        extraClaims.put("emailVerificado", usuario.isEmailVerificado());
+        // jti = id único de sesión, para listar dispositivos y cierre remoto (#10).
+        extraClaims.put("jti", java.util.UUID.randomUUID().toString());
         return generateToken(extraClaims, usuario.getCorreo());
+    }
+
+    /** Id de sesión (jti) del token, o null si es un token legacy sin jti. */
+    public String extractJti(String token) {
+        try {
+            return extractClaim(token, claims -> claims.get("jti", String.class));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public String generateToken(Map<String, Object> extraClaims, String subject) {
@@ -74,6 +89,32 @@ public class JwtService {
         Claims claims = extractAllClaims(token);
         Object type = claims.get("type");
         if (!"password_reset".equals(type)) {
+            throw new IllegalArgumentException("Tipo de token inválido");
+        }
+        if (claims.getExpiration().before(new Date())) {
+            throw new IllegalArgumentException("El enlace ha expirado");
+        }
+        return claims.getSubject();
+    }
+
+    /** Token de verificación de email (24h default), claim {@code type=email_verification}. */
+    public String generateEmailVerificationToken(String correo) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("type", "email_verification");
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(correo)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + emailVerificationExpiration))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /** Valida un token de verificación de email y devuelve el correo (subject). */
+    public String validateEmailVerificationToken(String token) {
+        Claims claims = extractAllClaims(token);
+        Object type = claims.get("type");
+        if (!"email_verification".equals(type)) {
             throw new IllegalArgumentException("Tipo de token inválido");
         }
         if (claims.getExpiration().before(new Date())) {

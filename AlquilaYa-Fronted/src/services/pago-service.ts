@@ -1,9 +1,8 @@
 import { api } from '@/lib/api';
 
 interface PreferenciaResponse {
-  preferenceId: string;
-  init_point: string;
-  sandbox_init_point: string;
+  /** URL de checkout de Mercado Pago. El backend la devuelve como { url }. */
+  url: string;
 }
 
 async function crearPreferencia(reservaId: string | number): Promise<PreferenciaResponse> {

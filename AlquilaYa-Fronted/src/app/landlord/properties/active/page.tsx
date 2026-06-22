@@ -19,6 +19,8 @@ type PropiedadItem = {
   direccion: string;
   estado: string;
   imagenUrl?: string;
+  /** Caducidad (#49): si true, el aviso necesita que el dueño confirme que sigue vigente. */
+  requiereReconfirmacion?: boolean;
 };
 
 export default function ActivePropertiesPage() {
@@ -43,7 +45,17 @@ export default function ActivePropertiesPage() {
     try {
       setLoading(true);
       const data = await propiedadService.obtenerPorArrendador(landlordId.toString());
-      setProperties(data as unknown as PropiedadItem[]);
+      // La portada real es la primera imagen por orden; el imagenUrl legacy puede estar
+      // desfasado (apuntar a una foto ya borrada). Derivamos la portada de la lista.
+      setProperties(
+        data.map((p) => {
+          const portada =
+            (p.imagenes ?? [])
+              .slice()
+              .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0]?.url ?? p.imagenUrl;
+          return { ...p, imagenUrl: portada } as unknown as PropiedadItem;
+        }),
+      );
     } catch (err) {
       console.error('Error al cargar propiedades:', err);
       setError('No se pudieron cargar tus propiedades. Asegúrate de que el servidor esté activo.');
@@ -69,6 +81,22 @@ export default function ActivePropertiesPage() {
       notify.error(err, 'No se pudo eliminar la propiedad');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const [confirmandoId, setConfirmandoId] = useState<number | string | null>(null);
+  const handleConfirmarDisponibilidad = async (prop: PropiedadItem) => {
+    try {
+      setConfirmandoId(prop.id);
+      await propiedadService.confirmarDisponibilidad(prop.id);
+      notify.success('¡Gracias!', 'Tu aviso quedó confirmado como vigente.');
+      setProperties((prev) =>
+        prev.map((p) => (p.id === prop.id ? { ...p, requiereReconfirmacion: false } : p)),
+      );
+    } catch (err) {
+      notify.error(err, 'No se pudo confirmar la disponibilidad');
+    } finally {
+      setConfirmandoId(null);
     }
   };
 
@@ -212,7 +240,38 @@ export default function ActivePropertiesPage() {
                   <span className="material-symbols-outlined text-[15px] shrink-0 text-primary">location_on</span>
                   <p className="text-xs line-clamp-1 font-medium">{prop.direccion}</p>
                 </div>
+
+                {/* Caducidad (#49): pide reconfirmar que el aviso sigue vigente */}
+                {prop.requiereReconfirmacion && (
+                  <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                    <p className="flex items-start gap-1.5 text-[11px] font-semibold text-amber-800">
+                      <span className="material-symbols-outlined text-[15px] shrink-0">schedule</span>
+                      ¿Sigue disponible? Confírmalo para mantener tu aviso al día.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => handleConfirmarDisponibilidad(prop)}
+                      disabled={confirmandoId === prop.id}
+                      size="sm"
+                      className="mt-2 h-8 w-full rounded-lg bg-amber-500 text-[11px] font-bold text-white hover:bg-amber-600 border-0"
+                    >
+                      {confirmandoId === prop.id ? 'Confirmando…' : 'Confirmar disponibilidad'}
+                    </Button>
+                  </div>
+                )}
               </div>
+
+              {/* ── Divider ────────────────────────────────────── */}
+              <div className="h-px mx-0 bg-primary/10" />
+
+              {/* ── Analítica (#51–55) ─────────────────────────── */}
+              <Link
+                href={`/landlord/properties/${prop.id}/analytics?titulo=${encodeURIComponent(prop.titulo)}`}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-primary hover:bg-primary/5 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">monitoring</span>
+                Ver analítica
+              </Link>
 
               {/* ── Divider ────────────────────────────────────── */}
               <div className="h-px mx-0 bg-primary/10" />
