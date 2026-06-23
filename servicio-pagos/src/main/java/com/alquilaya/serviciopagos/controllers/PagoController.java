@@ -1,6 +1,7 @@
 package com.alquilaya.serviciopagos.controllers;
 
 import com.alquilaya.serviciopagos.config.CurrentUser;
+import com.alquilaya.serviciopagos.dto.EstadoPagoResponse;
 import com.alquilaya.serviciopagos.dto.ResumenFinancieroDTO;
 import com.alquilaya.serviciopagos.services.PagoService;
 import com.alquilaya.serviciopagos.services.ResumenFinancieroService;
@@ -24,6 +25,12 @@ public class PagoController {
             @AuthenticationPrincipal CurrentUser current) {
         String initPoint = pagoService.crearPreferencia(reservaId, current);
         return ResponseEntity.ok(Map.of("url", initPoint));
+    }
+
+    /** Estado del último pago de una reserva. Para polling del frontend mientras se paga en MP. */
+    @GetMapping("/estado/{reservaId}")
+    public ResponseEntity<EstadoPagoResponse> estadoPago(@PathVariable Long reservaId) {
+        return ResponseEntity.ok(pagoService.consultarEstado(reservaId));
     }
 
     @PostMapping("/webhook")

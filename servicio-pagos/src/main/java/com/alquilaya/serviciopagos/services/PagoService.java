@@ -2,6 +2,7 @@ package com.alquilaya.serviciopagos.services;
 
 import com.alquilaya.serviciopagos.clients.ReservasClient;
 import com.alquilaya.serviciopagos.config.CurrentUser;
+import com.alquilaya.serviciopagos.dto.EstadoPagoResponse;
 import com.alquilaya.serviciopagos.dto.ReservaDetalleDTO;
 import com.alquilaya.serviciopagos.entities.Pago;
 import com.alquilaya.serviciopagos.exceptions.WebhookInvalidoException;
@@ -25,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,7 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -55,15 +58,19 @@ public class PagoService {
     private final OutboxPublisher outboxPublisher;
     /** Opcional: si Redis está down/no configurado, hacemos fallback graceful. */
     private final StringRedisTemplate redisTemplate;
+    /** Auto-referencia (vía proxy) para que @Transactional surta efecto en llamadas internas. */
+    private final PagoService self;
 
     public PagoService(PagoRepository pagoRepository,
                        ReservasClient reservasClient,
                        OutboxPublisher outboxPublisher,
-                       @Autowired(required = false) StringRedisTemplate redisTemplate) {
+                       @Autowired(required = false) StringRedisTemplate redisTemplate,
+                       @Lazy PagoService self) {
         this.pagoRepository = pagoRepository;
         this.reservasClient = reservasClient;
         this.outboxPublisher = outboxPublisher;
         this.redisTemplate = redisTemplate;
+        this.self = self;
     }
 
     @Value("${mercadopago.back-urls.success}")
@@ -124,7 +131,20 @@ public class PagoService {
             try {
                 PreferenceClient client = new PreferenceClient();
                 return client.create(preferenceRequest);
+            } catch (com.mercadopago.exceptions.MPApiException apiEx) {
+                int code = apiEx.getStatusCode();
+                // 4xx = datos/negocio inválidos: NO tiene sentido reintentar (crear
+                // preferencia no es idempotente). IllegalStateException está en
+                // ignoreExceptions del Retry/CircuitBreaker → no reintenta ni abre el circuito.
+                if (code >= 400 && code < 500) {
+                    throw new IllegalStateException(
+                            "Mercado Pago rechazó la preferencia (HTTP " + code + "): " + apiEx.getMessage());
+                }
+                // 5xx = error transitorio del lado de MP → se permite reintento.
+                throw new RuntimeException(
+                        "Error transitorio de Mercado Pago (HTTP " + code + "): " + apiEx.getMessage(), apiEx);
             } catch (Exception e) {
+                // Errores de transporte/conexión (MPException, IOException) → transitorios, reintentar.
                 throw new RuntimeException("Error contactando a Mercado Pago: " + e.getMessage(), e);
             }
         });
@@ -132,6 +152,13 @@ public class PagoService {
 
     @SuppressWarnings("unused")
     private CompletableFuture<Preference> fallbackCrearPreferencia(PreferenceRequest preferenceRequest, Throwable t) {
+        // Si es un error de negocio (p.ej. MP rechazó la preferencia por datos), propagarlo
+        // tal cual en vez de enmascararlo como "servicio no disponible".
+        Throwable cause = (t instanceof java.util.concurrent.CompletionException && t.getCause() != null)
+                ? t.getCause() : t;
+        if (cause instanceof IllegalStateException ise) {
+            throw ise;
+        }
         log.error("[FALLBACK] crearPreferencia — {}: {}", t.getClass().getSimpleName(), t.getMessage());
         throw new IllegalStateException("El servicio de pagos externos (Mercado Pago) no está disponible temporalmente.");
     }
@@ -202,6 +229,11 @@ public class PagoService {
                     .items(items)
                     .payer(payer)
                     .backUrls(backUrls)
+                    // OJO: NO usar auto_return con back_urls.success en localhost → MP responde
+                    // HTTP 400 al crear la preferencia. Además, con el flujo de pestaña nueva +
+                    // polling el retorno automático no es necesario. Si en prod quieres que la
+                    // pestaña de MP regrese sola, pon back_urls.success a un dominio https público
+                    // y reactiva .autoReturn("approved").
                     .notificationUrl(notificationUrl)
                     .externalReference(reserva.getId().toString())
                     .expires(true)
@@ -209,6 +241,16 @@ public class PagoService {
                     .build();
 
             Preference preference = crearPreferenciaResiliente(preferenceRequest).join();
+
+            // Invalida pagos PENDIENTE previos de esta reserva: el estudiante pudo generar
+            // varios links de pago, y no queremos acumular filas huérfanas ni preferencias
+            // vivas en paralelo. El webhook siempre operará sobre el más reciente.
+            for (Pago previo : pagoRepository.findAllByReservaIdOrderByFechaCreacionDesc(reservaId)) {
+                if ("PENDIENTE".equals(previo.getEstado())) {
+                    previo.setEstado("EXPIRADO");
+                    pagoRepository.save(previo);
+                }
+            }
 
             Pago pago = Pago.builder()
                     .reservaId(reservaId)
@@ -241,7 +283,6 @@ public class PagoService {
         }
     }
 
-    @Transactional
     public void procesarWebhook(String xSignature, String xRequestId, String dataIdQuery,
                                 Map<String, Object> notification) {
         String type = (String) notification.get("type");
@@ -261,11 +302,10 @@ public class PagoService {
         verificarFirma(xSignature, xRequestId, dataIdQuery != null ? dataIdQuery : paymentIdStr);
 
         // 2. Lock distribuido en Redis para idempotencia atómica.
-        //    Si otro proceso ya tiene el lock o el pago ya fue procesado → salir 200 OK.
+        //    Si otro proceso ya tiene el lock → salir 200 OK (idempotente).
         String lockKey = REDIS_LOCK_PREFIX + paymentIdStr;
         String lockValue = UUID.randomUUID().toString();
         boolean lockAcquired = adquirirLockRedis(lockKey, lockValue);
-        boolean redisDisponible = (lockAcquired || redisTemplate != null);
 
         if (redisTemplate != null && !lockAcquired) {
             // Lock detentado por otro proceso → idempotente, no procesamos.
@@ -274,13 +314,8 @@ public class PagoService {
         }
 
         try {
-            // Fallback graceful o doble-check post-lock: si el pago ya está procesado, salir.
-            if (pagoRepository.findByPaymentId(paymentIdStr).isPresent()) {
-                log.info("↩️ Webhook duplicado ignorado. paymentId={}", paymentIdStr);
-                return;
-            }
-
-            // 3. Consultar el pago real contra la API de Mercado Pago (source of truth).
+            // 3. Consultar el pago real contra Mercado Pago (source of truth) FUERA de la
+            //    transacción de BD: la llamada HTTP no debe retener una conexión del pool.
             Payment payment;
             try {
                 payment = new PaymentClient().get(Long.parseLong(paymentIdStr));
@@ -289,41 +324,75 @@ public class PagoService {
                 throw new WebhookInvalidoException("No se pudo verificar el pago con Mercado Pago");
             }
 
-            String status = payment.getStatus();
-            String reservaIdStr = payment.getExternalReference();
-            if (reservaIdStr == null) {
-                throw new WebhookInvalidoException("Payment sin externalReference");
-            }
-            Long reservaId = Long.parseLong(reservaIdStr);
-
-            Pago pagoPendiente = pagoRepository
-                    .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
-                    .orElseThrow(() -> new WebhookInvalidoException(
-                            "No existe pago PENDIENTE para la reserva " + reservaId));
-
-            switch (status == null ? "" : status) {
-                case "approved" -> manejarAprobado(pagoPendiente, payment, paymentIdStr, reservaId, reservaIdStr);
-                case "rejected" -> manejarRechazado(pagoPendiente, paymentIdStr, reservaId, reservaIdStr);
-                case "pending", "in_process", "in_mediation" ->
-                        manejarPendiente(pagoPendiente, paymentIdStr, reservaId, status);
-                default -> log.info(
-                        "Pago con estado no manejado (status={}), se ignora. paymentId={}", status, paymentIdStr);
-            }
+            // 4. Aplicar el cambio de estado en una transacción corta. Se invoca vía proxy
+            //    (self) para que @Transactional aplique de verdad (evita self-invocation).
+            self.aplicarCambioEstado(payment, paymentIdStr);
 
         } finally {
-            // 4. Liberar lock (solo si lo adquirimos).
+            // 5. Liberar lock (solo si lo adquirimos).
             if (lockAcquired) {
                 liberarLockRedis(lockKey, lockValue);
-            }
-            // Suprimir warning de variable no usada (mantener intención del check redisDisponible)
-            if (!redisDisponible) {
-                log.trace("Redis no disponible en este flujo");
             }
         }
     }
 
+    /**
+     * Aplica el estado del pago de Mercado Pago a la BD en una transacción corta.
+     *
+     * <p>Idempotencia por ESTADO TERMINAL (no por mera existencia del paymentId): un pago
+     * 'pending' que luego se aprueba reusa el mismo paymentId, así que debe poder
+     * reprocesarse para llegar a PAGADO. Solo se ignora cuando ya está en un estado terminal.
+     */
+    @Transactional
+    public void aplicarCambioEstado(Payment payment, String paymentIdStr) {
+        String status = payment.getStatus();
+        String reservaIdStr = payment.getExternalReference();
+        if (reservaIdStr == null) {
+            throw new WebhookInvalidoException("Payment sin externalReference");
+        }
+        Long reservaId = Long.parseLong(reservaIdStr);
+
+        Optional<Pago> existentePorPayment = pagoRepository.findByPaymentId(paymentIdStr);
+        if (existentePorPayment.isPresent() && esEstadoTerminal(existentePorPayment.get().getEstado())) {
+            log.info("↩️ Webhook ya aplicado (estado terminal {}). paymentId={}",
+                    existentePorPayment.get().getEstado(), paymentIdStr);
+            return;
+        }
+
+        // Pago objetivo: el ya asociado a este paymentId (caso pending→approved) o, en su
+        // defecto, el PENDIENTE más reciente de la reserva.
+        Pago pago = existentePorPayment.orElseGet(() -> pagoRepository
+                .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
+                .orElseThrow(() -> new WebhookInvalidoException(
+                        "No existe pago PENDIENTE para la reserva " + reservaId)));
+
+        switch (status == null ? "" : status) {
+            case "approved" -> manejarAprobado(pago, payment, paymentIdStr, reservaId, reservaIdStr);
+            case "rejected" -> manejarRechazado(pago, paymentIdStr, reservaId, reservaIdStr);
+            case "pending", "in_process", "in_mediation" ->
+                    manejarPendiente(pago, paymentIdStr, reservaId, status);
+            default -> log.info(
+                    "Pago con estado no manejado (status={}), se ignora. paymentId={}", status, paymentIdStr);
+        }
+    }
+
+    /** Estados desde los que NO se reprocesa un webhook (pago ya resuelto). */
+    private static boolean esEstadoTerminal(String estado) {
+        return "PAGADO".equals(estado) || "RECHAZADO".equals(estado) || "DISCREPANCIA".equals(estado);
+    }
+
     private void manejarAprobado(Pago pagoPendiente, Payment payment, String paymentIdStr,
                                  Long reservaId, String reservaIdStr) {
+        // Validar la moneda (defensa en profundidad: solo aceptamos PEN).
+        String moneda = payment.getCurrencyId();
+        if (moneda != null && !"PEN".equalsIgnoreCase(moneda)) {
+            log.error("Moneda inesperada ({}) en pago aprobado para reserva {}. PaymentId={}",
+                    moneda, reservaId, paymentIdStr);
+            marcarDiscrepancia(pagoPendiente, paymentIdStr, reservaId,
+                    "MONEDA_INESPERADA", "moneda=" + moneda);
+            return;
+        }
+
         // Validar que el monto pagado coincide con el esperado (tolerancia de 0.01 PEN).
         BigDecimal montoEsperado = pagoPendiente.getMonto();
         BigDecimal montoReal = payment.getTransactionAmount() != null
@@ -335,7 +404,12 @@ public class PagoService {
                 .compareTo(new BigDecimal("0.01")) > 0) {
             log.error("Monto pagado ({}) no coincide con el esperado ({}) para reserva {}. PaymentId={}",
                     montoReal, montoEsperado, reservaId, paymentIdStr);
-            throw new WebhookInvalidoException("Monto pagado no coincide con el esperado");
+            // El estudiante YA pagó: no podemos descartar el webhook con un 400 y olvidarlo
+            // (quedaría plata atascada sin rastro). Persistimos la discrepancia para revisión
+            // manual y emitimos una alerta. Respondemos 200 para que MP no reintente en vano.
+            marcarDiscrepancia(pagoPendiente, paymentIdStr, reservaId,
+                    "MONTO_NO_COINCIDE", "esperado=" + montoEsperado + " real=" + montoReal);
+            return;
         }
 
         pagoPendiente.setEstado("PAGADO");
@@ -405,6 +479,37 @@ public class PagoService {
         outboxPublisher.publicar(
                 "pagos-topic",
                 "PAGO_EN_REVISION",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    /**
+     * Marca un pago como DISCREPANCIA (estado terminal que requiere revisión manual) y emite
+     * una alerta. Se usa cuando MP confirma un pago aprobado pero algo no cuadra (monto o
+     * moneda): el estudiante ya pagó, así que no podemos descartar el webhook sin dejar rastro.
+     */
+    private void marcarDiscrepancia(Pago pago, String paymentIdStr, Long reservaId,
+                                    String motivo, String detalle) {
+        pago.setEstado("DISCREPANCIA");
+        pago.setPaymentId(paymentIdStr);
+        pago.setFechaPago(LocalDateTime.now());
+        Pago guardado = pagoRepository.save(pago);
+        log.error("🚨 DISCREPANCIA de pago. reservaId={} paymentId={} motivo={} ({})",
+                reservaId, paymentIdStr, motivo, detalle);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pagoId", guardado.getId());
+        payload.put("reservaId", reservaId);
+        payload.put("monto", guardado.getMonto());
+        payload.put("moneda", "PEN");
+        payload.put("paymentId", paymentIdStr);
+        payload.put("motivo", motivo);
+        payload.put("detalle", detalle);
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "PAGO_DISCREPANCIA",
                 "Pago",
                 guardado.getId().toString(),
                 payload,
@@ -502,6 +607,21 @@ public class PagoService {
             result |= a.charAt(i) ^ b.charAt(i);
         }
         return result == 0;
+    }
+
+    /**
+     * Estado del último pago de una reserva. Usado por el frontend para hacer polling
+     * mientras el usuario paga en Mercado Pago en otra pestaña.
+     */
+    @Transactional(readOnly = true)
+    public EstadoPagoResponse consultarEstado(Long reservaId) {
+        return pagoRepository.findFirstByReservaIdOrderByFechaCreacionDesc(reservaId)
+                .map(p -> new EstadoPagoResponse(
+                        p.getEstado(),
+                        p.getPaymentId(),
+                        p.getMonto(),
+                        p.getFechaPago() != null ? p.getFechaPago().toString() : null))
+                .orElse(new EstadoPagoResponse("SIN_PAGO", null, null, null));
     }
 
     @Transactional

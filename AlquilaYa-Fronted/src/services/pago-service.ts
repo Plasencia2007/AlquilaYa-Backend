@@ -10,6 +10,28 @@ async function crearPreferencia(reservaId: string | number): Promise<Preferencia
   return data;
 }
 
+export type EstadoPago =
+  | 'SIN_PAGO'
+  | 'PENDIENTE'
+  | 'PENDIENTE_REVISION'
+  | 'PAGADO'
+  | 'RECHAZADO'
+  | 'DISCREPANCIA'
+  | 'EXPIRADO';
+
+export interface EstadoPagoResponse {
+  estado: EstadoPago;
+  paymentId: string | null;
+  monto: number | null;
+  fechaPago: string | null;
+}
+
+/** Estado del último pago de una reserva. Para hacer polling mientras se paga en Mercado Pago. */
+async function getEstadoPago(reservaId: string | number): Promise<EstadoPagoResponse> {
+  const { data } = await api.get<EstadoPagoResponse>(`/pagos/estado/${reservaId}`);
+  return data;
+}
+
 export interface ResumenFinancieroMes {
   mes: string; // YYYY-MM
   cobrado: number;
@@ -44,4 +66,4 @@ async function obtenerResumenFinanciero(): Promise<ResumenFinanciero> {
   };
 }
 
-export const pagoService = { crearPreferencia, obtenerResumenFinanciero };
+export const pagoService = { crearPreferencia, getEstadoPago, obtenerResumenFinanciero };

@@ -72,6 +72,9 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         minimumNumberOfCalls: 5
         automaticTransitionFromOpenToHalfOpenEnabled: true
+        # Los errores de negocio (MP 4xx) no son fallo del servicio: no deben abrir el circuito.
+        ignoreExceptions:
+          - java.lang.IllegalStateException
       servicio-propiedades:
         registerHealthIndicator: true
         slidingWindowType: COUNT_BASED
@@ -100,6 +103,10 @@ resilience4j:
           - java.io.IOException
           - java.util.concurrent.TimeoutException
           - java.lang.RuntimeException
+        # Crear preferencia NO es idempotente: los errores de negocio (MP 4xx, IDOR,
+        # reserva ya pagada) se marcan como IllegalStateException y NO se reintentan.
+        ignoreExceptions:
+          - java.lang.IllegalStateException
       obtenerReservaCB:
         maxAttempts: 3
         waitDuration: 1s

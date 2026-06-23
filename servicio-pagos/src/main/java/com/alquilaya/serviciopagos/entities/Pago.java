@@ -51,7 +51,7 @@ public class Pago {
     @Column(name = "monto_arrendador")
     private BigDecimal montoArrendador;
 
-    private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION
+    private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION, DISCREPANCIA, EXPIRADO
 
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;

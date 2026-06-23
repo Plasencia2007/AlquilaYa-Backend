@@ -26,6 +26,7 @@ import type { Reserva } from '@/types/reserva';
 
 import { ReservationTimeline } from './reservation-timeline';
 import { ReviewFormDialog } from './review-form-dialog';
+import { PaymentFlowDialog } from './payment-flow-dialog';
 
 interface Props {
   reserva: Reserva;
@@ -37,6 +38,8 @@ const cancelable: Reserva['estado'][] = ['SOLICITADA', 'APROBADA'];
 export function ReservationCard({ reserva, onCancelar }: Props) {
   const [expandido, setExpandido] = useState(false);
   const [pagando, setPagando] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const meta = metaEstadoReserva(reserva.estado);
   const Icono = meta.icon;
   const puedeCancelar = cancelable.includes(reserva.estado);
@@ -46,9 +49,20 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
     try {
       const { url } = await pagoService.crearPreferencia(reserva.id);
       if (!url) throw new Error('Sin URL de checkout');
-      window.location.href = url;
+      setCheckoutUrl(url);
+      // Abrimos Mercado Pago en otra pestaña y dejamos esta esperando el pago.
+      // OJO: no usar 'noopener' aquí — hace que window.open devuelva null SIEMPRE, y no
+      // podríamos distinguir "abrió" de "popup bloqueado".
+      const win = window.open(url, '_blank');
+      if (!win) {
+        // Popup bloqueado por el navegador → fallback a redirección en la misma pestaña.
+        window.location.href = url;
+        return;
+      }
+      setPayOpen(true);
     } catch (err) {
       notify.error(err, 'No pudimos iniciar el pago. Inténtalo de nuevo.');
+    } finally {
       setPagando(false);
     }
   };
@@ -176,7 +190,7 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                 ) : (
                   <CalendarDays className="size-4" />
                 )}
-                {pagando ? 'Redirigiendo...' : 'Pagar ahora'}
+                {pagando ? 'Abriendo...' : 'Pagar ahora'}
               </Button>
             )}
 
@@ -200,6 +214,15 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
           <ReservationTimeline estado={reserva.estado} motivoRechazo={reserva.motivoRechazo} />
         </div>
       )}
+
+      <PaymentFlowDialog
+        open={payOpen}
+        reservaId={reserva.id}
+        monto={reserva.montoTotal}
+        propiedadTitulo={reserva.propiedadTitulo}
+        checkoutUrl={checkoutUrl}
+        onClose={() => setPayOpen(false)}
+      />
     </article>
   );
 }
