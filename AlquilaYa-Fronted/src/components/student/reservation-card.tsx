@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, ChevronDown, Loader2, MapPin, Star } from 'lucide-react';
+import { CalendarDays, ChevronDown, Loader2, MapPin, Sparkles, Star } from 'lucide-react';
 import { pagoService } from '@/services/pago-service';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import type { Reserva } from '@/types/reserva';
 import { ReservationTimeline } from './reservation-timeline';
 import { ReviewFormDialog } from './review-form-dialog';
 import { PaymentFlowDialog } from './payment-flow-dialog';
+import { StayPanelDialog } from './stay-panel-dialog';
 
 interface Props {
   reserva: Reserva;
@@ -40,6 +41,7 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
   const [pagando, setPagando] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [stayOpen, setStayOpen] = useState(false);
   const meta = metaEstadoReserva(reserva.estado);
   const Icono = meta.icon;
   const puedeCancelar = cancelable.includes(reserva.estado);
@@ -194,6 +196,17 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
               </Button>
             )}
 
+            {reserva.estado === 'PAGADA' && (
+              <Button
+                size="sm"
+                className="ml-auto h-8 gap-1.5 text-xs font-bold"
+                onClick={() => setStayOpen(true)}
+              >
+                <Sparkles className="size-4" />
+                Próximos pasos
+              </Button>
+            )}
+
             {reserva.estado === 'FINALIZADA' && (
               <ReviewFormDialog
                 reserva={reserva}
@@ -223,6 +236,8 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
         checkoutUrl={checkoutUrl}
         onClose={() => setPayOpen(false)}
       />
+
+      <StayPanelDialog open={stayOpen} reserva={reserva} onClose={() => setStayOpen(false)} />
     </article>
   );
 }

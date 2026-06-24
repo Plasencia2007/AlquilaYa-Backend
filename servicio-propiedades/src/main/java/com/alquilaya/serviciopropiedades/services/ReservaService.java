@@ -149,7 +149,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.APROBADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_APROBADA", guardada, current);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         // Ola 3 — Saga orquestada: al aprobarse la reserva se inicia el seguimiento del
         // ciclo de pago para detectar inconsistencias (refund automático si llega un pago
         // tardío sobre una reserva ya cancelada, o cancelación post-pago).
@@ -168,7 +168,7 @@ public class ReservaService {
         r.setMotivoRechazo(motivo);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_RECHAZADA", guardada, current);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         return guardada;
     }
 
@@ -181,7 +181,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.PAGADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_PAGADA", guardada, null);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         return guardada;
     }
 
@@ -205,7 +205,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.CANCELADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_CANCELADA", guardada, current);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         // Ola 3 — Si se cancela una reserva APROBADA (pago en curso) o PAGADA, hay
         // que emitir REFUND_REQUERIDO al servicio-pagos para reembolsar en MP.
         if (estadoPrevio == EstadoReserva.PAGADA) {
@@ -250,7 +250,7 @@ public class ReservaService {
         r.setEstado(EstadoReserva.FINALIZADA);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_FINALIZADA", guardada, current);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         return guardada;
     }
 
@@ -286,7 +286,7 @@ public class ReservaService {
         extra.put("estado", guardada.getEstado().name());
         extra.put("montoTotal", guardada.getMontoTotal());
         reservaEventProducer.emitir("RESERVA_FINALIZADA", guardada.getId(), extra);
-        habitacionService.recomputarEstado(guardada.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(guardada);
         log.info("[FINALIZACION] Reserva {} FINALIZADA automáticamente (fechaFin={})",
                 guardada.getId(), guardada.getFechaFin());
         return true;

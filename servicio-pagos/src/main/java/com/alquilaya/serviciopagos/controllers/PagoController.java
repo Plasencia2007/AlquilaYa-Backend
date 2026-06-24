@@ -29,8 +29,9 @@ public class PagoController {
 
     /** Estado del último pago de una reserva. Para polling del frontend mientras se paga en MP. */
     @GetMapping("/estado/{reservaId}")
-    public ResponseEntity<EstadoPagoResponse> estadoPago(@PathVariable Long reservaId) {
-        return ResponseEntity.ok(pagoService.consultarEstado(reservaId));
+    public ResponseEntity<EstadoPagoResponse> estadoPago(@PathVariable Long reservaId,
+            @AuthenticationPrincipal CurrentUser current) {
+        return ResponseEntity.ok(pagoService.consultarEstado(reservaId, current));
     }
 
     @PostMapping("/webhook")

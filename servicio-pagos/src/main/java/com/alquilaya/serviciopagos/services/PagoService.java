@@ -88,6 +88,10 @@ public class PagoService {
     @Value("${mercadopago.webhook-secret:}")
     private String webhookSecret;
 
+    /** Monto mínimo cobrable. Por debajo, Mercado Pago rechaza el pago ("No pudimos procesar"). */
+    @Value("${mercadopago.monto-minimo:5.00}")
+    private BigDecimal montoMinimo;
+
     /** Si true, la firma HMAC del webhook es OBLIGATORIA. Default true (prod). */
     @Value("${mercadopago.webhook.required-signature:true}")
     private boolean webhookSignatureRequired;
@@ -195,6 +199,14 @@ public class PagoService {
                     : BigDecimal.ZERO;
             BigDecimal montoCobrado = montoArrendador.add(comision).setScale(2, RoundingMode.HALF_UP);
 
+            // Guard de monto mínimo: por debajo, MP rechaza el pago con un error genérico
+            // ("No pudimos procesar tu pago"). Mejor cortar acá con un mensaje claro.
+            if (montoCobrado.compareTo(montoMinimo) < 0) {
+                throw new IllegalStateException(
+                        "El monto mínimo de pago es S/ " + montoMinimo.toPlainString()
+                                + ". Esta reserva (S/ " + montoCobrado.toPlainString() + ") no puede pagarse en línea.");
+            }
+
             List<PreferenceItemRequest> items = new ArrayList<>();
             items.add(PreferenceItemRequest.builder()
                     .id(reserva.getId().toString())
@@ -258,6 +270,7 @@ public class PagoService {
                     .monto(montoCobrado)
                     .comision(comision)
                     .montoArrendador(montoArrendador)
+                    .estudianteId(reserva.getEstudianteId())
                     .estado("PENDIENTE")
                     .build();
             pagoRepository.save(pago);
@@ -614,14 +627,23 @@ public class PagoService {
      * mientras el usuario paga en Mercado Pago en otra pestaña.
      */
     @Transactional(readOnly = true)
-    public EstadoPagoResponse consultarEstado(Long reservaId) {
+    public EstadoPagoResponse consultarEstado(Long reservaId, CurrentUser current) {
+        EstadoPagoResponse sinPago = new EstadoPagoResponse("SIN_PAGO", null, null, null);
         return pagoRepository.findFirstByReservaIdOrderByFechaCreacionDesc(reservaId)
-                .map(p -> new EstadoPagoResponse(
-                        p.getEstado(),
-                        p.getPaymentId(),
-                        p.getMonto(),
-                        p.getFechaPago() != null ? p.getFechaPago().toString() : null))
-                .orElse(new EstadoPagoResponse("SIN_PAGO", null, null, null));
+                .map(p -> {
+                    // Anti-IDOR: solo el estudiante dueño ve el estado. Los pagos legacy sin
+                    // estudianteId (anteriores a este campo) no se bloquean.
+                    if (p.getEstudianteId() != null
+                            && (current == null || !p.getEstudianteId().equals(current.getPerfilId()))) {
+                        return sinPago;
+                    }
+                    return new EstadoPagoResponse(
+                            p.getEstado(),
+                            p.getPaymentId(),
+                            p.getMonto(),
+                            p.getFechaPago() != null ? p.getFechaPago().toString() : null);
+                })
+                .orElse(sinPago);
     }
 
     @Transactional

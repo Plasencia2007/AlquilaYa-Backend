@@ -698,11 +698,14 @@ public class PropiedadController {
             @RequestParam(required = false) Integer capacidadMin,
             @RequestParam(required = false) Integer dormitoriosMin
     ) {
+        // Listado público: por defecto solo mostramos propiedades DISPONIBLES, para que las
+        // reservadas/ocupadas no aparezcan. Un caller puede pedir disponible=false explícito.
+        Boolean soloDisponibles = (disponible != null) ? disponible : Boolean.TRUE;
         // El @Cacheable vive en el servicio (devuelve un contenedor, no una List
         // cruda, porque Redis no deserializa colecciones en la raíz). Aquí solo
         // desenvolvemos para mantener el contrato HTTP (array JSON).
         return propiedadService.buscarPublicoCacheado(
-                precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona,
+                precioMin, precioMax, tipo, periodo, soloDisponibles, distanciaMax, servicios, zona,
                 universidadId, zonaId, capacidadMin, dormitoriosMin
         ).getPropiedades();
     }

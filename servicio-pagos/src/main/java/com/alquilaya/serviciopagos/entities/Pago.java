@@ -51,6 +51,10 @@ public class Pago {
     @Column(name = "monto_arrendador")
     private BigDecimal montoArrendador;
 
+    /** Estudiante dueño de la reserva. Para verificar acceso al estado del pago (anti-IDOR). */
+    @Column(name = "estudiante_id")
+    private Long estudianteId;
+
     private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION, DISCREPANCIA, EXPIRADO
 
     @Column(name = "fecha_creacion")

@@ -135,7 +135,7 @@ public class ReservaExpirationScheduler {
 
             r.setEstado(EstadoReserva.EXPIRADA);
             Reserva guardada = reservaRepository.save(r);
-            habitacionService.recomputarEstado(guardada.getHabitacionId());
+            habitacionService.recomputarTrasCambioReserva(guardada);
 
             // Evento via Outbox: misma TX que el cambio de estado.
             Map<String, Object> extra = new HashMap<>();

@@ -39,6 +39,9 @@ export function PaymentFlowDialog({
   const router = useRouter();
   const [fase, setFase] = useState<Fase>('waiting');
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  // Monto REAL cobrado (incluye comisión). El prop `monto` es solo la parte del
+  // arrendador; el cobrado real lo trae el backend en el estado del pago.
+  const [montoPagado, setMontoPagado] = useState<number | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [nonce, setNonce] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -55,6 +58,7 @@ export function PaymentFlowDialog({
     if (!open) return;
     setFase('waiting');
     setPaymentId(null);
+    setMontoPagado(null);
     setCopiado(false);
     startRef.current = Date.now();
     let activo = true;
@@ -66,6 +70,7 @@ export function PaymentFlowDialog({
         if (!activo) return;
         if (r.estado === 'PAGADO') {
           setPaymentId(r.paymentId);
+          if (r.monto != null) setMontoPagado(r.monto);
           setFase('paid');
           stop();
           onPaid?.();
@@ -228,7 +233,7 @@ export function PaymentFlowDialog({
                 Monto pagado
               </p>
               <p className="text-lg font-black text-foreground">
-                S/ {monto.toLocaleString('es-PE')}
+                S/ {(montoPagado ?? monto).toLocaleString('es-PE')}
               </p>
               {paymentId && (
                 <>

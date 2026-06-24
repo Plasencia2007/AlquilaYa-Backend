@@ -178,7 +178,7 @@ public class SagaReservaPagoService {
         reserva.setEstado(EstadoReserva.PAGADA);
         snapshotComision(reserva, envelope);
         reservaRepository.save(reserva);
-        habitacionService.recomputarEstado(reserva.getHabitacionId());
+        habitacionService.recomputarTrasCambioReserva(reserva);
         log.info("Saga {}: reserva {} → PAGADA (ruta feliz)", saga.getSagaId(), reserva.getId());
         marcarSagaCompletada(saga, PasoSaga.PAGO_CONFIRMADO);
     }
@@ -374,7 +374,7 @@ public class SagaReservaPagoService {
             reserva.setEstado(EstadoReserva.PAGADA);
             snapshotComision(reserva, envelope);
             reservaRepository.save(reserva);
-            habitacionService.recomputarEstado(reserva.getHabitacionId());
+            habitacionService.recomputarTrasCambioReserva(reserva);
             log.info("Reserva {} → PAGADA (sin saga; fallback)", reserva.getId());
         } else if (estado == EstadoReserva.CANCELADA
                 || estado == EstadoReserva.RECHAZADA

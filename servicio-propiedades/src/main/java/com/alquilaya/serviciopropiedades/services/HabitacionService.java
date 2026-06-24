@@ -36,6 +36,14 @@ public class HabitacionService {
     private static final EnumSet<EstadoReserva> ESTADOS_RESERVA_ACTIVA =
             EnumSet.of(EstadoReserva.SOLICITADA, EstadoReserva.APROBADA, EstadoReserva.PAGADA);
 
+    /**
+     * Reservas que ocupan una UNIDAD COMPLETA (no gestionada por habitaciones): una vez
+     * aprobada o pagada, la propiedad deja de estar disponible. SOLICITADA no bloquea
+     * (varios estudiantes pueden solicitar antes de que el arrendador apruebe una).
+     */
+    private static final EnumSet<EstadoReserva> ESTADOS_OCUPAN_UNIDAD =
+            EnumSet.of(EstadoReserva.APROBADA, EstadoReserva.PAGADA);
+
     @Transactional(readOnly = true)
     public List<HabitacionResponse> listar(Long propiedadId) {
         return habitacionRepository.findByPropiedadIdOrderByOrdenAscIdAsc(propiedadId)
@@ -113,6 +121,46 @@ public class HabitacionService {
             if (h.getEstado() != nuevo) {
                 h.setEstado(nuevo);
                 habitacionRepository.save(h);
+            }
+        });
+    }
+
+    /**
+     * Recalcula estado de habitación + disponibilidad de la propiedad de una sola vez.
+     * Llamar tras CUALQUIER transición de reserva (crear/aprobar/pagar/cancelar/expirar/finalizar),
+     * así una propiedad reservada/ocupada deja de aparecer en la búsqueda y vuelve al liberarse.
+     */
+    @Transactional
+    public void recomputarTrasCambioReserva(Reserva reserva) {
+        if (reserva == null) return;
+        recomputarEstado(reserva.getHabitacionId());
+        recomputarDisponibilidadPropiedad(reserva.getPropiedadId());
+    }
+
+    /**
+     * Recalcula {@code propiedad.estaDisponible} para que reservadas/ocupadas no aparezcan en el
+     * listado público (el endpoint {@code /buscar} filtra por disponible por defecto):
+     *  - Gestión por habitación: disponible si queda al menos una habitación LIBRE.
+     *  - Unidad completa: disponible si NO hay reserva APROBADA/PAGADA vigente.
+     * Idempotente: solo escribe si el valor cambió.
+     */
+    @Transactional
+    public void recomputarDisponibilidadPropiedad(Long propiedadId) {
+        if (propiedadId == null) return;
+        propiedadRepository.findById(propiedadId).ifPresent(p -> {
+            boolean disponible;
+            if (Boolean.TRUE.equals(p.getGestionPorHabitacion())) {
+                List<Habitacion> habs = habitacionRepository.findByPropiedadIdOrderByOrdenAscIdAsc(propiedadId);
+                disponible = habs.isEmpty()
+                        || habs.stream().anyMatch(h -> h.getEstado() == EstadoHabitacion.LIBRE);
+            } else {
+                boolean ocupada = !reservaRepository
+                        .findByPropiedadIdAndEstadoIn(propiedadId, ESTADOS_OCUPAN_UNIDAD).isEmpty();
+                disponible = !ocupada;
+            }
+            if (!Objects.equals(p.getEstaDisponible(), disponible)) {
+                p.setEstaDisponible(disponible);
+                propiedadRepository.save(p);
             }
         });
     }
