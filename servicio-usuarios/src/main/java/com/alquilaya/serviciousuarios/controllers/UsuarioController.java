@@ -8,6 +8,7 @@ import com.alquilaya.serviciousuarios.dto.ArrendadorPublicoResponse;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordPerfilRequest;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordRequest;
 import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
+import com.alquilaya.serviciousuarios.dto.ReputacionResumen;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
@@ -46,6 +47,7 @@ public class UsuarioController {
     private final EstudianteRepository estudianteRepository;
     private final UsuarioRepository usuarioRepository;
     private final com.alquilaya.serviciousuarios.services.DeteccionDuplicadosService deteccionDuplicadosService;
+    private final com.alquilaya.serviciousuarios.services.ReputacionService reputacionService;
 
     /** Usuario autenticado, resuelto por el correo que el JWT pone como principal. */
     private Usuario usuarioActual() {
@@ -211,6 +213,7 @@ public class UsuarioController {
     private ArrendadorInfoResponse mapArrendadorInfo(Arrendador a) {
         Usuario u = a.getUsuario();
         boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        ReputacionResumen rep = reputacionService.calcularArrendador(a);
         return ArrendadorInfoResponse.builder()
                 .id(a.getId())
                 .usuarioId(u != null ? u.getId() : null)
@@ -226,6 +229,9 @@ public class UsuarioController {
                 // (requiere job/agregación sobre servicio-mensajeria). Por ahora null
                 // y la UI muestra "—".
                 .tiempoRespuestaPromedio(null)
+                .numResenas(a.getNumResenas())
+                .score(rep.score())
+                .nivelReputacion(rep.nivel().name())
                 .build();
     }
 
@@ -256,6 +262,7 @@ public class UsuarioController {
     private ArrendadorPublicoResponse mapArrendadorPublico(Arrendador a) {
         Usuario u = a.getUsuario();
         boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        ReputacionResumen rep = reputacionService.calcularArrendador(a);
         return ArrendadorPublicoResponse.builder()
                 .id(a.getId())
                 .usuarioId(u != null ? u.getId() : null)
@@ -266,6 +273,9 @@ public class UsuarioController {
                 .avatar(u != null ? u.getFotoUrl() : null)
                 .verificado(verificado)
                 .tiempoRespuestaPromedio(null)
+                .numResenas(a.getNumResenas())
+                .score(rep.score())
+                .nivelReputacion(rep.nivel().name())
                 .build();
     }
 
@@ -274,6 +284,7 @@ public class UsuarioController {
         Estudiante e = estudianteRepository.findById(perfilId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el estudiante con ID " + perfilId));
         Usuario u = e.getUsuario();
+        ReputacionResumen rep = reputacionService.calcularEstudiante(e);
         return ResponseEntity.ok(EstudianteInfoResponse.builder()
                 .id(e.getId())
                 .usuarioId(u.getId())
@@ -284,6 +295,8 @@ public class UsuarioController {
                 .universidad(e.getUniversidad())
                 .carrera(e.getCarrera())
                 .verificado(e.isVerificado())
+                .score(rep.score())
+                .nivelReputacion(rep.nivel().name())
                 .build());
     }
 }

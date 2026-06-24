@@ -63,6 +63,38 @@ public class KafkaProducerService {
                 MDC.get("correlationId"));
     }
 
+    /**
+     * Métricas de actividad del ARRENDADOR (reservas completadas/fallidas) para el
+     * score agregado de reputación (#26, Fase 2). Va al mismo topic de señales de
+     * reputación que las reseñas; servicio-usuarios lo consume.
+     */
+    public void enviarActividadArrendador(Long arrendadorId, long completadas, long fallidas) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("arrendadorId", arrendadorId);
+        payload.put("completadas", completadas);
+        payload.put("fallidas", fallidas);
+        try {
+            outboxPublisher.publicar(TOPIC_RESENAS, "ACTIVIDAD_ARRENDADOR_ACTUALIZADA",
+                    "Arrendador", String.valueOf(arrendadorId), payload, MDC.get("correlationId"));
+        } catch (Exception e) {
+            log.warn("No se pudo persistir actividad arrendador en outbox: {}", e.getMessage());
+        }
+    }
+
+    /** Métricas de actividad del ESTUDIANTE (buen inquilino) para el score agregado (#26, Fase 2). */
+    public void enviarActividadEstudiante(Long estudianteId, long completadas, long fallidas) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("estudianteId", estudianteId);
+        payload.put("completadas", completadas);
+        payload.put("fallidas", fallidas);
+        try {
+            outboxPublisher.publicar(TOPIC_RESENAS, "ACTIVIDAD_ESTUDIANTE_ACTUALIZADA",
+                    "Estudiante", String.valueOf(estudianteId), payload, MDC.get("correlationId"));
+        } catch (Exception e) {
+            log.warn("No se pudo persistir actividad estudiante en outbox: {}", e.getMessage());
+        }
+    }
+
     public void enviarCalificacionArrendador(Long arrendadorId, Double calificacion, long numResenas) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("arrendadorId", arrendadorId);

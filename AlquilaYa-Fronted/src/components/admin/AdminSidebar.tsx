@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermisos } from '@/hooks/use-permisos';
 import { cn } from '@/lib/cn';
 
 interface NavSubItem {
@@ -17,6 +18,8 @@ interface NavItem {
   href?: string;
   badge?: number;
   subItems?: NavSubItem[];
+  /** Si está, solo se muestra a usuarios con este permiso (RBAC dinámico #32). */
+  permiso?: string;
 }
 
 interface NavCategory {
@@ -110,6 +113,7 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Economía y pagos',
         icon: 'payments',
+        permiso: 'GESTIONAR_SISTEMA',
         subItems: [
           { label: 'Balance general', href: '/admin-master/finance/balance' },
           { label: 'Pagos a proveedores', href: '/admin-master/finance/payouts' },
@@ -119,6 +123,7 @@ const NAVIGATION: NavCategory[] = [
       {
         label: 'Configuración',
         icon: 'settings',
+        permiso: 'GESTIONAR_SISTEMA',
         subItems: [
           { label: 'Reglas de la plataforma', href: '/admin-master/system/settings' },
           { label: 'Roles y permisos', href: '/admin-master/system/roles' },
@@ -134,7 +139,13 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { usuario, cerrarSesion } = useAuth();
+  const { tienePermiso } = usePermisos();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  // RBAC dinámico (#32): un item con `permiso` solo se ve si el usuario lo tiene.
+  // ADMIN base ve todo (red de seguridad si /permisos/mios fallara).
+  const esAdmin = usuario?.rol === 'ADMIN';
+  const puedeVer = (item: NavItem) => !item.permiso || esAdmin || tienePermiso(item.permiso);
 
   const toggleItem = (label: string) => {
     setExpandedItems(prev =>
@@ -164,14 +175,14 @@ export default function AdminSidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar pb-4">
         {NAVIGATION.map((category, idx) => (
-          <div key={idx} className={cn(idx > 0 && 'mt-5')}>
-            {category.title && (
+          <div key={idx} className={cn(idx > 0 && category.items.some(puedeVer) && 'mt-5')}>
+            {category.title && category.items.some(puedeVer) && (
               <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[#475569]">
                 {category.title}
               </p>
             )}
             <div className="space-y-0.5">
-              {category.items.map((item) => {
+              {category.items.filter(puedeVer).map((item) => {
                 const isExpanded = expandedItems.includes(item.label);
                 const hasSubItems = item.subItems && item.subItems.length > 0;
                 const isAnySubItemActive = item.subItems?.some(si => pathname === si.href);

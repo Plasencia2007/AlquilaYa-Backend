@@ -6,6 +6,8 @@ export type EstadoReserva =
   | 'FINALIZADA'
   | 'CANCELADA';
 
+import type { NivelReputacion } from './reputacion';
+
 export interface Reserva {
   id: string;
   propiedadId: string;
@@ -14,6 +16,10 @@ export interface Reserva {
   propiedadUbicacion?: string;
   estudianteId: string;
   estudianteNombre?: string;
+  /** Score agregado de reputación del estudiante 0–100 (#26). */
+  estudianteScore?: number;
+  /** Nivel del estudiante: BRONCE/PLATA/ORO/PLATINO (#26). */
+  estudianteNivelReputacion?: NivelReputacion;
   arrendadorId?: string;
   arrendadorNombre?: string;
   fechaInicio: string;

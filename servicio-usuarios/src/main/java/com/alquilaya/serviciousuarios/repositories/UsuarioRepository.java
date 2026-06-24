@@ -37,4 +37,17 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             GROUP BY u.telefono HAVING COUNT(u) > 1
             """)
     List<String> telefonosDuplicados();
+
+    /** Claves de funcionalidad que otorgan los roles personalizados de un usuario (RBAC dinámico #32). */
+    @Query("""
+            SELECT f FROM Usuario u
+            JOIN u.rolesPersonalizados r
+            JOIN r.funcionalidades f
+            WHERE u.id = :usuarioId
+            """)
+    java.util.Set<String> findFuncionalidadesByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    /** Usuarios que tienen asignado un rol personalizado (para desasignar al borrar el rol). */
+    @Query("SELECT u FROM Usuario u JOIN u.rolesPersonalizados r WHERE r.id = :rolId")
+    List<Usuario> findByRolPersonalizadoId(@Param("rolId") Long rolId);
 }

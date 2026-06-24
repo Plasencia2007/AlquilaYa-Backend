@@ -38,7 +38,7 @@ public class AdminPropiedadController {
     public record ConfianzaDTO(List<SenalFraudeDTO> senales, long denunciasPendientes) {}
 
     @GetMapping("/{id}/confianza")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     public ResponseEntity<ConfianzaDTO> confianza(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> ResponseEntity.ok(new ConfianzaDTO(
@@ -48,7 +48,7 @@ public class AdminPropiedadController {
     }
 
     @GetMapping("/pendientes")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     public ResponseEntity<List<PropiedadAdminDTO>> listarPendientes() {
         List<PropiedadAdminDTO> dtos = propiedadRepository
                 .findByEstadoOrderByFechaCreacionAsc(EstadoPropiedad.PENDIENTE)
@@ -59,7 +59,7 @@ public class AdminPropiedadController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     public ResponseEntity<PropiedadAdminDTO> verDetalle(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> ResponseEntity.ok(propiedadService.toAdmin(p)))
@@ -67,7 +67,7 @@ public class AdminPropiedadController {
     }
 
     @PatchMapping("/{id}/aprobar")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     public ResponseEntity<Propiedad> aprobar(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> {
@@ -89,7 +89,7 @@ public class AdminPropiedadController {
     }
 
     @PatchMapping("/{id}/rechazar")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     public ResponseEntity<Propiedad> rechazar(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> {
@@ -107,7 +107,7 @@ public class AdminPropiedadController {
      * política se expone en el DTO público.
      */
     @PatchMapping("/{id}/politica-cancelacion")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
     @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<Propiedad> cambiarPoliticaCancelacion(
             @PathVariable Long id,

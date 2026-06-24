@@ -15,6 +15,7 @@ public class PermisoEnforcerService {
 
     private final PermisoService permisoService;
     private final UsuarioRepository usuarioRepository;
+    private final RbacService rbacService;
 
     public boolean tienePermiso(String funcionalidad) {
         try {
@@ -30,16 +31,27 @@ public class PermisoEnforcerService {
                     .findFirst()
                     .orElse("");
 
-            if (rolStr.isEmpty()) {
-                log.warn("[PERMISO] Rol no encontrado en el token para funcionalidad: {}", funcionalidad);
-                return false;
+            // 1) Permiso por ROL BASE (matriz Permiso por enum Rol) — camino rápido, sin tocar BD extra.
+            if (!rolStr.isEmpty()) {
+                try {
+                    Rol rol = Rol.valueOf(rolStr.toUpperCase());
+                    if (permisoService.tienePermiso(rol, funcionalidad)) {
+                        log.debug("[PERMISO] rol-base={} funcionalidad={} → concedido", rol, funcionalidad);
+                        return true;
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // El rol del token no mapea al enum; seguimos con RBAC dinámico.
+                }
             }
 
-            Rol rol = Rol.valueOf(rolStr.toUpperCase());
-            boolean tienePermiso = permisoService.tienePermiso(rol, funcionalidad);
-            
-            log.debug("[PERMISO] rol={} funcionalidad={} resultado={}", rol, funcionalidad, tienePermiso);
-            return tienePermiso;
+            // 2) RBAC dinámico (#32): permisos de los roles personalizados asignados al usuario.
+            String correo = auth.getName();
+            boolean porRolPersonalizado = usuarioRepository.findByCorreo(correo)
+                    .map(u -> rbacService.funcionalidadesPersonalizadas(u.getId()).contains(funcionalidad))
+                    .orElse(false);
+
+            log.debug("[PERMISO] funcionalidad={} viaRolPersonalizado={}", funcionalidad, porRolPersonalizado);
+            return porRolPersonalizado;
         } catch (Exception e) {
             log.error("[PERMISO] Error verificando permiso '{}': {}", funcionalidad, e.getMessage());
             return false;

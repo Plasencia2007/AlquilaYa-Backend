@@ -12,4 +12,11 @@ public interface PermisoClient {
     boolean verificarPermiso(
             @RequestParam("rol") String rol,
             @RequestParam("funcionalidad") String funcionalidad);
+
+    /**
+     * Chequeo EFECTIVO por usuario (rol base ∪ roles personalizados, #32). El usuario se
+     * resuelve del JWT propagado por Feign; por eso solo necesita la funcionalidad.
+     */
+    @GetMapping("/api/v1/usuarios/permisos/check-mio")
+    boolean verificarPermisoEfectivo(@RequestParam("funcionalidad") String funcionalidad);
 }

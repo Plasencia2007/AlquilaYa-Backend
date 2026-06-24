@@ -37,6 +37,14 @@ public class PermisoService {
                 .orElse(false);
     }
 
+    /** Funcionalidades habilitadas para un rol base (para calcular permisos efectivos #32). */
+    public java.util.Set<String> funcionalidadesHabilitadas(Rol rol) {
+        return permisoRepository.findByRol(rol).stream()
+                .filter(Permiso::isHabilitado)
+                .map(Permiso::getFuncionalidad)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     public Permiso obtenerPorId(Long id) {
         return permisoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Permiso no encontrado con id: " + id));

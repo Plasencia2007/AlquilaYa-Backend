@@ -27,6 +27,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/shared/error-state';
+import { ReputationBadge } from '@/components/reputation-badge';
+import { RoommateGroupsSection } from '@/components/student/roommate-groups-section';
 import { PropertyGallery } from '@/components/property/property-gallery';
 import { PropertyReviews } from '@/components/property/property-reviews';
 import { PropertyVideo } from '@/components/property/property-video';
@@ -440,6 +442,14 @@ export default function PropertyDetailPage({ params }: Props) {
                     <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verificado" />
                   )}
                 </div>
+                {propiedad.arrendadorNivelReputacion && (
+                  <div className="mt-1.5">
+                    <ReputationBadge
+                      nivel={propiedad.arrendadorNivelReputacion}
+                      score={propiedad.arrendadorScore}
+                    />
+                  </div>
+                )}
                 {propiedad.tiempoRespuestaArrendador != null && (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Responde en ~{propiedad.tiempoRespuestaArrendador} min
@@ -586,6 +596,12 @@ export default function PropertyDetailPage({ params }: Props) {
                 </Button>
               }
             />
+
+            {!propiedad.gestionPorHabitacion && (propiedad.capacidadPersonas ?? 0) > 1 && (
+              <div className="mt-3">
+                <RoommateGroupsSection propiedadId={propiedad.id} />
+              </div>
+            )}
 
             {(propiedad.disponibleDesde || propiedad.vistas != null) && (
               <div className="mt-4 space-y-1.5 border-t border-border pt-4">

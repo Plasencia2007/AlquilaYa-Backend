@@ -34,7 +34,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/propiedades/*/calendario").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/propiedades/*/habitaciones").permitAll()
                         .requestMatchers("/api/v1/propiedades/**").authenticated()
-                        .requestMatchers("/api/v1/admin/propiedades/**").hasRole("ADMIN")
+                        // RBAC dinámico (#32): la URL solo exige estar autenticado; el permiso fino
+                        // (MODERAR_PROPIEDADES / GESTIONAR_SISTEMA) lo aplica @PreAuthorize en cada método.
+                        // (Verificado: todos los endpoints bajo esta ruta tienen guard de método.)
+                        .requestMatchers("/api/v1/admin/propiedades/**").authenticated()
                         .requestMatchers("/api/v1/reservas/**").authenticated()
                         .requestMatchers("/api/v1/favoritos/**").authenticated()
                         .requestMatchers("/api/v1/resenas/propiedad/*").permitAll()

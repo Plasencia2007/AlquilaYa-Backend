@@ -51,4 +51,19 @@ public class Arrendador {
     @Builder.Default
     @DecimalMin("0.0") @DecimalMax("5.0")
     private Double calificacion = 5.0;
+
+    /** Nº de reseñas recibidas. Alimenta el promedio bayesiano del score agregado (#26). */
+    @Builder.Default
+    @Column(name = "num_resenas")
+    private Integer numResenas = 0;
+
+    /** Reservas finalizadas con éxito (señal de actividad del score #26, Fase 2). */
+    @Builder.Default
+    @Column(name = "reservas_completadas")
+    private Integer reservasCompletadas = 0;
+
+    /** Reservas canceladas/expiradas (señal negativa de actividad del score #26, Fase 2). */
+    @Builder.Default
+    @Column(name = "reservas_fallidas")
+    private Integer reservasFallidas = 0;
 }

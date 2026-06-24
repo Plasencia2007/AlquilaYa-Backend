@@ -22,4 +22,9 @@ public class ArrendadorPublicoResponse {
     private String avatar;
     private Boolean verificado;
     private Integer tiempoRespuestaPromedio;
+
+    // ===== Score agregado de reputación (#26) =====
+    private Integer numResenas;
+    private Integer score;
+    private String nivelReputacion;
 }

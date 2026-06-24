@@ -169,7 +169,9 @@ public class PropiedadService {
             b.arrendadorNombre(componerNombre(info))
              .arrendadorAvatar(info.getAvatar())
              .arrendadorVerificado(info.getVerificado())
-             .tiempoRespuestaArrendador(info.getTiempoRespuestaPromedio());
+             .tiempoRespuestaArrendador(info.getTiempoRespuestaPromedio())
+             .arrendadorScore(info.getScore())
+             .arrendadorNivelReputacion(info.getNivelReputacion());
         }
         return b;
     }

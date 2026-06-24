@@ -32,10 +32,18 @@ public class SecurityConfig {
                         // Documentacion Swagger / OpenAPI: acceso libre
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/auth/**").permitAll()
-                        .requestMatchers("/api/v1/usuarios/permisos/check").authenticated()
+                        // Chequeos de permiso del PROPIO usuario (RBAC dinámico #32): cualquier
+                        // autenticado puede consultar SUS permisos efectivos. La gestión (CRUD de
+                        // permisos) sigue restringida abajo + @PreAuthorize de método.
+                        .requestMatchers(
+                                "/api/v1/usuarios/permisos/check",
+                                "/api/v1/usuarios/permisos/check-mio",
+                                "/api/v1/usuarios/permisos/mios").authenticated()
                         .requestMatchers("/api/v1/usuarios/permisos/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/usuarios/arrendador/*/info").authenticated()
                         .requestMatchers("/api/v1/usuarios/estudiante/*/info").authenticated()
+                        .requestMatchers("/api/v1/usuarios/estudiante/*/convivencia").authenticated()
+                        .requestMatchers("/api/v1/usuarios/roommates").authenticated()
                         // Bulk para enriquecer listados de propiedades (card premium).
                         // Mismo nivel que el endpoint single: cualquier usuario autenticado.
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/arrendadores/bulk").authenticated()

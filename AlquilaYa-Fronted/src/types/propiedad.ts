@@ -8,6 +8,8 @@
  * `services/catalogos-service.ts`).
  */
 
+import type { NivelReputacion } from './reputacion';
+
 // ---------- Enums alineados con el backend ----------
 
 /** Espejo del enum `com.alquilaya.serviciopropiedades.enums.TipoPropiedad`. */
@@ -156,6 +158,10 @@ export interface Propiedad {
   vistas?: number;
   /** Tiempo promedio de respuesta del arrendador en minutos. */
   tiempoRespuestaArrendador?: number;
+  /** Score agregado de reputación del arrendador 0–100 (#26). */
+  arrendadorScore?: number;
+  /** Nivel de reputación del arrendador: BRONCE/PLATA/ORO/PLATINO (#26). */
+  arrendadorNivelReputacion?: NivelReputacion;
   /** Reglas de la casa (valores del catálogo REGLA). */
   reglas?: string[];
   /** Distintivos automáticos calculados por el backend (nuevo/popular/última plaza/rebaja). */

@@ -73,6 +73,16 @@ public class Usuario {
     @ToString.Exclude
     private Estudiante estudiante;
 
+    /** Roles personalizados (RBAC dinámico #32) asignados a este usuario. Suman permisos al rol base. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "usuario_roles_personalizados",
+            joinColumns = @JoinColumn(name = "usuario_id"),
+            inverseJoinColumns = @JoinColumn(name = "rol_personalizado_id"))
+    @ToString.Exclude
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Builder.Default
+    private java.util.Set<RolPersonalizado> rolesPersonalizados = new java.util.HashSet<>();
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime fechaCreacion;

@@ -47,6 +47,8 @@ export interface PropiedadPublicoDTO {
   reglas?: string[];
   arrendadorAvatar?: string;
   arrendadorVerificado?: boolean;
+  arrendadorScore?: number;
+  arrendadorNivelReputacion?: string;
   fechaCreacion?: string;
   ultimaActualizacion?: string;
   fechaActualizacion?: string;
@@ -104,6 +106,8 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     reglas: dto.reglas,
     arrendadorAvatar: dto.arrendadorAvatar,
     arrendadorVerificado: dto.arrendadorVerificado,
+    arrendadorScore: dto.arrendadorScore,
+    arrendadorNivelReputacion: dto.arrendadorNivelReputacion as Propiedad['arrendadorNivelReputacion'],
     fechaCreacion: dto.fechaCreacion,
     ultimaActualizacion: dto.ultimaActualizacion ?? dto.fechaActualizacion,
     disponibleDesde: dto.disponibleDesde,

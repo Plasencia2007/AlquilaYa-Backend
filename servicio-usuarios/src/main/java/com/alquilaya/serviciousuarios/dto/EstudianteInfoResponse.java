@@ -16,4 +16,10 @@ public class EstudianteInfoResponse {
     private String carrera;
     /** true si todos los documentos requeridos del estudiante están APROBADOS. */
     private boolean verificado;
+
+    // ===== Score agregado de reputación (#26) =====
+    /** Score agregado 0–100. */
+    private Integer score;
+    /** Nivel derivado del score: BRONCE / PLATA / ORO / PLATINO. */
+    private String nivelReputacion;
 }

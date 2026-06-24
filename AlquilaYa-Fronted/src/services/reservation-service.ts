@@ -15,6 +15,8 @@ interface ReservaResponseDTO {
   propiedadTitulo: string;
   estudianteNombre?: string;
   estudianteCorreo?: string;
+  estudianteScore?: number;
+  estudianteNivelReputacion?: string;
   motivoRechazo?: string;
   fechaCreacion: string;
 }
@@ -34,6 +36,8 @@ function fromDTO(dto: ReservaResponseDTO): Reserva {
     propiedadTitulo: dto.propiedadTitulo,
     estudianteId: String(dto.estudianteId),
     estudianteNombre: dto.estudianteNombre,
+    estudianteScore: dto.estudianteScore,
+    estudianteNivelReputacion: dto.estudianteNivelReputacion as Reserva['estudianteNivelReputacion'],
     arrendadorId: String(dto.arrendadorId),
     fechaInicio: dto.fechaInicio,
     fechaFin: dto.fechaFin,

@@ -25,9 +25,9 @@ public class ConfiguracionAuthController {
         return ResponseEntity.ok(new ConfiguracionVerificacionDTO(configuracionAuthService.getMetodo()));
     }
 
-    /** Cambia el método — solo admin. */
+    /** Cambia el método — requiere permiso de gestión de sistema (#32). */
     @PutMapping("/admin/configuracion/verificacion")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
     public ResponseEntity<ConfiguracionVerificacionDTO> actualizar(
             @Valid @RequestBody ConfiguracionVerificacionDTO req) {
         return ResponseEntity.ok(new ConfiguracionVerificacionDTO(

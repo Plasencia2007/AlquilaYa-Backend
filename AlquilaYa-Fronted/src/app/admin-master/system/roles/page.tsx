@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { permisoService, Permiso } from '@/services/admin-permission-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { CustomRolesManager } from '@/components/admin/CustomRolesManager';
 
 export default function RolesPermissionsPage() {
   const [permisos, setPermisos] = useState<Permiso[]>([]);
@@ -132,6 +133,9 @@ export default function RolesPermissionsPage() {
           Nota de Seguridad: El rol <span className="text-primary font-black">ADMIN</span> mantiene acceso total por defecto para prevenir fallos críticos de gestión local.
         </p>
       </div>
+
+      {/* RBAC dinámico (#32): roles personalizados de staff + asignación a usuarios. */}
+      <CustomRolesManager />
     </div>
   );
 }

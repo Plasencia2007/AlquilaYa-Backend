@@ -106,7 +106,7 @@ public class ReservaController {
     }
 
     @PatchMapping("/{id}/pagar")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
     public ResponseEntity<ReservaResponseDTO> marcarPagada(@PathVariable Long id) {
         Reserva r = reservaService.marcarPagada(id);
         return ResponseEntity.ok(toResponseDTO(r));
@@ -116,18 +116,24 @@ public class ReservaController {
         String titulo = reservaService.obtenerTituloPropiedad(r.getPropiedadId());
         String estNombre = "Estudiante " + r.getEstudianteId();
         String estCorreo = "";
-        
+        Integer estScore = null;
+        String estNivel = null;
+
         try {
             var est = reservaService.obtenerInfoEstudiante(r.getEstudianteId());
             if (est != null) {
                 estNombre = est.getNombre() + " " + (est.getApellido() != null ? est.getApellido() : "");
                 estCorreo = est.getCorreo();
+                estScore = est.getScore();
+                estNivel = est.getNivelReputacion();
             }
         } catch (Exception e) {
             log.warn("Error obteniendo info del estudiante {} para el DTO: {}", r.getEstudianteId(), e.getMessage());
         }
-        
+
         ReservaResponseDTO dto = ReservaResponseDTO.from(r, titulo, estNombre, estCorreo);
+        dto.setEstudianteScore(estScore);
+        dto.setEstudianteNivelReputacion(estNivel);
         // Si ya se pagó, usamos la comisión snapshotteada (histórica); si no, la calculamos en
         // vivo desde la zona para que el estudiante vea el cargo antes de pagar.
         dto.setComision(r.getComision() != null

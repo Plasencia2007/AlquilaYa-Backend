@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermisos } from '@/hooks/use-permisos';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export default function AdminMasterLayout({
@@ -11,8 +12,12 @@ export default function AdminMasterLayout({
   children: React.ReactNode;
 }) {
   const { estaAutenticado, usuario, cargando } = useAuth();
+  const { tienePermiso, cargando: cargandoPermisos } = usePermisos();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+
+  // Acceso al panel: rol base ADMIN o cualquier rol personalizado con ADMIN_PANEL (#32).
+  const puedeEntrar = estaAutenticado && (usuario?.rol === 'ADMIN' || tienePermiso('ADMIN_PANEL'));
 
   useEffect(() => {
     setIsMounted(true);
@@ -20,23 +25,21 @@ export default function AdminMasterLayout({
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted && (!estaAutenticado || usuario?.rol !== 'ADMIN')) {
+      if (event.persisted && !puedeEntrar && !cargandoPermisos) {
         router.replace('/');
       }
     };
     window.addEventListener('pageshow', handlePageShow);
 
-    if (isMounted && !cargando) {
-      if (!estaAutenticado || usuario?.rol !== 'ADMIN') {
-        router.replace('/');
-      }
+    if (isMounted && !cargando && !cargandoPermisos && !puedeEntrar) {
+      router.replace('/');
     }
 
     return () => window.removeEventListener('pageshow', handlePageShow);
-  }, [estaAutenticado, usuario, cargando, isMounted, router]);
+  }, [puedeEntrar, cargando, cargandoPermisos, isMounted, router]);
 
-  // Bloqueo visual mientras se verifica la sesión para evitar que el contenido "parpadee" a intrusos
-  if (!isMounted || cargando || !estaAutenticado || usuario?.rol !== 'ADMIN') {
+  // Bloqueo visual mientras se verifica la sesión/permisos para evitar parpadeo a intrusos.
+  if (!isMounted || cargando || cargandoPermisos || !puedeEntrar) {
     return (
       <div className="fixed inset-0 z-[9999] bg-[#0b1222] flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">

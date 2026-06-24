@@ -80,4 +80,8 @@ public class PropiedadPublicoDTO {
      * mientras no exista una métrica calculada; en UI se debe mostrar como "—".
      */
     private Integer tiempoRespuestaArrendador;
+
+    // ===== Score agregado de reputación del arrendador (#26) =====
+    private Integer arrendadorScore;
+    private String arrendadorNivelReputacion;
 }

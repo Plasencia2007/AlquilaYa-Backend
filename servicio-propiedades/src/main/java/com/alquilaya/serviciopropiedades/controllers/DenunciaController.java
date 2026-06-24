@@ -44,7 +44,7 @@ public class DenunciaController {
     // ===== Admin =====
 
     @GetMapping("/admin/denuncias")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_DENUNCIAS')")
     public ResponseEntity<Page<DenunciaDTO>> listar(
             @RequestParam(required = false) String estado,
             @RequestParam(defaultValue = "0") int page,
@@ -55,7 +55,7 @@ public class DenunciaController {
     }
 
     @PatchMapping("/admin/denuncias/{denunciaId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_DENUNCIAS')")
     public ResponseEntity<DenunciaDTO> actualizar(
             @PathVariable Long denunciaId,
             @RequestBody Map<String, String> body

@@ -23,14 +23,14 @@ public class AdminConfiguracionController {
     private final ConfiguracionReservaService configuracionReservaService;
 
     @GetMapping("/reserva")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
     public ResponseEntity<ConfiguracionReservaDTO> obtener() {
         int horas = configuracionReservaService.getExpiracionHoras();
         return ResponseEntity.ok(new ConfiguracionReservaDTO(horas));
     }
 
     @PutMapping("/reserva")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
     public ResponseEntity<ConfiguracionReservaDTO> actualizar(@Valid @RequestBody ConfiguracionReservaDTO req) {
         int horas = configuracionReservaService.actualizarExpiracionHoras(req.getExpiracionHoras());
         return ResponseEntity.ok(new ConfiguracionReservaDTO(horas));

@@ -24,4 +24,9 @@ public class ArrendadorInfoDTO {
     private Boolean verificado;
     /** Tiempo de respuesta promedio (minutos). Nullable mientras no haya métrica. */
     private Integer tiempoRespuestaPromedio;
+
+    // ===== Score agregado de reputación (#26) =====
+    private Integer numResenas;
+    private Integer score;
+    private String nivelReputacion;
 }

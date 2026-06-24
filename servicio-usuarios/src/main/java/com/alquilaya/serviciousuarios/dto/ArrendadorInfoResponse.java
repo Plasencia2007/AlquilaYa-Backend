@@ -22,4 +22,12 @@ public class ArrendadorInfoResponse {
     private Boolean verificado;
     /** Tiempo de respuesta promedio en minutos. Nullable mientras no haya métrica. */
     private Integer tiempoRespuestaPromedio;
+
+    // ===== Score agregado de reputación (#26) =====
+    /** Nº de reseñas recibidas (contexto del promedio bayesiano). */
+    private Integer numResenas;
+    /** Score agregado 0–100. */
+    private Integer score;
+    /** Nivel derivado del score: BRONCE / PLATA / ORO / PLATINO. */
+    private String nivelReputacion;
 }

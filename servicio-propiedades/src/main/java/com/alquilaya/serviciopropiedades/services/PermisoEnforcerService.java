@@ -30,18 +30,10 @@ public class PermisoEnforcerService {
                 return false;
             }
 
-            String rol = auth.getAuthorities().stream()
-                    .map(a -> a.getAuthority().replace("ROLE_", ""))
-                    .findFirst()
-                    .orElse("");
-
-            if (rol.isEmpty()) {
-                log.warn("[PERMISO] Rol vacío en token para funcionalidad: {}", funcionalidad);
-                return false;
-            }
-
-            boolean tienePermiso = verificarPermisoResiliente(rol, funcionalidad).join();
-            log.debug("[PERMISO] rol={} funcionalidad={} resultado={}", rol, funcionalidad, tienePermiso);
+            // Chequeo EFECTIVO por usuario (rol base ∪ roles personalizados, #32): el JWT se
+            // propaga a servicio-usuarios, que resuelve al usuario y sus permisos efectivos.
+            boolean tienePermiso = verificarPermisoResiliente(funcionalidad).join();
+            log.debug("[PERMISO] funcionalidad={} resultado={}", funcionalidad, tienePermiso);
             return tienePermiso;
         } catch (Throwable t) {
             log.error("[PERMISO] Error verificando permiso '{}': {}", funcionalidad, t.getMessage());
@@ -53,13 +45,13 @@ public class PermisoEnforcerService {
     @CircuitBreaker(name = "verificarPermisoCB", fallbackMethod = "fallbackVerificarPermiso")
     @Retry(name = "verificarPermisoCB")
     @Bulkhead(name = "verificarPermisoCB", type = Bulkhead.Type.SEMAPHORE)
-    public CompletableFuture<Boolean> verificarPermisoResiliente(String rol, String funcionalidad) {
-        log.info("[Resilience4j] Verificando permiso rol={} funcionalidad={}", rol, funcionalidad);
+    public CompletableFuture<Boolean> verificarPermisoResiliente(String funcionalidad) {
+        log.debug("[Resilience4j] Verificando permiso efectivo funcionalidad={}", funcionalidad);
         var attrs = RequestContextHolder.getRequestAttributes();
         return CompletableFuture.supplyAsync(() -> {
             RequestContextHolder.setRequestAttributes(attrs);
             try {
-                return permisoClient.verificarPermiso(rol, funcionalidad);
+                return permisoClient.verificarPermisoEfectivo(funcionalidad);
             } finally {
                 RequestContextHolder.resetRequestAttributes();
             }
@@ -67,9 +59,9 @@ public class PermisoEnforcerService {
     }
 
     @SuppressWarnings("unused")
-    private CompletableFuture<Boolean> fallbackVerificarPermiso(String rol, String funcionalidad, Throwable t) {
-        log.error("[FALLBACK] verificarPermiso(rol={}, funcionalidad={}) — {}: {}. Denegando por defecto (fail-safe).",
-                rol, funcionalidad, t.getClass().getSimpleName(), t.getMessage());
+    private CompletableFuture<Boolean> fallbackVerificarPermiso(String funcionalidad, Throwable t) {
+        log.error("[FALLBACK] verificarPermisoEfectivo(funcionalidad={}) — {}: {}. Denegando por defecto (fail-safe).",
+                funcionalidad, t.getClass().getSimpleName(), t.getMessage());
         return CompletableFuture.completedFuture(false);
     }
 }

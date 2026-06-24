@@ -12,6 +12,8 @@ import {
   MessageCircle,
   Search,
   User,
+  Users,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -44,6 +46,8 @@ const sections: SidebarSection[] = [
     label: 'Mi actividad',
     items: [
       { href: '/student/favorites', icon: Heart, label: 'Favoritos' },
+      { href: '/student/roommates', icon: Users, label: 'Compañeros' },
+      { href: '/student/groups', icon: UsersRound, label: 'Mis grupos' },
       { href: '/student/reservations', icon: ClipboardList, label: 'Mis reservas' },
       { href: '/student/history', icon: History, label: 'Historial' },
     ],

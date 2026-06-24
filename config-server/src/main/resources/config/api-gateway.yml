@@ -17,7 +17,7 @@ spring:
           - id: servicio-propiedades
             uri: lb://servicio-propiedades
             predicates:
-              - Path=/api/v1/propiedades/**, /api/v1/admin/propiedades/**, /api/v1/reservas/**, /api/v1/favoritos/**, /api/v1/resenas/**, /api/v1/dashboard/**
+              - Path=/api/v1/propiedades/**, /api/v1/admin/propiedades/**, /api/v1/reservas/**, /api/v1/favoritos/**, /api/v1/resenas/**, /api/v1/dashboard/**, /api/v1/grupos/**
             filters:
               - StripPrefix=0
               - name: CircuitBreaker

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { GraduationCap, Lock, ShieldCheck, User } from 'lucide-react';
+import { GraduationCap, Lock, ShieldCheck, User, Users } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VerificationPanel from '@/components/auth/verification-panel';
@@ -11,10 +11,12 @@ import { EmailVerificationBanner } from '@/components/auth/email-verification-ba
 import { AcademicTab } from './academic-tab';
 import { PersonalTab } from './personal-tab';
 import { SecurityTab } from './security-tab';
+import { ConvivenciaTab } from './convivencia-tab';
 
 const TABS = [
   { value: 'personal', label: 'Personal', icon: User },
   { value: 'academico', label: 'Académico', icon: GraduationCap },
+  { value: 'convivencia', label: 'Convivencia', icon: Users },
   { value: 'seguridad', label: 'Seguridad', icon: Lock },
   { value: 'verificacion', label: 'Verificación', icon: ShieldCheck },
 ] as const;
@@ -52,6 +54,9 @@ function ProfileTabs() {
       </TabsContent>
       <TabsContent value="academico" className="rounded-2xl border border-border bg-card p-6">
         <AcademicTab />
+      </TabsContent>
+      <TabsContent value="convivencia" className="rounded-2xl border border-border bg-card p-6">
+        <ConvivenciaTab />
       </TabsContent>
       <TabsContent value="seguridad" className="rounded-2xl border border-border bg-card p-6">
         <SecurityTab />

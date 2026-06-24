@@ -12,4 +12,10 @@ public class PermisoClientFallback implements PermisoClient {
         log.warn("[FEIGN FALLBACK] servicio-usuarios no disponible. Denegando permiso rol={} funcionalidad={}", rol, funcionalidad);
         return false;
     }
+
+    @Override
+    public boolean verificarPermisoEfectivo(String funcionalidad) {
+        log.warn("[FEIGN FALLBACK] servicio-usuarios no disponible. Denegando permiso efectivo funcionalidad={}", funcionalidad);
+        return false;
+    }
 }

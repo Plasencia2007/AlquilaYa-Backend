@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
 import type { EstadoReserva, Reserva } from '@/types/reserva';
+import { ReputationBadge } from '@/components/reputation-badge';
 import { cn } from '@/lib/cn';
 
 interface ReservationCardProps {
@@ -134,9 +135,18 @@ export function ReservationCard({
                 <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0">
                   {obtenerInicialesEstudiante(reserva.estudianteNombre)}
                 </div>
-                <p className="font-bold text-foreground truncate">
-                  {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
-                </p>
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground truncate">
+                    {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
+                  </p>
+                  {reserva.estudianteNivelReputacion && (
+                    <ReputationBadge
+                      nivel={reserva.estudianteNivelReputacion}
+                      score={reserva.estudianteScore}
+                      className="mt-0.5"
+                    />
+                  )}
+                </div>
               </div>
             </div>
             <div>

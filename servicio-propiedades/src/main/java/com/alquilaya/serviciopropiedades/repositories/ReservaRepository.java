@@ -26,6 +26,10 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     /** Total de reservas de una propiedad (cualquier estado) — embudo de analítica. */
     long countByPropiedadId(Long propiedadId);
 
+    /** Conteos por estado para el score de reputación (#26, Fase 2). */
+    long countByArrendadorIdAndEstadoIn(Long arrendadorId, Collection<EstadoReserva> estados);
+    long countByEstudianteIdAndEstadoIn(Long estudianteId, Collection<EstadoReserva> estados);
+
     /** Reserva más reciente de una propiedad (para la alerta "30 días sin reservas"). */
     Reserva findFirstByPropiedadIdOrderByFechaCreacionDesc(Long propiedadId);
 

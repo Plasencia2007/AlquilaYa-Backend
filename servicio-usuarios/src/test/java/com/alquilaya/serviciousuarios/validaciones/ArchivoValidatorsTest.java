@@ -32,7 +32,14 @@ class ArchivoValidatorsTest {
 
     @Test
     void archivoValidoDeberiaPasar() {
-        MockMultipartFile file = new MockMultipartFile("archivo", "foto.jpg", "image/jpeg", new byte[100]);
+        // El validador valida la firma real (magic bytes), no solo el content-type declarado:
+        // un JPEG empieza con FF D8 FF. Con bytes en cero el validador (correctamente) rechaza.
+        byte[] jpeg = new byte[100];
+        jpeg[0] = (byte) 0xFF;
+        jpeg[1] = (byte) 0xD8;
+        jpeg[2] = (byte) 0xFF;
+        jpeg[3] = (byte) 0xE0;
+        MockMultipartFile file = new MockMultipartFile("archivo", "foto.jpg", "image/jpeg", jpeg);
         assertThat(archivoValidoValidator.isValid(file, context)).isTrue();
     }
 

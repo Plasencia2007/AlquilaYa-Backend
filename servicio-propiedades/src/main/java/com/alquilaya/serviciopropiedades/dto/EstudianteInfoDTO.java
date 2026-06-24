@@ -18,4 +18,8 @@ public class EstudianteInfoDTO {
     private String carrera;
     /** Wrapper a propósito: null (servicio antiguo o caído) se trata como no verificable. */
     private Boolean verificado;
+
+    // ===== Score agregado de reputación (#26) =====
+    private Integer score;
+    private String nivelReputacion;
 }

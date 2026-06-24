@@ -31,6 +31,12 @@ public class HabitacionService {
     private final HabitacionRepository habitacionRepository;
     private final PropiedadRepository propiedadRepository;
     private final ReservaRepository reservaRepository;
+    private final KafkaProducerService kafkaProducerService;
+
+    /** Reservas que cuentan como "completadas" / "fallidas" para el score de reputación (#26). */
+    private static final EnumSet<EstadoReserva> RESERVAS_COMPLETADAS = EnumSet.of(EstadoReserva.FINALIZADA);
+    private static final EnumSet<EstadoReserva> RESERVAS_FALLIDAS =
+            EnumSet.of(EstadoReserva.CANCELADA, EstadoReserva.EXPIRADA);
 
     /** Reservas que impiden eliminar una habitación. */
     private static final EnumSet<EstadoReserva> ESTADOS_RESERVA_ACTIVA =
@@ -135,6 +141,25 @@ public class HabitacionService {
         if (reserva == null) return;
         recomputarEstado(reserva.getHabitacionId());
         recomputarDisponibilidadPropiedad(reserva.getPropiedadId());
+        emitirActividadReputacion(reserva);
+    }
+
+    /**
+     * Emite las métricas de actividad (reservas completadas/fallidas) del arrendador y del
+     * estudiante de la reserva, para que servicio-usuarios alimente el score agregado (#26).
+     * Va en la misma transacción (outbox), así que es atómico con el cambio de estado.
+     */
+    private void emitirActividadReputacion(Reserva reserva) {
+        if (reserva.getArrendadorId() != null) {
+            long comp = reservaRepository.countByArrendadorIdAndEstadoIn(reserva.getArrendadorId(), RESERVAS_COMPLETADAS);
+            long fall = reservaRepository.countByArrendadorIdAndEstadoIn(reserva.getArrendadorId(), RESERVAS_FALLIDAS);
+            kafkaProducerService.enviarActividadArrendador(reserva.getArrendadorId(), comp, fall);
+        }
+        if (reserva.getEstudianteId() != null) {
+            long comp = reservaRepository.countByEstudianteIdAndEstadoIn(reserva.getEstudianteId(), RESERVAS_COMPLETADAS);
+            long fall = reservaRepository.countByEstudianteIdAndEstadoIn(reserva.getEstudianteId(), RESERVAS_FALLIDAS);
+            kafkaProducerService.enviarActividadEstudiante(reserva.getEstudianteId(), comp, fall);
+        }
     }
 
     /**
