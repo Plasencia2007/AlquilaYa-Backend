@@ -179,10 +179,11 @@ function aplicarFiltrosClient(propiedades: Propiedad[], filtros: BusquedaParams)
     resultado = resultado.filter((p) => p.tipo === filtros.tipo);
   }
   if (filtros.servicios && filtros.servicios.length > 0) {
-    const requeridos = filtros.servicios.map((s) => s.toLowerCase());
+    // Comparación exacta (case-insensitive) — evita falsos positivos como AGUA vs AGUA_CALIENTE.
+    const requeridos = filtros.servicios.map((s) => s.toUpperCase());
     resultado = resultado.filter((p) => {
-      const propios = p.servicios.map((s) => s.toLowerCase());
-      return requeridos.every((req) => propios.some((s) => s.includes(req)));
+      const propios = p.servicios.map((s) => s.toUpperCase());
+      return requeridos.every((req) => propios.includes(req));
     });
   }
   if (typeof filtros.distanciaMaxKm === 'number') {
@@ -275,20 +276,31 @@ export const servicioPropiedades = {
       return aplicarFiltrosClient(MOCK_PROPIEDADES, filtros);
     }
 
-    const params: Record<string, string | number> = {};
+    const params: Record<string, string | number | string[]> = {};
     if (filtros.zona) params.zona = filtros.zona;
     if (typeof filtros.precioMin === 'number') params.precioMin = filtros.precioMin;
     if (typeof filtros.precioMax === 'number') params.precioMax = filtros.precioMax;
     if (filtros.tipo) params.tipo = filtros.tipo;
-    if (typeof filtros.calificacionMin === 'number' && filtros.calificacionMin > 0) {
-      params.calificacionMin = filtros.calificacionMin;
-    }
     if (typeof filtros.universidadId === 'number') params.universidadId = filtros.universidadId;
     if (typeof filtros.zonaId === 'number') params.zonaId = filtros.zonaId;
     if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) params.capacidadMin = filtros.capacidadMin;
     if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) params.dormitoriosMin = filtros.dormitoriosMin;
+    // distanciaMax → backend espera metros (Integer)
+    if (typeof filtros.distanciaMaxKm === 'number') params.distanciaMax = Math.round(filtros.distanciaMaxKm * 1000);
+    // servicios → backend hace OR (al menos uno); el client-side hace AND (todos presentes)
+    if (filtros.servicios && filtros.servicios.length > 0) params.servicios = filtros.servicios;
 
-    const response = await api.get<PropiedadPublicoDTO[]>('/propiedades/buscar', { params });
+    const response = await api.get<PropiedadPublicoDTO[]>('/propiedades/buscar', {
+      params,
+      paramsSerializer: (p) => {
+        const sp = new URLSearchParams();
+        Object.entries(p).forEach(([k, v]) => {
+          if (Array.isArray(v)) v.forEach((item) => sp.append(k, item));
+          else sp.append(k, String(v));
+        });
+        return sp.toString();
+      },
+    });
     const propiedades = response.data.map(fromDTO);
     return aplicarFiltrosClient(propiedades, {
       servicios: filtros.servicios,

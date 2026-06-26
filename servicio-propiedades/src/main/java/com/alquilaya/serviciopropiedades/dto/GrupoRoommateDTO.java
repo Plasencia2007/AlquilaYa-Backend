@@ -22,6 +22,8 @@ public class GrupoRoommateDTO {
     private int cuposOcupados;
     private String estado;
     private String codigoInvitacion;
+    /** Reserva grupal generada (Fase 2), si el grupo ya reservó. */
+    private Long reservaId;
     private List<MiembroGrupoDTO> miembros;
 
     public record MiembroGrupoDTO(Long estudianteId, String estado) {

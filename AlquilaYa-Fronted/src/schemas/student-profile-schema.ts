@@ -7,6 +7,7 @@ export const datosPersonalesSchema = z.object({
     .string()
     .min(1, 'Requerido')
     .regex(/^\+519\d{8}$/, 'Teléfono inválido. Debe empezar con +51 y tener 9 dígitos que empiecen con 9'),
+  fechaNacimiento: z.string().optional(),
   passwordActual: z.string().optional(),
 });
 

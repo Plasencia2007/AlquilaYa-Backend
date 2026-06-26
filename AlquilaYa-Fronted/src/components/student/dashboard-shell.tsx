@@ -19,7 +19,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   useNotifications();
 
   return (
-    <div className="flex min-h-screen w-full bg-background text-foreground">
+    <div className="flex min-h-screen w-full bg-white text-foreground dark:bg-background">
       <StudentSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <StudentTopbar />

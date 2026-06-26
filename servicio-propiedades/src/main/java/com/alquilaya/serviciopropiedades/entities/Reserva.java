@@ -58,6 +58,10 @@ public class Reserva {
      */
     private BigDecimal comision;
 
+    /** Si la reserva es de un grupo de roommates (#38 Fase 2): pago dividido por cuotas. Null = individual. */
+    @Column(name = "grupo_id")
+    private Long grupoId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

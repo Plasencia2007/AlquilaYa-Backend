@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Bell,
   ClipboardList,
   Heart,
   History,
@@ -19,14 +18,12 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
-import { useNotificationsStore } from '@/stores/notifications-store';
 import { cn } from '@/lib/cn';
 
 interface SidebarItem {
   href: string;
   icon: LucideIcon;
   label: string;
-  badge?: 'no-leidas';
 }
 
 interface SidebarSection {
@@ -56,12 +53,6 @@ const sections: SidebarSection[] = [
     label: 'Comunicación',
     items: [
       { href: '/student/messages', icon: MessageCircle, label: 'Mensajes' },
-      {
-        href: '/student/notifications',
-        icon: Bell,
-        label: 'Notificaciones',
-        badge: 'no-leidas',
-      },
     ],
   },
   {
@@ -73,7 +64,6 @@ const sections: SidebarSection[] = [
 export function StudentSidebar() {
   const pathname = usePathname() ?? '';
   const { cerrarSesion } = useAuth();
-  const noLeidas = useNotificationsStore((s) => s.noLeidas);
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-border bg-card md:flex">
@@ -96,7 +86,6 @@ export function StudentSidebar() {
                   item.href === '/student'
                     ? pathname === '/student'
                     : pathname.startsWith(item.href);
-                const showBadge = item.badge === 'no-leidas' && noLeidas > 0;
                 return (
                   <li key={item.href}>
                     <Link
@@ -110,11 +99,6 @@ export function StudentSidebar() {
                     >
                       <Icon className="size-4" aria-hidden />
                       <span className="flex-1">{item.label}</span>
-                      {showBadge && (
-                        <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                          {noLeidas > 9 ? '9+' : noLeidas}
-                        </span>
-                      )}
                     </Link>
                   </li>
                 );

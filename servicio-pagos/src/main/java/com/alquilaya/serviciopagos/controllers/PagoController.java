@@ -27,6 +27,14 @@ public class PagoController {
         return ResponseEntity.ok(Map.of("url", initPoint));
     }
 
+    /** Pago dividido (#38 Fase 2): genera el link para la cuota del miembro actual. */
+    @PostMapping("/preferencia-grupo/{reservaId}")
+    public ResponseEntity<Map<String, String>> crearPreferenciaGrupo(@PathVariable Long reservaId,
+            @AuthenticationPrincipal CurrentUser current) {
+        String initPoint = pagoService.crearPreferenciaGrupo(reservaId, current);
+        return ResponseEntity.ok(Map.of("url", initPoint));
+    }
+
     /** Estado del último pago de una reserva. Para polling del frontend mientras se paga en MP. */
     @GetMapping("/estado/{reservaId}")
     public ResponseEntity<EstadoPagoResponse> estadoPago(@PathVariable Long reservaId,

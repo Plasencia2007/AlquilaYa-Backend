@@ -29,7 +29,7 @@ interface Props {
   onHover?: (id: string | null) => void;
 }
 
-const GRID_DEFAULT = 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3';
+const GRID_DEFAULT = 'grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3';
 
 export function ResultsGrid({
   items,
@@ -105,10 +105,7 @@ export function ResultsGrid({
             key={p.id}
             onMouseEnter={() => onHover?.(p.id)}
             onMouseLeave={() => onHover?.(null)}
-            className={cn(
-              'rounded-2xl transition-shadow',
-              activeId === p.id && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-            )}
+            className="flex h-full flex-col rounded-2xl"
           >
             <PropertyCard propiedad={p} variant="full" />
           </div>

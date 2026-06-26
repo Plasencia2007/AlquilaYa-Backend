@@ -12,8 +12,12 @@ export interface EstudianteInfo {
   apellido?: string;
   correo?: string;
   telefono?: string;
+  fotoUrl?: string;
+  fechaNacimiento?: string;
   universidad?: string;
+  codigoEstudiante?: string;
   carrera?: string;
+  ciclo?: number;
   verificado?: boolean;
 }
 
@@ -31,7 +35,11 @@ export const studentProfileService = {
   },
 
   actualizarPersonal: async (data: DatosPersonalesData): Promise<void> => {
-    await api.patch('/usuarios/perfil/personal', data);
+    // fechaNacimiento vacía debe ir como null (Jackson no parsea "" a LocalDate).
+    await api.patch('/usuarios/perfil/personal', {
+      ...data,
+      fechaNacimiento: data.fechaNacimiento || null,
+    });
   },
 
   actualizarAcademico: async (data: DatosAcademicosData): Promise<void> => {

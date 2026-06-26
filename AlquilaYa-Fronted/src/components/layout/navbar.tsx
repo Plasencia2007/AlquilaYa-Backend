@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 
 import { TopBar } from './top-bar';
 
-const HIDDEN_ROUTES = ['/login', '/register', '/admin-master', '/landlord', '/student'];
+const HIDDEN_ROUTES = ['/login', '/register', '/admin-master', '/landlord', '/student', '/search'];
 
 export function Navbar() {
   const pathname = usePathname();

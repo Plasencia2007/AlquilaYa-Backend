@@ -31,8 +31,9 @@ export function PropertyRating({
 
   if (!totalResenas || totalResenas <= 0) {
     return (
-      <span className={cn('font-medium text-muted-foreground', textSize, className)}>
-        Sin reseñas
+      <span className={cn('flex shrink-0 items-center gap-0.5 text-muted-foreground', textSize, className)}>
+        <Star className={cn(iconSize, 'fill-muted-foreground/60 text-muted-foreground/60')} aria-hidden />
+        <span className="font-medium">Novedad</span>
       </span>
     );
   }

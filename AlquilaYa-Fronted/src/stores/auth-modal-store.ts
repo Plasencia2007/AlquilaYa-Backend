@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export type AuthView = 'login' | 'register' | 'forgot-password';
 
 export type AuthRole = 'ESTUDIANTE' | 'ARRENDADOR';
-export type RegisterStep = 'personal' | 'details' | 'otp' | 'email-code' | 'result';
+export type RegisterStep = 'role' | 'personal' | 'details' | 'otp' | 'email-code' | 'result';
 
 export interface PersonalData {
   nombre: string;
@@ -57,12 +57,19 @@ export const useAuthModal = create<AuthModalState>((set) => ({
   landlordDetails: null,
 
   open: (view = 'login', role = 'ESTUDIANTE') =>
-    set({ isOpen: true, view, targetRole: role, step: 'personal' }),
+    set((state) => ({
+      isOpen: true,
+      view,
+      targetRole: role,
+      // Solo resetea el step si se abre el flujo de registro desde cero
+      // Para login/forgot-password no tocamos el step (no rompe la página de registro en el fondo)
+      step: view === 'register' ? 'personal' : state.step,
+    })),
 
   close: () =>
     set({
       isOpen: false,
-      step: 'personal',
+      step: 'role',
       personal: null,
       studentDetails: null,
       landlordDetails: null,
@@ -82,7 +89,7 @@ export const useAuthModal = create<AuthModalState>((set) => ({
 
   resetWizard: () =>
     set({
-      step: 'personal',
+      step: 'role',
       personal: null,
       studentDetails: null,
       landlordDetails: null,

@@ -84,8 +84,8 @@ public class Estudiante {
 
     /** Si está activo, el estudiante aparece en el board de búsqueda de roommates (#38). */
     @Builder.Default
-    @Column(name = "busca_companeros")
-    private boolean buscaCompaneros = false;
+    @Column(name = "busca_companeros", columnDefinition = "boolean default false")
+    private Boolean buscaCompaneros = false;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "estudiante_intereses", joinColumns = @JoinColumn(name = "estudiante_id"))

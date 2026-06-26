@@ -19,7 +19,20 @@ export interface GrupoRoommate {
   cuposOcupados: number;
   estado: EstadoGrupo;
   codigoInvitacion: string;
+  /** Reserva grupal generada (Fase 2), si ya reservó. */
+  reservaId?: number;
   miembros: MiembroGrupo[];
+}
+
+export interface CuotaPago {
+  reservaId: number;
+  grupoId: number;
+  estudianteId: number;
+  monto: number;
+  estado: 'PENDIENTE' | 'PAGADO';
+  propiedadTitulo?: string;
+  estudianteNombre?: string;
+  estudianteCorreo?: string;
 }
 
 export interface CrearGrupoRequest {
@@ -66,5 +79,22 @@ export const grupoService = {
   },
   eliminar: async (id: number | string): Promise<void> => {
     await api.delete(`${BASE}/${id}`);
+  },
+
+  // ===== Fase 2: reserva grupal + pago dividido =====
+  reservar: async (
+    id: number | string,
+    fechas: { fechaInicio: string; fechaFin: string },
+  ): Promise<GrupoRoommate> => {
+    const { data } = await api.post<GrupoRoommate>(`${BASE}/${id}/reservar`, fechas);
+    return data;
+  },
+  cuotas: async (reservaId: number | string): Promise<CuotaPago[]> => {
+    const { data } = await api.get<CuotaPago[]>(`${BASE}/reserva/${reservaId}/cuotas`);
+    return data;
+  },
+  miCuota: async (reservaId: number | string): Promise<CuotaPago> => {
+    const { data } = await api.get<CuotaPago>(`${BASE}/reserva/${reservaId}/mi-cuota`);
+    return data;
   },
 };

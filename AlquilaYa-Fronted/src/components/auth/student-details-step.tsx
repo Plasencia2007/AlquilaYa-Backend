@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
@@ -16,7 +16,9 @@ import { universidadService, type Universidad } from '@/services/universidad-ser
 import { carreraService, type Carrera } from '@/services/carrera-service';
 
 const SELECT_CLASS =
-  'h-12 w-full rounded-xl border border-input bg-input px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60';
+  'h-11 w-full rounded-xl border border-input bg-input px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60 appearance-none';
+
+const CICLOS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 export function StudentDetailsStep() {
   const { registrarse } = useAuth();
@@ -56,28 +58,11 @@ export function StudentDetailsStep() {
       setStep('personal');
       return;
     }
-
     setStudentDetails(data);
-
     try {
-      await registrarse(
-        personal.nombre,
-        personal.apellido,
-        personal.dni,
-        personal.correo,
-        personal.password,
-        'ESTUDIANTE',
-        data,
-        personal.telefono,
-      );
-      // El siguiente paso depende del método elegido por el admin (#3):
-      // teléfono → OTP WhatsApp; solo email → código por correo; ninguno → directo.
-      let metodo: string = 'WHATSAPP_OTP';
-      try {
-        metodo = await servicioAuth.obtenerMetodoVerificacion();
-      } catch {
-        /* fallback seguro: comportamiento histórico (OTP) */
-      }
+      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ESTUDIANTE', data, personal.telefono);
+      let metodo = 'WHATSAPP_OTP';
+      try { metodo = await servicioAuth.obtenerMetodoVerificacion(); } catch { /* fallback */ }
       if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
       else if (metodo === 'EMAIL') setStep('email-code');
       else setStep('result');
@@ -87,23 +72,25 @@ export function StudentDetailsStep() {
   };
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
-          Casi terminamos
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Necesitamos estos datos para verificar tu perfil estudiantil.
+    <div className="space-y-5">
+      <header>
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-primary">Perfil estudiantil</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Datos académicos</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Con esta info personalizamos tus búsquedas y verificamos tu perfil.
         </p>
       </header>
 
       <Form {...form}>
-        <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+
+          {/* Universidad */}
           <FormField
             control={form.control}
             name="universidad"
             render={({ field }) => (
               <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">Universidad</FormLabel>
                 <FormControl>
                   {cargandoCatalogo ? (
                     <select disabled className={SELECT_CLASS}>
@@ -117,9 +104,7 @@ export function StudentDetailsStep() {
                       ))}
                     </select>
                   ) : (
-                    <select disabled className={SELECT_CLASS}>
-                      <option>No hay universidades en el catálogo</option>
-                    </select>
+                    <Input {...field} placeholder="Escribe el nombre de tu universidad" className="h-11 rounded-xl bg-input text-sm" />
                   )}
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
@@ -127,38 +112,13 @@ export function StudentDetailsStep() {
             )}
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="codigoEstudiante"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input {...field} placeholder="Código" className="h-12 rounded-xl bg-input text-sm" />
-                  </FormControl>
-                  <FormMessage className="px-1 text-[10px]" />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="ciclo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input {...field} inputMode="numeric" placeholder="Ciclo (1-12)" className="h-12 rounded-xl bg-input text-sm" />
-                  </FormControl>
-                  <FormMessage className="px-1 text-[10px]" />
-                </FormItem>
-              )}
-            />
-          </div>
-
+          {/* Carrera */}
           <FormField
             control={form.control}
             name="carrera"
             render={({ field }) => (
               <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">Carrera</FormLabel>
                 <FormControl>
                   {cargandoCatalogo ? (
                     <select disabled className={SELECT_CLASS}>
@@ -172,9 +132,7 @@ export function StudentDetailsStep() {
                       ))}
                     </select>
                   ) : (
-                    <select disabled className={SELECT_CLASS}>
-                      <option>No hay carreras en el catálogo</option>
-                    </select>
+                    <Input {...field} placeholder="Ej: Ingeniería de Sistemas" className="h-11 rounded-xl bg-input text-sm" />
                   )}
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
@@ -182,23 +140,57 @@ export function StudentDetailsStep() {
             )}
           />
 
+          {/* Ciclo + Código en grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="ciclo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">Ciclo actual</FormLabel>
+                  <FormControl>
+                    <select {...field} className={SELECT_CLASS}>
+                      <option value="" disabled>Ciclo</option>
+                      {CICLOS.map((n) => (
+                        <option key={n} value={String(n)}>{n}° ciclo</option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="codigoEstudiante"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">Código de estudiante</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Ej: 202015043" className="h-11 rounded-xl bg-input text-sm" />
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+          </div>
+
           <Button
             type="submit"
             size="lg"
-            className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
+            className="h-12 w-full rounded-full text-sm font-bold tracking-wide"
             disabled={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro'}
+            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro →'}
           </Button>
 
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            className="w-full text-xs font-bold text-muted-foreground hover:text-primary"
             onClick={() => setStep('personal')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Volver
-          </Button>
+            ← Volver
+          </button>
         </form>
       </Form>
     </div>

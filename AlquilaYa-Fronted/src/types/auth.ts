@@ -11,6 +11,8 @@ export interface Usuario {
   biografia?: string;
   /** Correo confirmado vía link de verificación (o Google). #3 */
   emailVerificado?: boolean;
+  /** 'GOOGLE' si la cuenta fue creada/iniciada con Google OAuth, 'LOCAL' si es con email+contraseña. */
+  tipoLogin?: 'GOOGLE' | 'LOCAL';
 }
 
 export interface PayloadJWT {
@@ -19,8 +21,10 @@ export interface PayloadJWT {
   perfilId?: number;
   nombre: string;
   rol: RolUsuario;
+  foto?: string;
   iat: number;
   exp: number;
+  tipoLogin?: 'GOOGLE' | 'LOCAL';
 }
 
 export interface EstadoAuth {

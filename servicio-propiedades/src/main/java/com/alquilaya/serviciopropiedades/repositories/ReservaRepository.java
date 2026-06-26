@@ -33,6 +33,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     /** Reserva más reciente de una propiedad (para la alerta "30 días sin reservas"). */
     Reserva findFirstByPropiedadIdOrderByFechaCreacionDesc(Long propiedadId);
 
+    /** Reserva de un grupo de roommates (#38 Fase 2). */
+    java.util.Optional<Reserva> findFirstByGrupoId(Long grupoId);
+
     boolean existsByEstudianteIdAndPropiedadIdAndEstado(Long estudianteId, Long propiedadId, EstadoReserva estado);
 
     boolean existsByPropiedadIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(

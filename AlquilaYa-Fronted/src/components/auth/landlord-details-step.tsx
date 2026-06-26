@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2, Loader2, MapPin } from 'lucide-react';
+import { Locate, Loader2, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
@@ -15,79 +15,113 @@ import { notify } from '@/lib/notify';
 import { servicioAuth } from '@/services/auth-service';
 import { landlordDetailsSchema, type LandlordDetailsFormData } from '@/schemas/auth-schema';
 
-const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-[200px] w-full animate-pulse items-center justify-center rounded-xl bg-muted text-xs text-muted-foreground">
-      Cargando mapa…
-    </div>
-  ),
-});
+const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), { ssr: false });
+
+interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
 
 export function LandlordDetailsStep() {
   const { registrarse } = useAuth();
   const { personal, landlordDetails, setLandlordDetails, setStep } = useAuthModal();
-  const [obteniendoUbicacion, setObteniendoUbicacion] = useState(false);
+
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<LandlordDetailsFormData>({
     resolver: zodResolver(landlordDetailsSchema),
     defaultValues: {
       ruc: landlordDetails?.ruc ?? '',
       direccionCuartos: landlordDetails?.direccionCuartos ?? '',
-      latitud: landlordDetails?.latitud ?? (null as unknown as number),
-      longitud: landlordDetails?.longitud ?? (null as unknown as number),
+      latitud: landlordDetails?.latitud ?? undefined,
+      longitud: landlordDetails?.longitud ?? undefined,
     },
   });
 
-  const lat = form.watch('latitud');
-  const lng = form.watch('longitud');
-
-  const reverseGeocode = useCallback(
-    async (lat: number, lng: number) => {
+  /* ── Búsqueda de dirección (Nominatim forward geocoding) ── */
+  const handleSearch = (q: string) => {
+    setSearchQuery(q);
+    setSearchResults([]);
+    if (!q.trim()) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
-          { headers: { 'User-Agent': 'AlquilaYa-App' } },
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=4&countrycodes=pe`,
         );
-        const data = await res.json();
-        if (data?.display_name) {
-          form.setValue('direccionCuartos', data.display_name, { shouldValidate: true });
-        }
+        const data: NominatimResult[] = await res.json();
+        setSearchResults(data);
       } catch {
-        // El usuario puede escribir la dirección manualmente.
+        /* silent */
+      } finally {
+        setSearching(false);
       }
-    },
-    [form],
-  );
+    }, 450);
+  };
 
-  const onMapMove = useCallback(
-    (newLat: number, newLng: number) => {
-      form.setValue('latitud', newLat, { shouldValidate: true });
-      form.setValue('longitud', newLng, { shouldValidate: true });
-      reverseGeocode(newLat, newLng);
-    },
-    [form, reverseGeocode],
-  );
+  const selectResult = (r: NominatimResult) => {
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    form.setValue('latitud', lat, { shouldValidate: true });
+    form.setValue('longitud', lon, { shouldValidate: true });
+    form.setValue('direccionCuartos', r.display_name.split(',').slice(0, 3).join(', '), { shouldValidate: true });
+    setSearchQuery('');
+    setSearchResults([]);
+  };
 
+  /* ── GPS ── */
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
       notify.error(null, 'Tu navegador no soporta geolocalización');
       return;
     }
-    setObteniendoUbicacion(true);
+    setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        form.setValue('latitud', latitude, { shouldValidate: true });
-        form.setValue('longitud', longitude, { shouldValidate: true });
-        reverseGeocode(latitude, longitude);
-        setObteniendoUbicacion(false);
+      async ({ coords }) => {
+        const { latitude: lat, longitude: lon } = coords;
+        form.setValue('latitud', lat, { shouldValidate: true });
+        form.setValue('longitud', lon, { shouldValidate: true });
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+          );
+          const data = await res.json();
+          const addr = (data.display_name as string | undefined)
+            ? (data.display_name as string).split(',').slice(0, 3).join(', ')
+            : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+          form.setValue('direccionCuartos', addr, { shouldValidate: true });
+        } catch {
+          form.setValue('direccionCuartos', `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+        }
+        setGettingLocation(false);
       },
       (err) => {
-        notify.error(err, 'No pudimos obtener tu ubicación. Revisa los permisos.');
-        setObteniendoUbicacion(false);
+        notify.error(null, err.code === 1 ? 'Permiso de ubicación denegado' : 'No se pudo obtener tu ubicación');
+        setGettingLocation(false);
       },
     );
+  };
+
+  /* ── MapPicker: arrastrar/clic el marcador ── */
+  const handlePositionChange = async (lat: number, lon: number) => {
+    form.setValue('latitud', lat, { shouldValidate: true });
+    form.setValue('longitud', lon, { shouldValidate: true });
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+      );
+      const data = await res.json();
+      if (data.display_name) {
+        form.setValue('direccionCuartos', (data.display_name as string).split(',').slice(0, 3).join(', '), { shouldValidate: true });
+      }
+    } catch { /* silent */ }
   };
 
   const onSubmit = async (data: LandlordDetailsFormData) => {
@@ -96,38 +130,11 @@ export function LandlordDetailsStep() {
       setStep('personal');
       return;
     }
-
-    setLandlordDetails({
-      ruc: data.ruc ?? '',
-      direccionCuartos: data.direccionCuartos,
-      latitud: data.latitud,
-      longitud: data.longitud,
-    });
-
+    setLandlordDetails({ ...data, ruc: data.ruc ?? '', latitud: data.latitud ?? null, longitud: data.longitud ?? null });
     try {
-      await registrarse(
-        personal.nombre,
-        personal.apellido,
-        personal.dni,
-        personal.correo,
-        personal.password,
-        'ARRENDADOR',
-        {
-          ruc: data.ruc ?? '',
-          direccionCuartos: data.direccionCuartos,
-          latitud: data.latitud,
-          longitud: data.longitud,
-          esEmpresa: !!data.ruc,
-        },
-        personal.telefono,
-      );
-      // teléfono → OTP WhatsApp; solo email → código por correo; ninguno → directo (#3).
-      let metodo: string = 'WHATSAPP_OTP';
-      try {
-        metodo = await servicioAuth.obtenerMetodoVerificacion();
-      } catch {
-        /* fallback seguro: comportamiento histórico (OTP) */
-      }
+      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ARRENDADOR', data, personal.telefono);
+      let metodo = 'WHATSAPP_OTP';
+      try { metodo = await servicioAuth.obtenerMetodoVerificacion(); } catch { /* fallback */ }
       if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
       else if (metodo === 'EMAIL') setStep('email-code');
       else setStep('result');
@@ -136,97 +143,164 @@ export function LandlordDetailsStep() {
     }
   };
 
+  const lat = form.watch('latitud');
+  const lon = form.watch('longitud');
+
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
-          Datos del arrendador
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Necesitamos saber dónde están tus cuartos.
+    <div className="space-y-5">
+      <header>
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-primary">Perfil arrendador</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Ubicación de tus cuartos</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Marca en el mapa dónde están — así aparecerás en búsquedas cercanas a campus.
         </p>
       </header>
 
       <Form {...form}>
-        <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
-          <FormField
-            control={form.control}
-            name="ruc"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input {...field} placeholder="RUC (para facturación, opcional)" className="h-12 rounded-xl bg-input text-sm" />
-                </FormControl>
-                <FormMessage className="px-1 text-[10px]" />
-              </FormItem>
-            )}
-          />
+        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
 
+          {/* ── Buscador de dirección ── */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Busca la dirección</p>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Escribe una calle, avenida o referencia…"
+                className="h-11 w-full rounded-xl border border-input bg-input pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              {searching && (
+                <Loader2 className="absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
+              {searchQuery && !searching && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <ul className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                {searchResults.map((r) => (
+                  <li key={r.place_id}>
+                    <button
+                      type="button"
+                      onClick={() => selectResult(r)}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/60"
+                    >
+                      {r.display_name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* ── GPS ── */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDetectLocation}
+            disabled={gettingLocation}
+            className="h-9 w-full gap-2 rounded-xl border-dashed text-xs font-semibold text-muted-foreground"
+          >
+            {gettingLocation
+              ? <><Loader2 className="size-3.5 animate-spin" /> Obteniendo ubicación…</>
+              : <><Locate className="size-3.5" /> Usar mi ubicación actual (GPS)</>}
+          </Button>
+
+          {/* ── Mapa interactivo ── */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">O arrastra el marcador en el mapa</p>
+            <div className="h-[190px] overflow-hidden rounded-2xl border border-border">
+              <MapPicker
+                lat={lat ?? -12.0464}
+                lng={lon ?? -77.0428}
+                onPositionChange={handlePositionChange}
+              />
+            </div>
+            {lat !== undefined && lon !== undefined && (
+              <p className="text-[10px] text-muted-foreground/60">
+                {lat.toFixed(5)}, {lon.toFixed(5)}
+              </p>
+            )}
+          </div>
+
+          {/* ── Dirección confirmada ── */}
           <FormField
             control={form.control}
             name="direccionCuartos"
             render={({ field }) => (
               <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">Dirección confirmada</FormLabel>
                 <FormControl>
-                  <div className="relative">
-                    <Input {...field} placeholder="Dirección de tus cuartos" className="h-12 rounded-xl bg-input pr-10 text-sm" />
-                    <MapPin className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                  </div>
+                  <Input
+                    {...field}
+                    placeholder="Se completa al elegir en el mapa o GPS"
+                    className="h-11 rounded-xl bg-input text-sm"
+                  />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
             )}
           />
 
-          <button
-            type="button"
-            onClick={handleDetectLocation}
-            disabled={obteniendoUbicacion}
-            className="flex items-center gap-2 text-xs font-bold text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
-          >
-            {obteniendoUbicacion ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : lat ? (
-              <CheckCircle2 className="size-4 text-green-600" />
-            ) : (
-              <MapPin className="size-4" />
+          {/* ── RUC opcional ── */}
+          <FormField
+            control={form.control}
+            name="ruc"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">
+                  RUC <span className="font-normal text-muted-foreground/60">(opcional · para facturación)</span>
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    inputMode="numeric"
+                    maxLength={11}
+                    placeholder="20123456789"
+                    className="h-11 rounded-xl bg-input text-sm"
+                  />
+                </FormControl>
+                <FormMessage className="px-1 text-[10px]" />
+              </FormItem>
             )}
-            {obteniendoUbicacion
-              ? 'Obteniendo GPS…'
-              : lat
-                ? 'Ubicación GPS capturada'
-                : 'Detectar mi ubicación GPS exacta'}
-          </button>
+          />
 
-          {lat && lng && (
-            <div className="space-y-2">
-              <div className="flex justify-between px-1 text-[10px] text-muted-foreground">
-                <span>
-                  Lat: {lat.toFixed(4)} · Lng: {lng.toFixed(4)}
-                </span>
-                <span className="font-bold text-primary">Mueve el marcador</span>
-              </div>
-              <MapPicker lat={lat} lng={lng} onPositionChange={onMapMove} />
-            </div>
-          )}
+          {/* Error de coordenadas */}
+          <FormField
+            control={form.control}
+            name="latitud"
+            render={() => (
+              <FormItem>
+                <FormMessage className="px-1 text-[10px]" />
+              </FormItem>
+            )}
+          />
 
           <Button
             type="submit"
             size="lg"
-            className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
+            className="h-12 w-full rounded-full text-sm font-bold tracking-wide"
             disabled={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro'}
+            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro →'}
           </Button>
 
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            className="w-full text-xs font-bold text-muted-foreground hover:text-primary"
             onClick={() => setStep('personal')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Volver
-          </Button>
+            ← Volver
+          </button>
         </form>
       </Form>
     </div>

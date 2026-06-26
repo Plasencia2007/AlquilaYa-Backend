@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
@@ -43,7 +42,6 @@ const ICON_BY_TIPO: Record<TipoNotificacion, LucideIcon> = {
 export function NotificationBell() {
   const router = useRouter();
   const { items, noLeidas, marcarLeida, marcarTodasLeidas } = useNotifications();
-  const preview = items.slice(0, 5);
 
   const onItemClick = (n: Notificacion) => {
     if (!n.leida) marcarLeida(n.id);
@@ -72,13 +70,20 @@ export function NotificationBell() {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" sideOffset={10} className="w-[360px] p-0">
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div>
-            <p className="text-sm font-bold">Notificaciones</p>
-            <p className="text-[11px] text-muted-foreground">
-              {noLeidas > 0 ? `${noLeidas} sin leer` : 'Estás al día'}
-            </p>
+      <DropdownMenuContent align="end" sideOffset={10} className="w-[380px] overflow-hidden !rounded-none border border-border/60 p-0 shadow-lg">
+        {/* Header */}
+        <header className="flex items-center justify-between bg-muted/40 px-5 py-3.5 border-b border-border">
+          <div className="flex items-center gap-2.5">
+            {noLeidas > 0
+              ? <BellRing className="size-4 text-primary" aria-hidden />
+              : <Bell className="size-4 text-muted-foreground" aria-hidden />
+            }
+            <div>
+              <p className="text-sm font-bold text-foreground leading-none">Notificaciones</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {noLeidas > 0 ? `${noLeidas} sin leer` : 'Estás al día'}
+              </p>
+            </div>
           </div>
           {noLeidas > 0 && (
             <button
@@ -91,14 +96,17 @@ export function NotificationBell() {
           )}
         </header>
 
-        <ScrollArea className="max-h-[420px]">
-          {preview.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              Sin notificaciones por ahora
+        {/* Lista */}
+        <ScrollArea className="max-h-[400px]">
+          {items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
+              <Bell className="size-8 text-muted-foreground/30" aria-hidden />
+              <p className="text-sm font-medium text-muted-foreground">Sin notificaciones por ahora</p>
+              <p className="text-xs text-muted-foreground/60">Te avisaremos cuando haya novedades</p>
             </div>
           ) : (
-            <ul>
-              {preview.map((n) => {
+            <ul className="divide-y divide-border">
+              {items.map((n) => {
                 const Icon = ICON_BY_TIPO[n.tipo] ?? Bell;
                 return (
                   <li key={n.id}>
@@ -106,36 +114,30 @@ export function NotificationBell() {
                       type="button"
                       onClick={() => onItemClick(n)}
                       className={cn(
-                        'flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted',
-                        !n.leida && 'bg-primary/5',
+                        'flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/60',
+                        !n.leida && 'bg-primary/4',
                       )}
                     >
-                      <span
-                        className={cn(
-                          'mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full',
-                          n.leida
-                            ? 'bg-muted text-muted-foreground'
-                            : 'bg-primary/10 text-primary',
-                        )}
-                      >
-                        <Icon className="size-4" aria-hidden />
+                      <span className={cn(
+                        'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg',
+                        n.leida ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary',
+                      )}>
+                        <Icon className="size-3.5" aria-hidden />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p
-                          className={cn(
-                            'text-sm leading-snug',
-                            n.leida ? 'font-medium text-foreground/80' : 'font-bold text-foreground',
-                          )}
-                        >
+                        <p className={cn(
+                          'text-sm leading-snug',
+                          n.leida ? 'font-medium text-foreground/70' : 'font-semibold text-foreground',
+                        )}>
                           {n.titulo}
                         </p>
-                        <p className="line-clamp-2 text-xs text-muted-foreground">{n.mensaje}</p>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.mensaje}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground/60">
                           {tiempoRelativo(n.fechaCreacion)}
                         </p>
                       </div>
                       {!n.leida && (
-                        <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
                       )}
                     </button>
                   </li>
@@ -145,16 +147,18 @@ export function NotificationBell() {
           )}
         </ScrollArea>
 
-        <footer className="border-t border-border p-2">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs font-bold"
-          >
-            <Link href="/student/notifications">Ver todas</Link>
-          </Button>
-        </footer>
+        {/* Footer */}
+        {items.length > 0 && (
+          <div className="border-t border-border px-5 py-2.5">
+            <button
+              type="button"
+              onClick={() => router.push('/student/notifications')}
+              className="w-full text-center text-xs font-bold text-primary hover:underline"
+            >
+              Ver todas las notificaciones
+            </button>
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

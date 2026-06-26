@@ -2,7 +2,9 @@ package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
 import com.alquilaya.serviciopropiedades.dto.CrearGrupoRequest;
+import com.alquilaya.serviciopropiedades.dto.CuotaPagoDTO;
 import com.alquilaya.serviciopropiedades.dto.GrupoRoommateDTO;
+import com.alquilaya.serviciopropiedades.dto.ReservarGrupoRequest;
 import com.alquilaya.serviciopropiedades.services.GrupoRoommateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +58,25 @@ public class GrupoRoommateController {
     @PostMapping("/{id}/miembros/{estudianteId}/aprobar")
     public ResponseEntity<GrupoRoommateDTO> aprobar(@PathVariable Long id, @PathVariable Long estudianteId) {
         return ResponseEntity.ok(grupoService.aprobar(id, estudianteId, CurrentUserProvider.requirePerfilId()));
+    }
+
+    /** Genera la reserva grupal (creador, grupo COMPLETO) con las cuotas por miembro. */
+    @PostMapping("/{id}/reservar")
+    public ResponseEntity<GrupoRoommateDTO> reservar(@PathVariable Long id, @Valid @RequestBody ReservarGrupoRequest req) {
+        return ResponseEntity.ok(grupoService.reservarGrupo(
+                id, CurrentUserProvider.requirePerfilId(), req.getFechaInicio(), req.getFechaFin()));
+    }
+
+    /** Cuota del miembro actual en una reserva grupal (la consume pagos para cobrar su parte). */
+    @GetMapping("/reserva/{reservaId}/mi-cuota")
+    public ResponseEntity<CuotaPagoDTO> miCuota(@PathVariable Long reservaId) {
+        return ResponseEntity.ok(grupoService.miCuota(reservaId, CurrentUserProvider.requirePerfilId()));
+    }
+
+    /** Progreso de pago de una reserva grupal (todas las cuotas). */
+    @GetMapping("/reserva/{reservaId}/cuotas")
+    public ResponseEntity<List<CuotaPagoDTO>> cuotas(@PathVariable Long reservaId) {
+        return ResponseEntity.ok(grupoService.cuotasDeReserva(reservaId));
     }
 
     @DeleteMapping("/{id}/salir")

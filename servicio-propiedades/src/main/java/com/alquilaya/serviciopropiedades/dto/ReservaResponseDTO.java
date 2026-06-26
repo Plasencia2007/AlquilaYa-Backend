@@ -38,6 +38,8 @@ public class ReservaResponseDTO {
     private String estadoFrontend;
     private String motivoRechazo;
     private LocalDateTime fechaCreacion;
+    /** Si la reserva es grupal (#38 Fase 2): el pago es dividido por cuotas. Null = individual. */
+    private Long grupoId;
 
     public static ReservaResponseDTO from(Reserva r) {
         return from(r, "", "", "");
@@ -64,6 +66,7 @@ public class ReservaResponseDTO {
                 .estadoFrontend(mapearEstadoFrontend(r.getEstado()))
                 .motivoRechazo(r.getMotivoRechazo())
                 .fechaCreacion(r.getFechaCreacion())
+                .grupoId(r.getGrupoId())
                 .build();
     }
 

@@ -115,7 +115,7 @@ public class ConvivenciaService {
                 .presupuestoMax(e.getPresupuestoMax())
                 .fechaMudanza(e.getFechaMudanza())
                 .numCompaneros(e.getNumCompaneros())
-                .buscaCompaneros(e.isBuscaCompaneros())
+                .buscaCompaneros(Boolean.TRUE.equals(e.getBuscaCompaneros()))
                 .intereses(e.getIntereses())
                 .zonasPreferidas(e.getZonasPreferidas())
                 .build();

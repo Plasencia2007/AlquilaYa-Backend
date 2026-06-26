@@ -10,6 +10,12 @@ async function crearPreferencia(reservaId: string | number): Promise<Preferencia
   return data;
 }
 
+/** Pago dividido (#38 Fase 2): link para pagar la cuota propia de una reserva grupal. */
+async function crearPreferenciaGrupo(reservaId: string | number): Promise<PreferenciaResponse> {
+  const { data } = await api.post<PreferenciaResponse>(`/pagos/preferencia-grupo/${reservaId}`);
+  return data;
+}
+
 export type EstadoPago =
   | 'SIN_PAGO'
   | 'PENDIENTE'
@@ -66,4 +72,9 @@ async function obtenerResumenFinanciero(): Promise<ResumenFinanciero> {
   };
 }
 
-export const pagoService = { crearPreferencia, getEstadoPago, obtenerResumenFinanciero };
+export const pagoService = {
+  crearPreferencia,
+  crearPreferenciaGrupo,
+  getEstadoPago,
+  obtenerResumenFinanciero,
+};

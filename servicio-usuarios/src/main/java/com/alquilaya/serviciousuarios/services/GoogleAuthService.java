@@ -86,6 +86,7 @@ public class GoogleAuthService {
         String nombreCompleto = (String) payload.get("name");
         String givenName = (String) payload.get("given_name");
         String familyName = (String) payload.get("family_name");
+        String picture = (String) payload.get("picture");
 
         if (email == null || Boolean.FALSE.equals(emailVerified)) {
             throw new CredencialesInvalidasException("La cuenta de Google no tiene email verificado.");
@@ -94,8 +95,14 @@ public class GoogleAuthService {
         String correoNorm = email.trim().toLowerCase();
         Optional<Usuario> existente = usuarioRepository.findByCorreo(correoNorm);
         if (existente.isPresent()) {
+            Usuario u = existente.get();
+            // Backfill de la foto de Google si el usuario aún no tiene una.
+            if ((u.getFotoUrl() == null || u.getFotoUrl().isBlank()) && picture != null && !picture.isBlank()) {
+                u.setFotoUrl(picture);
+                usuarioRepository.save(u);
+            }
             log.info("[GoogleAuth] Login existente para {}", LogMask.email(correoNorm));
-            return existente.get();
+            return u;
         }
 
         // Usuario nuevo
@@ -117,6 +124,7 @@ public class GoogleAuthService {
                 .estado(EstadoUsuario.ACTIVE) // Google verificó email
                 .emailVerificado(true) // Google ya verifica el correo (#3)
                 .telefonoVerificado(false) // Sin teléfono aún
+                .fotoUrl(picture) // Foto de perfil de Google
                 .build();
 
         Usuario creado = usuarioRepository.save(nuevo);

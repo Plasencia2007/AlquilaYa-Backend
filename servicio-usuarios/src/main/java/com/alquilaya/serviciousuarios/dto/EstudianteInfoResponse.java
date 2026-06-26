@@ -12,8 +12,12 @@ public class EstudianteInfoResponse {
     private String apellido;
     private String correo;
     private String telefono;
+    private String fotoUrl;
+    private java.time.LocalDate fechaNacimiento;
     private String universidad;
+    private String codigoEstudiante;
     private String carrera;
+    private Integer ciclo;
     /** true si todos los documentos requeridos del estudiante están APROBADOS. */
     private boolean verificado;
 

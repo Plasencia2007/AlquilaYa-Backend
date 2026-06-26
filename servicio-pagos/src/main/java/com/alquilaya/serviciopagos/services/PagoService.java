@@ -2,6 +2,7 @@ package com.alquilaya.serviciopagos.services;
 
 import com.alquilaya.serviciopagos.clients.ReservasClient;
 import com.alquilaya.serviciopagos.config.CurrentUser;
+import com.alquilaya.serviciopagos.dto.CuotaPagoDTO;
 import com.alquilaya.serviciopagos.dto.EstadoPagoResponse;
 import com.alquilaya.serviciopagos.dto.ReservaDetalleDTO;
 import com.alquilaya.serviciopagos.entities.Pago;
@@ -55,6 +56,7 @@ public class PagoService {
 
     private final PagoRepository pagoRepository;
     private final ReservasClient reservasClient;
+    private final com.alquilaya.serviciopagos.clients.GruposClient gruposClient;
     private final OutboxPublisher outboxPublisher;
     /** Opcional: si Redis está down/no configurado, hacemos fallback graceful. */
     private final StringRedisTemplate redisTemplate;
@@ -63,11 +65,13 @@ public class PagoService {
 
     public PagoService(PagoRepository pagoRepository,
                        ReservasClient reservasClient,
+                       com.alquilaya.serviciopagos.clients.GruposClient gruposClient,
                        OutboxPublisher outboxPublisher,
                        @Autowired(required = false) StringRedisTemplate redisTemplate,
                        @Lazy PagoService self) {
         this.pagoRepository = pagoRepository;
         this.reservasClient = reservasClient;
+        this.gruposClient = gruposClient;
         this.outboxPublisher = outboxPublisher;
         this.redisTemplate = redisTemplate;
         this.self = self;
@@ -185,6 +189,12 @@ public class PagoService {
                 throw new IllegalStateException("No puedes pagar una reserva que no es tuya");
             }
 
+            // Las reservas grupales (#38 Fase 2) se pagan por cuotas → usar crearPreferenciaGrupo.
+            if (reserva.getGrupoId() != null) {
+                throw new IllegalStateException(
+                        "Esta reserva es grupal: cada miembro paga su cuota (pago dividido).");
+            }
+
             // Validar campos críticos para Mercado Pago
             String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty())
                     ? reserva.getEstudianteNombre() : "Estudiante AlquilaYa";
@@ -296,6 +306,91 @@ public class PagoService {
         }
     }
 
+    /**
+     * Pago dividido (#38 Fase 2): el miembro paga SU cuota de una reserva grupal. La preferencia
+     * usa {@code externalReference = "reservaId:estudianteId"} para que el webhook identifique la
+     * cuota; el flujo individual (externalReference = reservaId) queda intacto.
+     */
+    public String crearPreferenciaGrupo(Long reservaId, CurrentUser current) {
+        try {
+            if (current == null || current.getPerfilId() == null) {
+                throw new IllegalStateException("No se pudo identificar al estudiante");
+            }
+            // Cuota del miembro actual (propiedades lo resuelve por el JWT propagado).
+            CuotaPagoDTO cuota = gruposClient.miCuota(reservaId);
+            if (cuota == null || cuota.getMonto() == null) {
+                throw new IllegalStateException("No tienes una cuota en esta reserva grupal");
+            }
+            if (cuota.getEstudianteId() != null && !current.getPerfilId().equals(cuota.getEstudianteId())) {
+                throw new IllegalStateException("Esta cuota no es tuya");
+            }
+            if ("PAGADO".equalsIgnoreCase(cuota.getEstado())) {
+                throw new IllegalStateException("Ya pagaste tu cuota de este grupo");
+            }
+            BigDecimal monto = cuota.getMonto().setScale(2, RoundingMode.HALF_UP);
+            if (monto.compareTo(montoMinimo) < 0) {
+                throw new IllegalStateException("El monto mínimo de pago es S/ " + montoMinimo.toPlainString()
+                        + ". Tu cuota (S/ " + monto.toPlainString() + ") no puede pagarse en línea.");
+            }
+
+            Long estudianteId = current.getPerfilId();
+            String nombrePagador = (cuota.getEstudianteNombre() != null && !cuota.getEstudianteNombre().isEmpty())
+                    ? cuota.getEstudianteNombre() : "Estudiante AlquilaYa";
+            String emailPagador = (cuota.getEstudianteCorreo() != null && !cuota.getEstudianteCorreo().isEmpty())
+                    ? cuota.getEstudianteCorreo() : "estudiante@test.com";
+
+            List<PreferenceItemRequest> items = new ArrayList<>();
+            items.add(PreferenceItemRequest.builder()
+                    .id("cuota-" + reservaId + "-" + estudianteId)
+                    .title("Tu parte · " + (cuota.getPropiedadTitulo() != null ? cuota.getPropiedadTitulo() : "Reserva grupal AlquilaYa"))
+                    .quantity(1).unitPrice(monto).currencyId("PEN").build());
+
+            PreferenceBackUrlsRequest backUrls = PreferenceBackUrlsRequest.builder()
+                    .success(urlSuccess).failure(urlFailure).pending(urlPending).build();
+            com.mercadopago.client.preference.PreferencePayerRequest payer =
+                    com.mercadopago.client.preference.PreferencePayerRequest.builder()
+                            .name(nombrePagador).email(emailPagador).build();
+
+            PreferenceRequest preferenceRequest = PreferenceRequest.builder()
+                    .items(items).payer(payer).backUrls(backUrls)
+                    .notificationUrl(notificationUrl)
+                    .externalReference(reservaId + ":" + estudianteId)
+                    .expires(true).expirationDateTo(OffsetDateTime.now().plusDays(2))
+                    .build();
+
+            Preference preference = crearPreferenciaResiliente(preferenceRequest).join();
+
+            // Invalida cuotas-pago PENDIENTE previas de ESTE miembro en esta reserva.
+            for (Pago previo : pagoRepository.findAllByReservaIdOrderByFechaCreacionDesc(reservaId)) {
+                if ("PENDIENTE".equals(previo.getEstado()) && estudianteId.equals(previo.getEstudianteId())) {
+                    previo.setEstado("EXPIRADO");
+                    pagoRepository.save(previo);
+                }
+            }
+
+            Pago pago = Pago.builder()
+                    .reservaId(reservaId).preferenciaId(preference.getId())
+                    .monto(monto).comision(BigDecimal.ZERO).montoArrendador(monto)
+                    .estudianteId(estudianteId).grupoId(cuota.getGrupoId())
+                    .estado("PENDIENTE").build();
+            pagoRepository.save(pago);
+
+            log.info("✅ Preferencia de cuota creada: reserva={} estudiante={} monto={}", reservaId, estudianteId, monto);
+            return preference.getInitPoint();
+
+        } catch (IllegalStateException | CallNotPermittedException | BulkheadFullException e) {
+            throw e;
+        } catch (java.util.concurrent.CompletionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof IllegalStateException ise) throw ise;
+            log.error("❌ Error creando preferencia de cuota: {}", cause.getMessage(), cause);
+            throw new RuntimeException("No se pudo generar el link de pago de tu cuota: " + cause.getMessage());
+        } catch (Exception e) {
+            log.error("❌ Error creando preferencia de cuota: {}", e.getMessage(), e);
+            throw new RuntimeException("No se pudo generar el link de pago de tu cuota: " + e.getMessage());
+        }
+    }
+
     public void procesarWebhook(String xSignature, String xRequestId, String dataIdQuery,
                                 Map<String, Object> notification) {
         String type = (String) notification.get("type");
@@ -359,11 +454,22 @@ public class PagoService {
     @Transactional
     public void aplicarCambioEstado(Payment payment, String paymentIdStr) {
         String status = payment.getStatus();
-        String reservaIdStr = payment.getExternalReference();
-        if (reservaIdStr == null) {
+        String externalRef = payment.getExternalReference();
+        if (externalRef == null) {
             throw new WebhookInvalidoException("Payment sin externalReference");
         }
-        Long reservaId = Long.parseLong(reservaIdStr);
+        // Single-pagador: externalReference = reservaId (sin cambios).
+        // Grupal (#38 Fase 2): "reservaId:estudianteId" → identifica la cuota del miembro.
+        final Long reservaId;
+        final Long estudianteIdGrupal;
+        if (externalRef.contains(":")) {
+            String[] parts = externalRef.split(":", 2);
+            reservaId = Long.parseLong(parts[0]);
+            estudianteIdGrupal = Long.parseLong(parts[1]);
+        } else {
+            reservaId = Long.parseLong(externalRef);
+            estudianteIdGrupal = null;
+        }
 
         Optional<Pago> existentePorPayment = pagoRepository.findByPaymentId(paymentIdStr);
         if (existentePorPayment.isPresent() && esEstadoTerminal(existentePorPayment.get().getEstado())) {
@@ -372,13 +478,23 @@ public class PagoService {
             return;
         }
 
-        // Pago objetivo: el ya asociado a este paymentId (caso pending→approved) o, en su
-        // defecto, el PENDIENTE más reciente de la reserva.
-        Pago pago = existentePorPayment.orElseGet(() -> pagoRepository
-                .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
-                .orElseThrow(() -> new WebhookInvalidoException(
-                        "No existe pago PENDIENTE para la reserva " + reservaId)));
+        // Pago objetivo: el ya asociado a este paymentId (caso pending→approved) o, en su defecto,
+        // el PENDIENTE de esa reserva (grupal: el del miembro concreto; individual: el más reciente).
+        Pago pago = existentePorPayment.orElseGet(() -> {
+            if (estudianteIdGrupal != null) {
+                return pagoRepository
+                        .findFirstByReservaIdAndEstudianteIdAndEstadoOrderByFechaCreacionDesc(
+                                reservaId, estudianteIdGrupal, "PENDIENTE")
+                        .orElseThrow(() -> new WebhookInvalidoException(
+                                "No existe cuota PENDIENTE para reserva " + reservaId + " / estudiante " + estudianteIdGrupal));
+            }
+            return pagoRepository
+                    .findFirstByReservaIdAndEstadoOrderByFechaCreacionDesc(reservaId, "PENDIENTE")
+                    .orElseThrow(() -> new WebhookInvalidoException(
+                            "No existe pago PENDIENTE para la reserva " + reservaId));
+        });
 
+        String reservaIdStr = String.valueOf(reservaId);
         switch (status == null ? "" : status) {
             case "approved" -> manejarAprobado(pago, payment, paymentIdStr, reservaId, reservaIdStr);
             case "rejected" -> manejarRechazado(pago, paymentIdStr, reservaId, reservaIdStr);
@@ -436,6 +552,8 @@ public class PagoService {
         Map<String, Object> payload = new HashMap<>();
         payload.put("pagoId", guardado.getId());
         payload.put("reservaId", reservaId);
+        payload.put("estudianteId", guardado.getEstudianteId());
+        payload.put("grupoId", guardado.getGrupoId());
         payload.put("monto", guardado.getMonto());
         payload.put("comision", guardado.getComision());
         payload.put("montoArrendador", guardado.getMontoArrendador());

@@ -63,15 +63,18 @@ public class SagaReservaPagoService {
     private final ReservaRepository reservaRepository;
     private final OutboxPublisher outboxPublisher;
     private final com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService;
+    private final com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository cuotaRepo;
 
     public SagaReservaPagoService(SagaReservaPagoRepository sagaRepository,
                                   ReservaRepository reservaRepository,
                                   OutboxPublisher outboxPublisher,
-                                  com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService) {
+                                  com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService,
+                                  com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository cuotaRepo) {
         this.sagaRepository = sagaRepository;
         this.reservaRepository = reservaRepository;
         this.outboxPublisher = outboxPublisher;
         this.habitacionService = habitacionService;
+        this.cuotaRepo = cuotaRepo;
     }
 
     // =====================================================================
@@ -151,6 +154,13 @@ public class SagaReservaPagoService {
             return;
         }
 
+        // Reserva grupal (#38 Fase 2): cada miembro paga su cuota; la reserva se confirma a PAGADA
+        // SOLO cuando todas las cuotas están pagadas (no en el primer pago).
+        if (reserva.getGrupoId() != null) {
+            manejarPagoGrupal(saga, reserva, envelope);
+            return;
+        }
+
         EstadoReserva estado = reserva.getEstado();
         Long pagoId = extraerPagoIdDelEnvelope(envelope);
         String correlationId = envelope != null && envelope.getCorrelationId() != null
@@ -181,6 +191,52 @@ public class SagaReservaPagoService {
         habitacionService.recomputarTrasCambioReserva(reserva);
         log.info("Saga {}: reserva {} → PAGADA (ruta feliz)", saga.getSagaId(), reserva.getId());
         marcarSagaCompletada(saga, PasoSaga.PAGO_CONFIRMADO);
+    }
+
+    /**
+     * Maneja el pago de la cuota de un miembro en una reserva grupal: marca esa cuota como PAGADA
+     * y, si todas las cuotas de la reserva ya están pagadas, confirma la reserva (→ PAGADA).
+     */
+    private void manejarPagoGrupal(SagaReservaPago saga, Reserva reserva, EventEnvelope envelope) {
+        Long estId = extraerLongDelPayload(envelope, "estudianteId");
+        String paymentId = extraerStringDelPayload(envelope, "paymentId");
+        if (estId != null) {
+            cuotaRepo.findByReservaIdAndEstudianteId(reserva.getId(), estId).ifPresent(c -> {
+                if (!"PAGADO".equals(c.getEstado())) {
+                    c.setEstado("PAGADO");
+                    c.setPaymentId(paymentId);
+                    c.setFechaPago(LocalDateTime.now());
+                    cuotaRepo.save(c);
+                }
+            });
+        }
+        var todas = cuotaRepo.findByReservaId(reserva.getId());
+        long pagadas = todas.stream().filter(c -> "PAGADO".equals(c.getEstado())).count();
+        log.info("Saga {}: reserva grupal {} — cuota de {} pagada ({}/{})",
+                saga.getSagaId(), reserva.getId(), estId, pagadas, todas.size());
+        boolean todasPagadas = !todas.isEmpty() && pagadas == todas.size();
+        if (todasPagadas && reserva.getEstado() == EstadoReserva.APROBADA) {
+            rutaFelizPagado(saga, reserva, envelope); // → PAGADA + saga COMPLETADA
+        }
+        // Si faltan cuotas: la reserva se queda APROBADA y la saga en ESPERANDO_PAGO.
+    }
+
+    private Long extraerLongDelPayload(EventEnvelope env, String campo) {
+        if (env == null || env.getPayload() == null) return null;
+        JsonNode node = env.getPayload().get(campo);
+        if (node == null || node.isNull()) return null;
+        if (node.isNumber()) return node.asLong();
+        try {
+            return Long.parseLong(node.asText().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String extraerStringDelPayload(EventEnvelope env, String campo) {
+        if (env == null || env.getPayload() == null) return null;
+        JsonNode node = env.getPayload().get(campo);
+        return (node == null || node.isNull()) ? null : node.asText();
     }
 
     /** Snapshotea en la reserva la comisión efectivamente cobrada que trae el evento de pago. */

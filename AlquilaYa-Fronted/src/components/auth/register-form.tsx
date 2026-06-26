@@ -11,12 +11,10 @@ import { PasswordStrength } from './password-strength';
 
 
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { cn } from '@/lib/cn';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
 import { registerSchema, type RegisterFormData } from '@/schemas/auth-schema';
 
 import { LandlordDetailsStep } from './landlord-details-step';
@@ -27,7 +25,7 @@ import { RoleStep } from './role-step';
 import { StudentDetailsStep } from './student-details-step';
 
 export function RegisterForm() {
-  const { step, targetRole, personal, setPersonal, setStep, toggleView, setRole } = useAuthModal();
+  const { step, targetRole, personal, setPersonal, setStep, open } = useAuthModal();
 
   const [showPassword, setShowPassword] = useState(false);
 
@@ -61,6 +59,7 @@ export function RegisterForm() {
     setStep('details');
   };
 
+  if (step === 'role') return <RoleStep />;
   if (step === 'details') {
     return targetRole === 'ARRENDADOR' ? <LandlordDetailsStep /> : <StudentDetailsStep />;
   }
@@ -70,119 +69,108 @@ export function RegisterForm() {
 
   return (
     <div className="space-y-5">
-      <header className="space-y-1">
-        <h2 className="font-headline text-2xl font-bold tracking-tight text-foreground">
-          Crea tu cuenta
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {targetRole === 'ARRENDADOR'
-            ? 'Regístrate como arrendador profesional.'
-            : 'Únete como estudiante en segundos.'}
-        </p>
+      <header>
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-primary">Datos personales</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Cuéntanos sobre ti</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Solo tarda 30 segundos, prometido</p>
       </header>
 
-      <Tabs
-        value={targetRole}
-        onValueChange={(v) => setRole(v as 'ESTUDIANTE' | 'ARRENDADOR')}
-        className="w-full"
-      >
-        <TabsList className="grid w-full grid-cols-2 rounded-xl h-10 bg-muted p-1">
-          <TabsTrigger value="ESTUDIANTE" className="h-full rounded-lg text-sm font-bold tracking-wide">
-            Estudiante
-          </TabsTrigger>
-          <TabsTrigger value="ARRENDADOR" className="h-full rounded-lg text-sm font-bold tracking-wide">
-            Arrendador
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Google PRIMERO */}
+      <GoogleRegisterButton rolPreferido={targetRole} onSuccess={() => setStep('result')} />
 
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">o con tu correo</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
 
       <Form {...form}>
-        <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
-          <FormField
-            control={form.control}
-            name="nombre"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input {...field} placeholder="Nombre" autoComplete="given-name" className="h-11 rounded-xl bg-input text-sm" />
-                </FormControl>
-                <FormMessage className="px-1 text-[10px]" />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="apellido"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input {...field} placeholder="Apellido" autoComplete="family-name" className="h-11 rounded-xl bg-input text-sm" />
-                </FormControl>
-                <FormMessage className="px-1 text-[10px]" />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="dni"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input
-                    {...field}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="DNI"
-                    className="h-11 rounded-xl bg-input text-sm"
-                  />
-                </FormControl>
-                <FormMessage className="px-1 text-[10px]" />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="telefono"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <PhoneInput
-                    international
-                    defaultCountry="PE"
-                    value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
-                    className="alquilaya-phone-input"
-                  />
-                </FormControl>
-                <FormMessage className="px-1 text-[10px]" />
-              </FormItem>
-            )}
-          />
+        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="nombre"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">Nombre</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Tu nombre" autoComplete="given-name" className="h-11 rounded-xl bg-input text-sm" />
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="apellido"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">Apellido</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Tu apellido" autoComplete="family-name" className="h-11 rounded-xl bg-input text-sm" />
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="dni"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">DNI</FormLabel>
+                  <FormControl>
+                    <Input {...field} inputMode="numeric" maxLength={8} placeholder="12345678" className="h-11 rounded-xl bg-input text-sm" />
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="telefono"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">Teléfono</FormLabel>
+                  <FormControl>
+                    <PhoneInput international defaultCountry="PE" value={field.value} onChange={(v) => field.onChange(v ?? '')} className="alquilaya-phone-input" />
+                  </FormControl>
+                  <FormMessage className="px-1 text-[10px]" />
+                </FormItem>
+              )}
+            />
+          </div>
+
           <FormField
             control={form.control}
             name="correo"
             render={({ field }) => (
-              <FormItem className="sm:col-span-2">
+              <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">Correo electrónico</FormLabel>
                 <FormControl>
-                  <Input {...field} type="email" autoComplete="email" placeholder="Correo" className="h-11 rounded-xl bg-input text-sm" />
+                  <Input {...field} type="email" autoComplete="email" placeholder="tu@correo.com" className="h-11 rounded-xl bg-input text-sm" />
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
             )}
           />
+
           <FormField
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem className="sm:col-span-2">
+              <FormItem>
+                <FormLabel className="text-xs font-medium text-muted-foreground">
+                  Contraseña{' '}
+                  <span className="font-normal text-muted-foreground/70">(mín. 8 car., mayúscula, número y símbolo)</span>
+                </FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Input
                       {...field}
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
-                      placeholder="Contraseña"
+                      placeholder="••••••••"
                       className={cn('h-11 rounded-xl bg-input pr-11 text-sm')}
                     />
                     <button
@@ -199,41 +187,25 @@ export function RegisterForm() {
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
             )}
-
           />
 
-          <Button
-            type="submit"
-            size="lg"
-            className="mt-1 h-11 rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20 sm:col-span-2"
-          >
-            Siguiente paso
+          <Button type="submit" size="lg" className="h-12 w-full rounded-full text-sm font-bold tracking-wide">
+            Siguiente paso →
           </Button>
         </form>
       </Form>
 
-      {/* Separador */}
-      <div className="relative flex items-center gap-4">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs font-medium text-muted-foreground">o regístrate con</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      {/* Botón Google */}
-      <GoogleRegisterButton
-        rolPreferido={targetRole}
-        onSuccess={() => {
-          setStep('result');
-        }}
-      />
+      <button
+        type="button"
+        onClick={() => setStep('role')}
+        className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        ← Volver a elegir rol
+      </button>
 
       <p className="text-center text-xs text-muted-foreground">
         ¿Ya eres miembro?{' '}
-        <button
-          type="button"
-          onClick={toggleView}
-          className="font-bold text-primary transition-colors hover:text-primary/80"
-        >
+        <button type="button" onClick={() => open('login')} className="font-bold text-primary transition-colors hover:text-primary/80">
           Inicia sesión
         </button>
       </p>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 
-const HIDDEN_ROUTES = ['/admin-master', '/landlord', '/student', '/property', '/search', '/favorites'];
+const HIDDEN_ROUTES = ['/admin-master', '/landlord', '/student', '/property', '/search', '/favorites', '/register'];
 
 export default function Footer() {
   const pathname = usePathname();

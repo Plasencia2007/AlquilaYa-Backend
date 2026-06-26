@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +21,7 @@ const navLinks = [
 
 export function TopBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { usuario, estaAutenticado, cargando } = useAuth();
   const { open: openAuthModal } = useAuthModal();
 
@@ -91,7 +92,7 @@ export function TopBar() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => openAuthModal('register', 'ESTUDIANTE')}
+              onClick={() => router.push('/register')}
 
               className={cn(
                 "hidden text-xs font-black uppercase tracking-[0.2em] transition-colors sm:inline-block",

@@ -5,7 +5,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   SlidersHorizontal, Minus, Plus, Star,
-  Wifi, ShowerHead, CookingPot, Shirt, Snowflake, Car, Dumbbell, ShieldCheck, PawPrint, Tv,
+  Wifi, ShowerHead, CookingPot, Shirt, Tv, Car, ShieldCheck, Droplets, Flame,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,27 +30,40 @@ import {
 import { contarFiltrosActivos } from '@/lib/search-url';
 import { cn } from '@/lib/cn';
 
-const SERVICIOS: { nombre: string; icon: LucideIcon }[] = [
-  { nombre: 'Wi-Fi', icon: Wifi },
-  { nombre: 'Cocina', icon: CookingPot },
-  { nombre: 'Baño privado', icon: ShowerHead },
-  { nombre: 'Lavandería', icon: Shirt },
-  { nombre: 'Aire acondicionado', icon: Snowflake },
-  { nombre: 'Estacionamiento', icon: Car },
-  { nombre: 'Gimnasio', icon: Dumbbell },
-  { nombre: 'Seguridad', icon: ShieldCheck },
-  { nombre: 'Mascotas', icon: PawPrint },
-  { nombre: 'Cable', icon: Tv },
+/* ─── datos ─────────────────────────────────────────────────────────────── */
+
+// Claves que coinciden EXACTO con SERVICIOS_CATALOGO (types/propiedad.ts).
+// Esas son las claves que el formulario del arrendador guarda en la BD.
+const SERVICIOS_POPULARES: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: 'WIFI',          label: 'Wi-Fi',         icon: Wifi },
+  { key: 'LAVANDERIA',    label: 'Lavandería',     icon: Shirt },
+  { key: 'ESTACIONAMIENTO', label: 'Estacionamiento', icon: Car },
+  { key: 'SEGURIDAD_24H', label: 'Seguridad 24h', icon: ShieldCheck },
+];
+
+const SERVICIOS_TODOS: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: 'WIFI',               label: 'Wi-Fi',             icon: Wifi },
+  { key: 'LUZ',                label: 'Luz',               icon: Droplets },
+  { key: 'AGUA',               label: 'Agua',              icon: Droplets },
+  { key: 'GAS',                label: 'Gas',               icon: Flame },
+  { key: 'CABLE_TV',           label: 'Cable TV',          icon: Tv },
+  { key: 'LAVANDERIA',         label: 'Lavandería',        icon: Shirt },
+  { key: 'COCINA_COMPARTIDA',  label: 'Cocina compartida', icon: CookingPot },
+  { key: 'ESTACIONAMIENTO',    label: 'Estacionamiento',   icon: Car },
+  { key: 'SEGURIDAD_24H',      label: 'Seguridad 24h',    icon: ShieldCheck },
 ];
 
 const TIPO_LABELS: Record<string, string> = {
   CUARTO_INDIVIDUAL: 'Cuarto individual',
   CUARTO_COMPARTIDO: 'Cuarto compartido',
-  DEPARTAMENTO: 'Departamento',
-  MINI_DEPA: 'Mini depa',
-  CASA: 'Casa',
-  SUITE: 'Suite',
+  DEPARTAMENTO:      'Departamento',
+  MINI_DEPA:         'Mini depa',
+  CASA:              'Casa',
+  SUITE:             'Suite',
 };
+
+// Histograma visual estático para el rango de precios (distribución representativa)
+const HIST_BARS = [3,5,8,12,18,24,30,38,44,50,54,58,60,58,54,48,42,36,30,24,18,14,10,7,5,4,3,3,2,2];
 
 interface Props {
   filtros: Filtros;
@@ -72,6 +85,8 @@ function defaultsDesde(filtros: Filtros): FiltrosFormData {
     view: filtros.view,
   };
 }
+
+/* ─── componente principal ───────────────────────────────────────────────── */
 
 export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
   const [open, setOpen] = useState(false);
@@ -136,40 +151,98 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="flex max-h-[85vh] w-[calc(100%-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl p-0">
-        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
-          <DialogTitle className="text-center text-base font-bold">Filtros</DialogTitle>
+      <DialogContent className="flex max-h-[90vh] w-[calc(100%-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl p-0 shadow-2xl">
+        {/* Header */}
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-4">
+          <DialogTitle className="text-center text-base font-bold tracking-tight">Filtros</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 py-6">
-            {/* Tipo de alojamiento */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+
+            {/* ── 1. Más populares ── */}
             <Controller
               control={form.control}
-              name="tipo"
+              name="servicios"
               render={({ field }) => (
-                <Seccion titulo="Tipo de alojamiento">
-                  <div className="flex flex-wrap gap-2">
-                    <Pill active={!field.value} onClick={() => field.onChange(undefined)}>
-                      Cualquier tipo
-                    </Pill>
-                    {TIPOS_PROPIEDAD.map((t) => (
-                      <Pill
-                        key={t}
-                        active={field.value === t}
-                        onClick={() => field.onChange(field.value === t ? undefined : t)}
-                      >
-                        {TIPO_LABELS[t]}
-                      </Pill>
-                    ))}
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Más populares</h3>
+                  <div className="grid grid-cols-4 gap-3">
+                    {SERVICIOS_POPULARES.map(({ key, label, icon: Icon }) => {
+                      const on = field.value.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() =>
+                            on
+                              ? field.onChange(field.value.filter((x) => x !== key))
+                              : field.onChange([...field.value, key])
+                          }
+                          className={cn(
+                            'group flex flex-col items-center gap-2 rounded-2xl border-2 px-2 py-4 text-center transition-all',
+                            on
+                              ? 'border-foreground bg-foreground/5 shadow-sm'
+                              : 'border-border hover:border-foreground/40',
+                          )}
+                        >
+                          <Icon className={cn('size-6', on ? 'text-foreground' : 'text-muted-foreground')} />
+                          <span className={cn('text-[11px] font-semibold leading-tight', on ? 'text-foreground' : 'text-muted-foreground')}>
+                            {label}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </Seccion>
+                </section>
               )}
             />
 
             <Hr />
 
-            {/* Rango de precios */}
+            {/* ── 2. Tipo de alojamiento ── */}
+            <Controller
+              control={form.control}
+              name="tipo"
+              render={({ field }) => (
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Tipo de alojamiento</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(undefined)}
+                      className={cn(
+                        'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                        !field.value
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border bg-card text-foreground hover:border-foreground/40',
+                      )}
+                    >
+                      Cualquier tipo
+                    </button>
+                    {TIPOS_PROPIEDAD.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => field.onChange(field.value === t ? undefined : t)}
+                        className={cn(
+                          'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                          field.value === t
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border bg-card text-foreground hover:border-foreground/40',
+                        )}
+                      >
+                        {TIPO_LABELS[t]}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+            />
+
+            <Hr />
+
+            {/* ── 3. Rango de precios con histograma ── */}
             <Controller
               control={form.control}
               name="precioMin"
@@ -178,26 +251,41 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                   control={form.control}
                   name="precioMax"
                   render={({ field: maxField }) => (
-                    <Seccion titulo="Rango de precios" subtitulo="Precio mensual (S/)">
-                      <Slider
+                    <section className="px-6 py-6">
+                      <h3 className="mb-1 text-lg font-bold text-foreground">Rango de precios</h3>
+                      <p className="mb-5 text-sm text-muted-foreground">Precio mensual (S/)</p>
+
+                      {/* Mini histograma */}
+                      <PriceHistogram
+                        bars={HIST_BARS}
                         min={PRECIO_MIN_DEFAULT}
                         max={PRECIO_MAX_DEFAULT}
-                        step={50}
-                        value={[minField.value, maxField.value]}
-                        onValueChange={(vals) => {
-                          minField.onChange(vals[0]);
-                          maxField.onChange(vals[1]);
-                        }}
+                        valueMin={minField.value}
+                        valueMax={maxField.value}
                       />
-                      <div className="mt-4 flex items-center justify-between gap-3">
+
+                      <div className="mt-2">
+                        <Slider
+                          min={PRECIO_MIN_DEFAULT}
+                          max={PRECIO_MAX_DEFAULT}
+                          step={50}
+                          value={[minField.value, maxField.value]}
+                          onValueChange={(vals) => {
+                            minField.onChange(vals[0]);
+                            maxField.onChange(vals[1]);
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-3">
                         <RangoPill label="Mínimo" value={`S/ ${minField.value}`} />
-                        <span className="h-px w-4 bg-border" />
+                        <div className="h-px w-4 shrink-0 bg-border" />
                         <RangoPill
                           label="Máximo"
                           value={`S/ ${maxField.value}${maxField.value >= PRECIO_MAX_DEFAULT ? '+' : ''}`}
                         />
                       </div>
-                    </Seccion>
+                    </section>
                   )}
                 />
               )}
@@ -205,12 +293,13 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
 
             <Hr />
 
-            {/* Distancia a UPeU */}
+            {/* ── 4. Distancia a UPeU ── */}
             <Controller
               control={form.control}
               name="distanciaMaxKm"
               render={({ field }) => (
-                <Seccion titulo="Distancia máxima a UPeU">
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Distancia máxima a UPeU</h3>
                   <Slider
                     min={1}
                     max={DISTANCIA_MAX_DEFAULT}
@@ -218,112 +307,126 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                     value={[field.value]}
                     onValueChange={(vals) => field.onChange(vals[0])}
                   />
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Hasta <span className="font-semibold text-foreground">{field.value} km</span>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Hasta{' '}
+                    <span className="font-bold text-foreground">{field.value} km</span>
                   </p>
-                </Seccion>
+                </section>
               )}
             />
 
             <Hr />
 
-            {/* Capacidad (steppers) */}
+            {/* ── 5. Capacidad ── */}
             <Controller
               control={form.control}
               name="capacidadMin"
               render={({ field }) => (
-                <Seccion titulo="Capacidad">
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Capacidad</h3>
                   <FilaStepper
                     label="Personas"
                     value={field.value}
                     onChange={field.onChange}
                     max={10}
                   />
-                </Seccion>
+                </section>
               )}
             />
 
             <Hr />
 
-            {/* Servicios (chips con íconos) */}
+            {/* ── 6. Servicios ── */}
             <Controller
               control={form.control}
               name="servicios"
               render={({ field }) => (
-                <Seccion titulo="Servicios">
-                  <div className="flex flex-wrap gap-2">
-                    {SERVICIOS.map(({ nombre, icon: Icon }) => {
-                      const checked = field.value.includes(nombre);
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Servicios</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SERVICIOS_TODOS.map(({ key, label, icon: Icon }) => {
+                      const on = field.value.includes(key);
                       return (
                         <button
-                          key={nombre}
+                          key={key}
                           type="button"
                           onClick={() =>
-                            checked
-                              ? field.onChange(field.value.filter((x) => x !== nombre))
-                              : field.onChange([...field.value, nombre])
+                            on
+                              ? field.onChange(field.value.filter((x) => x !== key))
+                              : field.onChange([...field.value, key])
                           }
                           className={cn(
-                            'flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
-                            checked
-                              ? 'border-foreground bg-foreground/5 text-foreground'
-                              : 'border-border bg-card text-foreground hover:border-foreground/40',
+                            'flex items-center gap-3 rounded-2xl border-2 px-4 py-4 text-left text-sm font-medium transition-all',
+                            on
+                              ? 'border-foreground bg-foreground/5 text-foreground shadow-sm'
+                              : 'border-border text-foreground hover:border-foreground/40',
                           )}
                         >
-                          <Icon className="size-4" />
-                          {nombre}
+                          <Icon className={cn('size-5 shrink-0', on ? 'text-foreground' : 'text-muted-foreground')} />
+                          {label}
                         </button>
                       );
                     })}
                   </div>
-                </Seccion>
+                </section>
               )}
             />
 
             <Hr />
 
-            {/* Calificación mínima */}
+            {/* ── 7. Calificación mínima ── */}
             <Controller
               control={form.control}
               name="calificacionMin"
               render={({ field }) => (
-                <Seccion titulo="Calificación mínima">
+                <section className="px-6 py-6">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">Calificación mínima</h3>
                   <div className="flex flex-wrap gap-2">
                     {[0, 3, 4, 4.5].map((n) => (
-                      <Pill
+                      <button
                         key={n}
-                        active={field.value === n}
+                        type="button"
                         onClick={() => field.onChange(n)}
+                        className={cn(
+                          'rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors',
+                          field.value === n
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border bg-card text-foreground hover:border-foreground/40',
+                        )}
                       >
                         {n === 0 ? (
                           'Cualquiera'
                         ) : (
-                          <span className="flex items-center gap-1">
-                            <Star className="size-3.5 fill-current" /> {n.toFixed(1)}+
+                          <span className="flex items-center gap-1.5">
+                            <Star className="size-3.5 fill-current" />
+                            {n.toFixed(1)}+
                           </span>
                         )}
-                      </Pill>
+                      </button>
                     ))}
                   </div>
-                </Seccion>
+                </section>
               )}
             />
           </div>
 
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-6 py-4">
+          {/* Footer */}
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-background px-6 py-4">
             <button
               type="button"
               onClick={onLimpiar}
-              className="text-sm font-bold text-foreground underline-offset-4 hover:underline"
+              className="text-sm font-bold text-foreground underline underline-offset-4 hover:text-muted-foreground"
             >
               Limpiar filtros
             </button>
             <Button
               type="submit"
               size="lg"
-              className="rounded-xl px-6 text-sm font-bold"
+              className="rounded-2xl bg-foreground px-6 text-sm font-bold text-background hover:bg-foreground/90"
             >
-              {total > 0 ? `Mostrar ${total} resultado${total === 1 ? '' : 's'}` : 'Aplicar filtros'}
+              {total > 0
+                ? `Mostrar ${total} resultado${total === 1 ? '' : 's'}`
+                : 'Aplicar filtros'}
             </Button>
           </footer>
         </form>
@@ -332,58 +435,17 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
   );
 }
 
-function Seccion({
-  titulo,
-  subtitulo,
-  children,
-}: {
-  titulo: string;
-  subtitulo?: string;
-  children: ReactNode;
-}) {
-  return (
-    <fieldset>
-      <legend className="text-lg font-bold text-foreground">{titulo}</legend>
-      {subtitulo && <p className="mb-3 mt-0.5 text-sm text-muted-foreground">{subtitulo}</p>}
-      <div className={subtitulo ? '' : 'mt-3'}>{children}</div>
-    </fieldset>
-  );
-}
+/* ─── sub-componentes ────────────────────────────────────────────────────── */
 
 function Hr() {
-  return <div className="h-px bg-border" />;
-}
-
-function Pill({
-  active,
-  onClick,
-  children,
-}: {
-  active?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-        active
-          ? 'border-foreground bg-foreground text-background'
-          : 'border-border bg-card text-foreground hover:border-foreground/40',
-      )}
-    >
-      {children}
-    </button>
-  );
+  return <div className="h-px bg-border/60 mx-6" />;
 }
 
 function RangoPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-center">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm font-bold text-foreground">{value}</p>
+    <div className="flex-1 rounded-2xl border border-border bg-muted/40 px-4 py-3 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm font-bold text-foreground">{value}</p>
     </div>
   );
 }
@@ -402,18 +464,18 @@ function FilaStepper({
   const actual = value ?? 0;
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-sm font-semibold text-foreground">{label}</span>
       <div className="flex items-center gap-4">
         <button
           type="button"
           aria-label="Disminuir"
           disabled={actual <= 0}
           onClick={() => onChange(actual <= 1 ? undefined : actual - 1)}
-          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-40"
+          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-30"
         >
           <Minus className="size-4" />
         </button>
-        <span className="min-w-[5rem] text-center text-sm font-semibold text-foreground">
+        <span className="min-w-[5.5rem] text-center text-sm font-semibold text-foreground">
           {actual === 0 ? 'Cualquiera' : `${actual}${actual >= max ? '+' : ''}`}
         </span>
         <button
@@ -421,11 +483,49 @@ function FilaStepper({
           aria-label="Aumentar"
           disabled={actual >= max}
           onClick={() => onChange(actual + 1)}
-          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-40"
+          className="flex size-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:opacity-30"
         >
           <Plus className="size-4" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Histograma visual para el rango de precios */
+function PriceHistogram({
+  bars,
+  min,
+  max,
+  valueMin,
+  valueMax,
+}: {
+  bars: number[];
+  min: number;
+  max: number;
+  valueMin: number;
+  valueMax: number;
+}) {
+  const maxBar = Math.max(...bars);
+  const total = max - min;
+
+  return (
+    <div className="flex h-16 items-end gap-0.5" aria-hidden>
+      {bars.map((h, i) => {
+        const barMin = min + (total / bars.length) * i;
+        const barMax = min + (total / bars.length) * (i + 1);
+        const inRange = barMax > valueMin && barMin < valueMax;
+        return (
+          <div
+            key={i}
+            className={cn(
+              'flex-1 rounded-sm transition-colors',
+              inRange ? 'bg-foreground' : 'bg-muted-foreground/25',
+            )}
+            style={{ height: `${(h / maxBar) * 100}%` }}
+          />
+        );
+      })}
     </div>
   );
 }

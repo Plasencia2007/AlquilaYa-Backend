@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { RoommateCard } from '@/components/student/roommate-card';
-import { grupoService, type GrupoRoommate } from '@/services/grupo-service';
+import { grupoService, type CuotaPago, type GrupoRoommate } from '@/services/grupo-service';
+import { pagoService } from '@/services/pago-service';
 import { roommateService, type PerfilConvivencia } from '@/services/roommate-service';
 
 export default function GrupoDetallePage() {
@@ -21,6 +22,9 @@ export default function GrupoDetallePage() {
   const [grupo, setGrupo] = useState<GrupoRoommate | null>(null);
   const [miId, setMiId] = useState<number | null>(null);
   const [perfiles, setPerfiles] = useState<Record<number, PerfilConvivencia>>({});
+  const [cuotas, setCuotas] = useState<CuotaPago[]>([]);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
   const [cargando, setCargando] = useState(true);
   const [accion, setAccion] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -44,6 +48,11 @@ export default function GrupoDetallePage() {
         }),
       );
       setPerfiles(Object.fromEntries(entradas.filter(Boolean) as [number, PerfilConvivencia][]));
+      if (g.reservaId) {
+        grupoService.cuotas(g.reservaId).then(setCuotas).catch(() => setCuotas([]));
+      } else {
+        setCuotas([]);
+      }
     } catch (err) {
       notify.error(err, 'No se pudo cargar el grupo.');
     } finally {
@@ -63,6 +72,22 @@ export default function GrupoDetallePage() {
       await cargar();
     } catch (err) {
       notify.error(err, 'No se pudo completar la acción.');
+    } finally {
+      setAccion(false);
+    }
+  };
+
+  const pagarMiParte = async () => {
+    if (!grupo?.reservaId) return;
+    setAccion(true);
+    try {
+      const { url } = await pagoService.crearPreferenciaGrupo(grupo.reservaId);
+      if (url) {
+        const win = window.open(url, '_blank');
+        if (!win) window.location.href = url;
+      }
+    } catch (err) {
+      notify.error(err, 'No se pudo iniciar el pago de tu cuota.');
     } finally {
       setAccion(false);
     }
@@ -158,6 +183,87 @@ export default function GrupoDetallePage() {
           )}
         </div>
       </div>
+
+      {/* Fase 2: reservar en grupo (creador, grupo COMPLETO) */}
+      {soyCreador && grupo.estado === 'COMPLETO' && (
+        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+          <h3 className="font-bold text-foreground">¡Grupo completo! Reserven juntos</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Elige las fechas de la estadía; luego cada miembro paga su parte.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-muted-foreground">Entrada</span>
+              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-muted-foreground">Salida</span>
+              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+            </label>
+          </div>
+          <Button className="mt-3 w-full font-bold" disabled={accion || !fechaInicio || !fechaFin}
+            onClick={() => run(() => grupoService.reservar(grupo.id, { fechaInicio, fechaFin }), 'Reserva grupal creada')}>
+            Reservar en grupo
+          </Button>
+        </div>
+      )}
+
+      {/* Fase 2: pago dividido (grupo RESERVADO) */}
+      {grupo.estado === 'RESERVADO' && grupo.reservaId && (
+        <div className="mt-4 rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-foreground">Pago dividido</h3>
+            <Button variant="ghost" size="sm" onClick={() => cargar()} disabled={accion}>
+              Actualizar
+            </Button>
+          </div>
+          {(() => {
+            const pagadas = cuotas.filter((c) => c.estado === 'PAGADO').length;
+            const pct = cuotas.length ? Math.round((pagadas / cuotas.length) * 100) : 0;
+            const miCuota = cuotas.find((c) => c.estudianteId === miId);
+            return (
+              <>
+                <div className="mb-1 mt-2 flex justify-between text-xs font-bold">
+                  <span className="text-muted-foreground">Pagaron</span>
+                  <span className="text-primary">{pagadas}/{cuotas.length}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  {cuotas.map((c) => (
+                    <div key={c.estudianteId} className="flex items-center justify-between text-sm">
+                      <span className="text-foreground">
+                        {perfiles[c.estudianteId]?.nombre ?? `Estudiante ${c.estudianteId}`}
+                        {c.estudianteId === miId ? ' (tú)' : ''}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">S/ {c.monto.toLocaleString('es-PE')}</span>
+                        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold',
+                          c.estado === 'PAGADO' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>
+                          {c.estado === 'PAGADO' ? 'Pagó' : 'Pendiente'}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {miCuota && miCuota.estado === 'PENDIENTE' && (
+                  <Button className="mt-4 w-full font-bold" disabled={accion} onClick={pagarMiParte}>
+                    Pagar mi parte · S/ {miCuota.monto.toLocaleString('es-PE')}
+                  </Button>
+                )}
+                {cuotas.length > 0 && pagadas === cuotas.length && (
+                  <p className="mt-3 text-center text-sm font-bold text-green-600">
+                    ¡Todos pagaron! La reserva quedará confirmada. 🎉
+                  </p>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Link de invitación (solo miembros) */}
       {soyMiembro && (

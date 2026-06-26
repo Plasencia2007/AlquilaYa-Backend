@@ -94,7 +94,9 @@ export const servicioAuth = {
         correo: payload.sub,
         nombre: payload.nombre,
         rol: payload.rol,
-        emailVerificado: payload.emailVerificado
+        avatar: payload.foto,
+        emailVerificado: payload.emailVerificado,
+        tipoLogin: payload.tipoLogin,
       };
     } catch {
       return null;

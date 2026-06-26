@@ -266,7 +266,7 @@ export default function Home() {
               size="sm"
               className="mt-auto h-11 w-full rounded-xl font-bold"
               onClick={() => {
-                if (!estaAutenticado) openAuthModal('register');
+                if (!estaAutenticado) router.push('/register');
                 else router.push('/search');
               }}
             >
@@ -295,7 +295,7 @@ export default function Home() {
               size="sm"
               className="mt-auto h-11 w-full rounded-xl bg-white font-bold text-primary hover:bg-white/90"
               onClick={() => {
-                if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
+                if (!estaAutenticado) router.push('/register');
                 else router.push('/landlord/dashboard');
               }}
             >
@@ -345,7 +345,7 @@ export default function Home() {
                 size="lg"
                 className="h-12 w-full rounded-xl px-8 font-bold sm:w-auto"
                 onClick={() => {
-                  if (!estaAutenticado) openAuthModal('register', 'ARRENDADOR');
+                  if (!estaAutenticado) router.push('/register');
                   else router.push('/landlord/dashboard');
                 }}
               >

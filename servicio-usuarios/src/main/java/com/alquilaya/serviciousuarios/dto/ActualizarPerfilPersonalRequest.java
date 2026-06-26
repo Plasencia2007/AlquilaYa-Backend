@@ -24,4 +24,7 @@ public class ActualizarPerfilPersonalRequest {
 
     @Size(max = 20, message = "El teléfono no puede superar 20 caracteres")
     private String telefono;
+
+    /** Fecha de nacimiento (ISO yyyy-MM-dd). Opcional. */
+    private java.time.LocalDate fechaNacimiento;
 }

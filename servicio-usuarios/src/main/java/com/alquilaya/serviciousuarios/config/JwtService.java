@@ -39,6 +39,9 @@ public class JwtService {
         extraClaims.put("rol", usuario.getRol().name());
         extraClaims.put("nombre", usuario.getNombre());
         extraClaims.put("emailVerificado", usuario.isEmailVerificado());
+        if (usuario.getFotoUrl() != null && !usuario.getFotoUrl().isBlank()) {
+            extraClaims.put("foto", usuario.getFotoUrl());
+        }
         // jti = id único de sesión, para listar dispositivos y cierre remoto (#10).
         extraClaims.put("jti", java.util.UUID.randomUUID().toString());
         return generateToken(extraClaims, usuario.getCorreo());

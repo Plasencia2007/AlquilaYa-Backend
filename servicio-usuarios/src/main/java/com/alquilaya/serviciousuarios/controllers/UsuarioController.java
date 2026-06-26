@@ -67,6 +67,7 @@ public class UsuarioController {
         if (req.getTelefono() != null && !req.getTelefono().isBlank()) {
             u.setTelefono(req.getTelefono().trim());
         }
+        u.setFechaNacimiento(req.getFechaNacimiento());
         usuarioRepository.save(u);
         return ResponseEntity.noContent().build();
     }
@@ -292,8 +293,12 @@ public class UsuarioController {
                 .apellido(u.getApellido())
                 .correo(u.getCorreo())
                 .telefono(u.getTelefono())
+                .fotoUrl(u.getFotoUrl())
+                .fechaNacimiento(u.getFechaNacimiento())
                 .universidad(e.getUniversidad())
+                .codigoEstudiante(e.getCodigoEstudiante())
                 .carrera(e.getCarrera())
+                .ciclo(e.getCiclo())
                 .verificado(e.isVerificado())
                 .score(rep.score())
                 .nivelReputacion(rep.nivel().name())

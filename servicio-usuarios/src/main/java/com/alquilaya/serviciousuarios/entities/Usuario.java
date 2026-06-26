@@ -61,6 +61,9 @@ public class Usuario {
     @Column(name = "foto_url", length = 512)
     private String fotoUrl;
 
+    @Column(name = "fecha_nacimiento")
+    private java.time.LocalDate fechaNacimiento;
+
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private java.util.List<DocumentoVerificacion> documentos;

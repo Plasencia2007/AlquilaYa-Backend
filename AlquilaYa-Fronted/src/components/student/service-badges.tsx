@@ -17,18 +17,37 @@ import {
 
 import { cn } from '@/lib/cn';
 
+// Claves exactas de SERVICIOS_CATALOGO (tienen prioridad, van primero)
+// + regex de compatibilidad para datos legacy
 const ICON_MAP: Array<{ match: RegExp; icon: LucideIcon; short: string }> = [
-  { match: /wi[\s-]?fi/i, icon: Wifi, short: 'Wi-Fi' },
-  { match: /baño privado|baño privado/i, icon: Bath, short: 'Baño priv.' },
-  { match: /lavander/i, icon: WashingMachine, short: 'Lavandería' },
-  { match: /cocina|kitchenette/i, icon: CookingPot, short: 'Cocina' },
-  { match: /aire acondicionado|ac\b/i, icon: Snowflake, short: 'A/C' },
-  { match: /estacionamiento|parking/i, icon: ParkingCircle, short: 'Parking' },
-  { match: /gimnasio|gym/i, icon: Dumbbell, short: 'Gym' },
-  { match: /seguridad|24\/7/i, icon: ShieldCheck, short: 'Seguridad' },
-  { match: /mascot/i, icon: PawPrint, short: 'Mascotas' },
-  { match: /cable|tv/i, icon: Tv, short: 'TV' },
-  { match: /limpieza/i, icon: Sparkles, short: 'Limpieza' },
+  // ── Claves exactas del catálogo (property-service / arrendador form) ──
+  { match: /^WIFI$/,              icon: Wifi,          short: 'Wi-Fi' },
+  { match: /^LUZ$/,               icon: Sparkles,      short: 'Luz' },
+  { match: /^AGUA$/,              icon: Bath,          short: 'Agua' },
+  { match: /^GAS$/,               icon: CookingPot,    short: 'Gas' },
+  { match: /^CABLE_TV$/,          icon: Tv,            short: 'Cable TV' },
+  { match: /^LAVANDERIA$/,        icon: WashingMachine, short: 'Lavandería' },
+  { match: /^COCINA_COMPARTIDA$/, icon: CookingPot,    short: 'Cocina' },
+  { match: /^ESTACIONAMIENTO$/,   icon: ParkingCircle, short: 'Parking' },
+  { match: /^SEGURIDAD_24H$/,     icon: ShieldCheck,   short: 'Seguridad' },
+  // ── Claves legacy / seed ──
+  { match: /^AGUA_CALIENTE$/,     icon: Bath,          short: 'Agua cal.' },
+  { match: /^AGUA_FRIA$/,         icon: Bath,          short: 'Agua fría' },
+  { match: /^COCINA$/,            icon: CookingPot,    short: 'Cocina' },
+  { match: /^CABLE$/,             icon: Tv,            short: 'Cable' },
+  { match: /^ENTRADA_IND$/,       icon: ShieldCheck,   short: 'Ent. ind.' },
+  // ── Regex de compatibilidad para cualquier otro formato ──
+  { match: /wi[\s-]?fi|internet/i,         icon: Wifi,          short: 'Wi-Fi' },
+  { match: /baño\s*priv|bano_priv/i,       icon: Bath,          short: 'Baño priv.' },
+  { match: /lavander/i,                    icon: WashingMachine, short: 'Lavandería' },
+  { match: /cocina|kitchenette/i,          icon: CookingPot,    short: 'Cocina' },
+  { match: /aire|_ac\b|aire_acondicionado/i, icon: Snowflake,  short: 'A/C' },
+  { match: /estacion|parking/i,            icon: ParkingCircle, short: 'Parking' },
+  { match: /gimnas|gym/i,                  icon: Dumbbell,      short: 'Gym' },
+  { match: /segur/i,                       icon: ShieldCheck,   short: 'Seguridad' },
+  { match: /mascot/i,                      icon: PawPrint,      short: 'Mascotas' },
+  { match: /cable|^tv$/i,                  icon: Tv,            short: 'TV' },
+  { match: /limpieza/i,                    icon: Sparkles,      short: 'Limpieza' },
 ];
 
 function resolverIcono(servicio: string): { icon: LucideIcon; label: string } {
