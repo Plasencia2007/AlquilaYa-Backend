@@ -26,13 +26,25 @@ public class RateLimitConfig implements WebMvcConfigurer {
         this.jwtRevocationInterceptor = jwtRevocationInterceptor;
     }
 
+    /**
+     * Rutas de documentación (Swagger UI agregado + specs OpenAPI proxeadas) que
+     * NO deben pasar por rate-limit ni por la revocación de JWT: son públicas y la
+     * UI carga muchos recursos estáticos.
+     */
+    private static final String[] DOCS = {
+            "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
+            "/swagger-resources/**", "/webjars/**"
+    };
+
     @Override
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitFilter)
-                .addPathPatterns("/**");
+                .addPathPatterns("/**")
+                .excludePathPatterns(DOCS);
         // Rechaza tokens revocados (logout / cierre remoto) en un solo punto para todos
         // los servicios. Va después del rate-limit.
         registry.addInterceptor(jwtRevocationInterceptor)
-                .addPathPatterns("/**");
+                .addPathPatterns("/**")
+                .excludePathPatterns(DOCS);
     }
 }

@@ -4,6 +4,7 @@ import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
+import com.alquilaya.serviciousuarios.enums.TipoLogin;
 import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
@@ -96,11 +97,18 @@ public class GoogleAuthService {
         Optional<Usuario> existente = usuarioRepository.findByCorreo(correoNorm);
         if (existente.isPresent()) {
             Usuario u = existente.get();
+            boolean cambiado = false;
             // Backfill de la foto de Google si el usuario aún no tiene una.
             if ((u.getFotoUrl() == null || u.getFotoUrl().isBlank()) && picture != null && !picture.isBlank()) {
                 u.setFotoUrl(picture);
-                usuarioRepository.save(u);
+                cambiado = true;
             }
+            // Si la cuenta fue creada por Google (DNI placeholder) y aún no está marcada, corrige el tipo.
+            if (u.getTipoLogin() != TipoLogin.GOOGLE && "00000000".equals(u.getDni())) {
+                u.setTipoLogin(TipoLogin.GOOGLE);
+                cambiado = true;
+            }
+            if (cambiado) usuarioRepository.save(u);
             log.info("[GoogleAuth] Login existente para {}", LogMask.email(correoNorm));
             return u;
         }
@@ -125,6 +133,7 @@ public class GoogleAuthService {
                 .emailVerificado(true) // Google ya verifica el correo (#3)
                 .telefonoVerificado(false) // Sin teléfono aún
                 .fotoUrl(picture) // Foto de perfil de Google
+                .tipoLogin(TipoLogin.GOOGLE)
                 .build();
 
         Usuario creado = usuarioRepository.save(nuevo);

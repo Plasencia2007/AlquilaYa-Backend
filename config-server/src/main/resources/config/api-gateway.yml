@@ -54,6 +54,37 @@ spring:
                 args:
                   id: mensajeriaCB
                   fallbackUri: forward:/fallback/mensajeria
+          # --- Swagger agregado: proxy a los /v3/api-docs de cada servicio (vía Eureka) ---
+          - id: openapi-usuarios
+            uri: lb://servicio-usuarios
+            predicates:
+              - Path=/v3/api-docs/usuarios
+            filters:
+              - RewritePath=/v3/api-docs/usuarios, /v3/api-docs
+          - id: openapi-propiedades
+            uri: lb://servicio-propiedades
+            predicates:
+              - Path=/v3/api-docs/propiedades
+            filters:
+              - RewritePath=/v3/api-docs/propiedades, /v3/api-docs
+          - id: openapi-pagos
+            uri: lb://servicio-pagos
+            predicates:
+              - Path=/v3/api-docs/pagos
+            filters:
+              - RewritePath=/v3/api-docs/pagos, /v3/api-docs
+          - id: openapi-catalogos
+            uri: lb://servicio-catalogos
+            predicates:
+              - Path=/v3/api-docs/catalogos
+            filters:
+              - RewritePath=/v3/api-docs/catalogos, /v3/api-docs
+          - id: openapi-mensajeria
+            uri: lb://servicio-mensajeria
+            predicates:
+              - Path=/v3/api-docs/mensajeria
+            filters:
+              - RewritePath=/v3/api-docs/mensajeria, /v3/api-docs
           # NOTA: WebSocket /ws-mensajeria NO se rutea por este gateway (Spring Cloud Gateway MVC
           # no soporta proxy WS). El frontend conecta directo al servicio en :8086.
 
@@ -82,3 +113,20 @@ resilience4j:
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+
+# Swagger UI agregado en el gateway: una sola UI con un dropdown para los 5 microservicios.
+# Accesible en  http://localhost:8080/swagger-ui.html
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: servicio-usuarios
+        url: /v3/api-docs/usuarios
+      - name: servicio-propiedades
+        url: /v3/api-docs/propiedades
+      - name: servicio-pagos
+        url: /v3/api-docs/pagos
+      - name: servicio-catalogos
+        url: /v3/api-docs/catalogos
+      - name: servicio-mensajeria
+        url: /v3/api-docs/mensajeria

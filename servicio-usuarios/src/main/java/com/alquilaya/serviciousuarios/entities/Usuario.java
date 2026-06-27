@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.entities;
 
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
+import com.alquilaya.serviciousuarios.enums.TipoLogin;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -63,6 +64,11 @@ public class Usuario {
 
     @Column(name = "fecha_nacimiento")
     private java.time.LocalDate fechaNacimiento;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_login", nullable = false, columnDefinition = "varchar(20) default 'LOCAL'")
+    @Builder.Default
+    private TipoLogin tipoLogin = TipoLogin.LOCAL;
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude

@@ -42,6 +42,7 @@ public class JwtService {
         if (usuario.getFotoUrl() != null && !usuario.getFotoUrl().isBlank()) {
             extraClaims.put("foto", usuario.getFotoUrl());
         }
+        extraClaims.put("tipoLogin", usuario.getTipoLogin() != null ? usuario.getTipoLogin().name() : "LOCAL");
         // jti = id único de sesión, para listar dispositivos y cierre remoto (#10).
         extraClaims.put("jti", java.util.UUID.randomUUID().toString());
         return generateToken(extraClaims, usuario.getCorreo());
