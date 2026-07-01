@@ -96,6 +96,7 @@ public class SeedDataInitializer implements CommandLineRunner {
                 .rol(Rol.ADMIN)
                 .estado(EstadoUsuario.ACTIVE)
                 .telefonoVerificado(true)
+                .emailVerificado(true)
                 .build();
         usuarioRepository.save(u);
         log.info("[SEED] 👑 ADMIN creado: {}", correo);
@@ -117,6 +118,7 @@ public class SeedDataInitializer implements CommandLineRunner {
                 .rol(Rol.ESTUDIANTE)
                 .estado(EstadoUsuario.ACTIVE)
                 .telefonoVerificado(true)
+                .emailVerificado(true)
                 .build());
 
         estudianteRepository.save(Estudiante.builder()
@@ -146,6 +148,7 @@ public class SeedDataInitializer implements CommandLineRunner {
                 .rol(Rol.ARRENDADOR)
                 .estado(EstadoUsuario.ACTIVE)
                 .telefonoVerificado(true)
+                .emailVerificado(true)
                 .build());
 
         Arrendador a = arrendadorRepository.save(Arrendador.builder()

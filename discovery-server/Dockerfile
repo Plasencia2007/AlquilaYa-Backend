@@ -7,6 +7,7 @@ WORKDIR /build
 
 # Descarga dependencias primero para cachear esa capa.
 COPY mvnw ./
+RUN sed -i 's/\r$//' mvnw
 COPY .mvn .mvn
 COPY pom.xml ./
 RUN chmod +x ./mvnw && ./mvnw -B -q dependency:go-offline

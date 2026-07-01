@@ -144,6 +144,11 @@ resilience4j:
         limitRefreshPeriod: 1s
         timeoutDuration: 5s
 
+# Seguridad JWT sincronizada
+jwt:
+  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
+  expiration: ${JWT_EXPIRATION:7200000}
+
 ---
 spring:
   config:
