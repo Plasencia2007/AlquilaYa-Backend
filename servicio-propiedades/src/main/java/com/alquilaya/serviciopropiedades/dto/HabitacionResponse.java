@@ -19,6 +19,7 @@ public class HabitacionResponse {
     private Double area;
     private String descripcion;
     private Integer orden;
+    private EstudianteInfoDTO ocupante;
 
     public static HabitacionResponse from(Habitacion h) {
         return HabitacionResponse.builder()

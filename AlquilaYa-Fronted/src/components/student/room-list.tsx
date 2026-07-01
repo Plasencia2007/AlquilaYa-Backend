@@ -43,7 +43,7 @@ export function RoomList({ propiedad }: { propiedad: Propiedad }) {
             key={h.id}
             className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="truncate font-bold text-foreground">{h.nombre}</p>
                 <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${meta.cls}`}>
@@ -57,6 +57,21 @@ export function RoomList({ propiedad }: { propiedad: Propiedad }) {
                 S/ {h.precio.toLocaleString('es-PE')}
                 <span className="text-[11px] font-medium text-muted-foreground"> /mes</span>
               </p>
+              {h.estado === 'OCUPADA' && h.ocupante && (
+                <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-border/50 bg-muted/40 p-2 max-w-xs sm:max-w-sm">
+                  <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-[9px] font-black text-primary">
+                    {h.ocupante.nombre?.[0]?.toUpperCase() ?? 'R'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-bold text-foreground">
+                      Roommate: {h.ocupante.nombre} {h.ocupante.apellido?.split(' ')[0] ?? ''}
+                    </p>
+                    <p className="truncate text-[9px] text-muted-foreground">
+                      {h.ocupante.carrera} {h.ocupante.nivelReputacion ? `· Reputación ${h.ocupante.nivelReputacion}` : ''}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             {libre ? (
               <ReservationFormDialog

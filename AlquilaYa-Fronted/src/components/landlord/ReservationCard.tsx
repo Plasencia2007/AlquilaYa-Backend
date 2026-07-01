@@ -13,6 +13,7 @@ interface ReservationCardProps {
   onAprobar?: (reserva: Reserva) => void;
   onRechazar?: (reserva: Reserva) => void;
   onFinalizar?: (reserva: Reserva) => void;
+  onVerPerfil?: (reserva: Reserva) => void;
   /** Modo compacto sólo lectura (historial). */
   readOnly?: boolean;
 }
@@ -70,6 +71,7 @@ export function ReservationCard({
   onAprobar,
   onRechazar,
   onFinalizar,
+  onVerPerfil,
   readOnly = false,
 }: ReservationCardProps) {
   const variante = ESTADO_VARIANTE[reserva.estado];
@@ -131,13 +133,25 @@ export function ReservationCard({
               <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">
                 Estudiante
               </p>
-              <div className="flex items-center gap-2 min-w-0">
+              <div 
+                onClick={() => onVerPerfil?.(reserva)}
+                className={cn(
+                  "flex items-center gap-2 min-w-0 rounded-xl transition-all",
+                  onVerPerfil && "cursor-pointer hover:bg-muted/80 hover:scale-[1.02] active:scale-[0.98] px-2 py-1 -mx-2 -my-1"
+                )}
+                title={onVerPerfil ? "Ver perfil del estudiante" : undefined}
+              >
                 <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0">
                   {obtenerInicialesEstudiante(reserva.estudianteNombre)}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-bold text-foreground truncate">
+                  <p className="font-bold text-foreground truncate flex items-center gap-0.5">
                     {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
+                    {onVerPerfil && (
+                      <span className="material-symbols-outlined text-[12px] text-primary shrink-0 select-none">
+                        open_in_new
+                      </span>
+                    )}
                   </p>
                   {reserva.estudianteNivelReputacion && (
                     <ReputationBadge

@@ -380,6 +380,17 @@ export interface ServicioConEstado {
 
 export type EstadoHabitacion = 'LIBRE' | 'RESERVADA' | 'OCUPADA' | 'MANTENIMIENTO';
 
+export interface OcupanteInfo {
+  id: number;
+  usuarioId?: number;
+  nombre?: string;
+  apellido?: string;
+  universidad?: string;
+  carrera?: string;
+  score?: number;
+  nivelReputacion?: string;
+}
+
 /** Habitación reservable de una propiedad gestionada por habitaciones. */
 export interface Habitacion {
   id: number;
@@ -390,6 +401,7 @@ export interface Habitacion {
   area?: number | null;
   descripcion?: string | null;
   orden?: number;
+  ocupante?: OcupanteInfo | null;
 }
 
 /** Payload de alta/edición de una habitación. */

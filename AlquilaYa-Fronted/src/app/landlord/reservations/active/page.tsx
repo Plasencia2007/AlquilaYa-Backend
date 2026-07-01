@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { ReservationCard } from '@/components/landlord/ReservationCard';
 import { ConfirmActionModal } from '@/components/landlord/ConfirmActionModal';
+import { StudentProfileModal } from '@/components/landlord/StudentProfileModal';
 import { useReservationsStore } from '@/stores/reservations-store';
 import type { Reserva, EstadoReserva } from '@/types/reserva';
 
@@ -47,6 +48,7 @@ export default function ReservationsActivePage() {
   const [seleccion, setSeleccion] = useState<Reserva | null>(null);
   const [working, setWorking] = useState(false);
   const [filtroConf, setFiltroConf] = useState<'TODOS' | 'APROBADA' | 'PAGADA'>('TODOS');
+  const [perfilEstudiante, setPerfilEstudiante] = useState<Reserva | null>(null);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -189,6 +191,7 @@ export default function ReservationsActivePage() {
                   reserva={reserva}
                   onAprobar={(r) => setAccion({ tipo: 'aprobar', reserva: r })}
                   onRechazar={(r) => setAccion({ tipo: 'rechazar', reserva: r })}
+                  onVerPerfil={(r) => setPerfilEstudiante(r)}
                 />
               ))}
             </div>
@@ -240,7 +243,12 @@ export default function ReservationsActivePage() {
           ) : (
             <div className="space-y-4">
               {confirmadasFiltradas.map((reserva) => (
-                <ReservationCard key={reserva.id} reserva={reserva} onFinalizar={(r) => setSeleccion(r)} />
+                <ReservationCard 
+                  key={reserva.id} 
+                  reserva={reserva} 
+                  onFinalizar={(r) => setSeleccion(r)} 
+                  onVerPerfil={(r) => setPerfilEstudiante(r)}
+                />
               ))}
             </div>
           )}
@@ -293,6 +301,13 @@ export default function ReservationsActivePage() {
         isLoading={working}
         onConfirm={handleFinalizar}
         onCancel={() => !working && setSeleccion(null)}
+      />
+
+      {/* Modal ver perfil estudiante */}
+      <StudentProfileModal
+        open={!!perfilEstudiante}
+        reserva={perfilEstudiante}
+        onClose={() => setPerfilEstudiante(null)}
       />
     </div>
   );

@@ -1,7 +1,11 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1/';
+let API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1/';
+
+if (typeof window !== 'undefined' && API_URL.includes('localhost') && window.location.hostname !== 'localhost') {
+  API_URL = `${window.location.protocol}//${window.location.host}/api/v1/`;
+}
 
 export const api = axios.create({
   baseURL: API_URL,

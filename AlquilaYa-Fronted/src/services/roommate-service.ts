@@ -14,6 +14,8 @@ export interface PerfilConvivencia {
   score?: number;
   nivelReputacion?: NivelReputacion;
   completitud: number;
+  compatibilidadScore?: number;
+  compatibilidadNivel?: 'Alta' | 'Media' | 'Baja';
   bio?: string;
   instagram?: string;
   fuma?: string;
@@ -97,33 +99,6 @@ export function labelOpcion(campo: keyof typeof OPCIONES, valor?: string): strin
   return OPCIONES[campo].find((o) => o.v === valor)?.l ?? valor;
 }
 
-/** Compatibilidad simple entre dos perfiles de convivencia (#38): % de hábitos que coinciden. */
-export function compatibilidad(
-  mi: PerfilConvivencia | null | undefined,
-  otro: PerfilConvivencia,
-): { score: number; nivel: 'Alta' | 'Media' | 'Baja' } | null {
-  if (!mi) return null;
-  const campos = ['fuma', 'horario', 'orden', 'ruido', 'sociabilidad', 'mascotas', 'invitados'] as const;
-  let comparables = 0;
-  let coinciden = 0;
-  for (const c of campos) {
-    if (mi[c] && otro[c]) {
-      comparables++;
-      if (mi[c] === otro[c]) coinciden++;
-    }
-  }
-  // Presupuesto: si ambos lo declararon y se solapan, suma como coincidencia.
-  if (mi.presupuestoMax && otro.presupuestoMax) {
-    comparables++;
-    const miMin = mi.presupuestoMin ?? 0;
-    const otroMin = otro.presupuestoMin ?? 0;
-    const solapan = Math.max(miMin, otroMin) <= Math.min(mi.presupuestoMax, otro.presupuestoMax);
-    if (solapan) coinciden++;
-  }
-  const score = comparables === 0 ? 0 : Math.round((coinciden / comparables) * 100);
-  const nivel = score >= 75 ? 'Alta' : score >= 45 ? 'Media' : 'Baja';
-  return { score, nivel };
-}
 
 export const roommateService = {
   listarRoommates: async (): Promise<PerfilConvivencia[]> => {

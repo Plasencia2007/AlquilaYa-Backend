@@ -2,6 +2,8 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.dto.HabitacionRequest;
 import com.alquilaya.serviciopropiedades.dto.HabitacionResponse;
+import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
+import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.entities.Habitacion;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoHabitacion;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -32,6 +35,7 @@ public class HabitacionService {
     private final PropiedadRepository propiedadRepository;
     private final ReservaRepository reservaRepository;
     private final KafkaProducerService kafkaProducerService;
+    private final UsuariosClient usuariosClient;
 
     /** Reservas que cuentan como "completadas" / "fallidas" para el score de reputación (#26). */
     private static final EnumSet<EstadoReserva> RESERVAS_COMPLETADAS = EnumSet.of(EstadoReserva.FINALIZADA);
@@ -53,7 +57,32 @@ public class HabitacionService {
     @Transactional(readOnly = true)
     public List<HabitacionResponse> listar(Long propiedadId) {
         return habitacionRepository.findByPropiedadIdOrderByOrdenAscIdAsc(propiedadId)
-                .stream().map(HabitacionResponse::from).toList();
+                .stream().map(this::toResponseEnriched).toList();
+    }
+
+    private HabitacionResponse toResponseEnriched(Habitacion h) {
+        HabitacionResponse res = HabitacionResponse.from(h);
+        if (h.getEstado() == EstadoHabitacion.OCUPADA) {
+            List<Reserva> pagadas = reservaRepository.findByHabitacionIdAndEstadoIn(h.getId(), List.of(EstadoReserva.PAGADA));
+            LocalDate hoy = LocalDate.now();
+            pagadas.stream()
+                .filter(r -> (r.getFechaInicio() == null || !r.getFechaInicio().isAfter(hoy))
+                        && (r.getFechaFin() == null || !r.getFechaFin().isBefore(hoy)))
+                .findFirst()
+                .ifPresent(reserva -> {
+                    try {
+                        EstudianteInfoDTO est = usuariosClient.obtenerEstudiante(reserva.getEstudianteId());
+                        if (est != null) {
+                            est.setCorreo(null);
+                            est.setTelefono(null);
+                            res.setOcupante(est);
+                        }
+                    } catch (Exception e) {
+                        // fallback silenciador
+                    }
+                });
+        }
+        return res;
     }
 
     @Transactional
@@ -69,7 +98,7 @@ public class HabitacionService {
                 .build();
         Habitacion guardada = habitacionRepository.save(h);
         sincronizarPrecioPropiedad(propiedadId);
-        return HabitacionResponse.from(guardada);
+        return toResponseEnriched(guardada);
     }
 
     @Transactional
@@ -84,7 +113,7 @@ public class HabitacionService {
         if (req.getOrden() != null) h.setOrden(req.getOrden());
         Habitacion guardada = habitacionRepository.save(h);
         sincronizarPrecioPropiedad(propiedadId);
-        return HabitacionResponse.from(guardada);
+        return toResponseEnriched(guardada);
     }
 
     @Transactional

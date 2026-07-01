@@ -118,6 +118,10 @@ public class ReservaController {
         String estCorreo = "";
         Integer estScore = null;
         String estNivel = null;
+        String estTelefono = "";
+        String estUniversidad = "";
+        String estCarrera = "";
+        Boolean estVerificado = false;
 
         try {
             var est = reservaService.obtenerInfoEstudiante(r.getEstudianteId());
@@ -126,6 +130,10 @@ public class ReservaController {
                 estCorreo = est.getCorreo();
                 estScore = est.getScore();
                 estNivel = est.getNivelReputacion();
+                estTelefono = est.getTelefono();
+                estUniversidad = est.getUniversidad();
+                estCarrera = est.getCarrera();
+                estVerificado = est.getVerificado();
             }
         } catch (Exception e) {
             log.warn("Error obteniendo info del estudiante {} para el DTO: {}", r.getEstudianteId(), e.getMessage());
@@ -134,6 +142,10 @@ public class ReservaController {
         ReservaResponseDTO dto = ReservaResponseDTO.from(r, titulo, estNombre, estCorreo);
         dto.setEstudianteScore(estScore);
         dto.setEstudianteNivelReputacion(estNivel);
+        dto.setEstudianteTelefono(estTelefono);
+        dto.setEstudianteUniversidad(estUniversidad);
+        dto.setEstudianteCarrera(estCarrera);
+        dto.setEstudianteVerificado(estVerificado);
         // Si ya se pagó, usamos la comisión snapshotteada (histórica); si no, la calculamos en
         // vivo desde la zona para que el estudiante vea el cargo antes de pagar.
         dto.setComision(r.getComision() != null

@@ -15,6 +15,10 @@ interface ReservaResponseDTO {
   propiedadTitulo: string;
   estudianteNombre?: string;
   estudianteCorreo?: string;
+  estudianteTelefono?: string;
+  estudianteUniversidad?: string;
+  estudianteCarrera?: string;
+  estudianteVerificado?: boolean;
   estudianteScore?: number;
   estudianteNivelReputacion?: string;
   motivoRechazo?: string;
@@ -46,6 +50,11 @@ function fromDTO(dto: ReservaResponseDTO): Reserva {
     estado: dto.estado,
     motivoRechazo: dto.motivoRechazo,
     fechaCreacion: dto.fechaCreacion,
+    estudianteCorreo: dto.estudianteCorreo,
+    estudianteTelefono: dto.estudianteTelefono,
+    estudianteUniversidad: dto.estudianteUniversidad,
+    estudianteCarrera: dto.estudianteCarrera,
+    estudianteVerificado: dto.estudianteVerificado,
   };
 }
 

@@ -31,6 +31,10 @@ public class ReservaResponseDTO {
     private String propiedadTitulo;
     private String estudianteNombre;
     private String estudianteCorreo;
+    private String estudianteTelefono;
+    private String estudianteUniversidad;
+    private String estudianteCarrera;
+    private Boolean estudianteVerificado;
     /** Score agregado de reputación del estudiante 0–100 (#26). */
     private Integer estudianteScore;
     /** Nivel del estudiante: BRONCE/PLATA/ORO/PLATINO (#26). */

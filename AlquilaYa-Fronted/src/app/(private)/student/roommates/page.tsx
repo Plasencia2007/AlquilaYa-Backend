@@ -7,7 +7,7 @@ import { Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { notify } from '@/lib/notify';
 import { RoommateCard } from '@/components/student/roommate-card';
-import { compatibilidad, roommateService, type PerfilConvivencia } from '@/services/roommate-service';
+import { roommateService, type PerfilConvivencia } from '@/services/roommate-service';
 
 export default function RoommatesPage() {
   const [lista, setLista] = useState<PerfilConvivencia[]>([]);
@@ -29,10 +29,13 @@ export default function RoommatesPage() {
 
   const ordenados = useMemo(
     () =>
-      lista
-        .map((p) => ({ p, c: compatibilidad(mi, p) }))
-        .sort((a, b) => (b.c?.score ?? 0) - (a.c?.score ?? 0)),
-    [lista, mi],
+      lista.map((p) => ({
+        p,
+        c: p.compatibilidadScore !== undefined && p.compatibilidadNivel !== undefined
+          ? { score: p.compatibilidadScore, nivel: p.compatibilidadNivel }
+          : null,
+      })),
+    [lista],
   );
 
   return (

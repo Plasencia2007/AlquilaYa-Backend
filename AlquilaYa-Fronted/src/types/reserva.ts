@@ -34,6 +34,11 @@ export interface Reserva {
   comision?: number;
   estado: EstadoReserva;
   fechaCreacion: string;
+  estudianteCorreo?: string;
+  estudianteTelefono?: string;
+  estudianteUniversidad?: string;
+  estudianteCarrera?: string;
+  estudianteVerificado?: boolean;
 }
 
 export interface CrearReservaRequest {

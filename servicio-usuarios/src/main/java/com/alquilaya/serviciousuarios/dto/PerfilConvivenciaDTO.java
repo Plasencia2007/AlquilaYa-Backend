@@ -27,6 +27,8 @@ public class PerfilConvivenciaDTO {
     private Integer score;            // reputación #26
     private String nivelReputacion;   // BRONCE/PLATA/ORO/PLATINO
     private int completitud;          // % del perfil de convivencia completado
+    private Integer compatibilidadScore;
+    private String compatibilidadNivel;
 
     // Sobre mí
     private String bio;
