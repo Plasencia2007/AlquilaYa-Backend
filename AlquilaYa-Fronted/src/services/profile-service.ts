@@ -115,4 +115,9 @@ export const profileService = {
     );
     return data.fotoUrl;
   },
+
+  verificarRuc: async (ruc: string): Promise<any> => {
+    const { data } = await api.post(`/usuarios/arrendador/verificar-ruc?ruc=${ruc}`);
+    return data;
+  },
 };

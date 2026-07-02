@@ -182,3 +182,8 @@ app:
 # Token JWT corto para reset password (15 min)
 password-reset:
   token-expiration-ms: 900000
+
+# API Peru (DNI / RUC integration)
+apiperu:
+  token: ${APIPERU_TOKEN:}
+  url: ${APIPERU_URL:https://apiperu.dev/api}

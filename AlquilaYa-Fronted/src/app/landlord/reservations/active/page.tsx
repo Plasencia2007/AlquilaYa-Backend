@@ -9,6 +9,7 @@ import { ConfirmActionModal } from '@/components/landlord/ConfirmActionModal';
 import { StudentProfileModal } from '@/components/landlord/StudentProfileModal';
 import { useReservationsStore } from '@/stores/reservations-store';
 import type { Reserva, EstadoReserva } from '@/types/reserva';
+import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
 
 type Tab = 'pendientes' | 'confirmadas';
 type AccionPendiente =
@@ -49,8 +50,15 @@ export default function ReservationsActivePage() {
   const [working, setWorking] = useState(false);
   const [filtroConf, setFiltroConf] = useState<'TODOS' | 'APROBADA' | 'PAGADA'>('TODOS');
   const [perfilEstudiante, setPerfilEstudiante] = useState<Reserva | null>(null);
+  const [motivosRechazo, setMotivosRechazo] = useState<ItemCatalogo[]>([]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  useEffect(() => {
+    catalogosService.obtenerPorTipo('MOTIVO_RECHAZO')
+      .then(setMotivosRechazo)
+      .catch((err) => console.error('Error cargando motivos de rechazo:', err));
+  }, []);
 
   const pendientes = useMemo(
     () => reservas.filter((r) => r.estado === 'SOLICITADA'),
@@ -281,6 +289,7 @@ export default function ReservationsActivePage() {
         confirmLabel="Rechazar reserva"
         tone="danger"
         requireReason
+        predefinedReasons={motivosRechazo}
         reasonPlaceholder="Ej. Las fechas ya no están disponibles…"
         isLoading={working}
         onConfirm={handleConfirmAprobarRechazar}

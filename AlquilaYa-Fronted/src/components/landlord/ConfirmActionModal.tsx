@@ -13,6 +13,7 @@ interface ConfirmActionModalProps {
   /** Estilo visual del botón principal. Default: primary (azul). */
   tone?: 'primary' | 'success' | 'danger' | 'neutral';
   requireReason?: boolean;
+  predefinedReasons?: Array<{ nombre: string; valor: string } | any>;
   reasonPlaceholder?: string;
   isLoading?: boolean;
   onConfirm: (reason?: string) => void | Promise<void>;
@@ -48,16 +49,21 @@ export function ConfirmActionModal({
   cancelLabel = 'Cancelar',
   tone = 'primary',
   requireReason = false,
+  predefinedReasons,
   reasonPlaceholder = 'Cuéntale al estudiante por qué…',
   isLoading = false,
   onConfirm,
   onCancel,
 }: ConfirmActionModalProps) {
   const [reason, setReason] = useState('');
+  const [selectedPredefined, setSelectedPredefined] = useState('');
 
   // Reset cuando se abre
   useEffect(() => {
-    if (open) setReason('');
+    if (open) {
+      setReason('');
+      setSelectedPredefined('');
+    }
   }, [open]);
 
   // Cerrar con ESC
@@ -72,11 +78,17 @@ export function ConfirmActionModal({
 
   if (!open) return null;
 
-  const reasonInvalido = requireReason && reason.trim().length < 4;
+  const showTextArea = !predefinedReasons || predefinedReasons.length === 0 || selectedPredefined === 'OTRO';
+  const reasonInvalido = requireReason && (
+    showTextArea 
+      ? reason.trim().length < 4 
+      : !selectedPredefined
+  );
 
   const handleConfirm = async () => {
     if (reasonInvalido) return;
-    await onConfirm(requireReason ? reason.trim() : undefined);
+    const finalReason = showTextArea ? reason.trim() : selectedPredefined;
+    await onConfirm(requireReason ? finalReason : undefined);
   };
 
   return (
@@ -125,24 +137,46 @@ export function ConfirmActionModal({
             >
               Motivo
             </label>
-            <textarea
-              id="confirm-modal-reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={reasonPlaceholder}
-              maxLength={300}
-              disabled={isLoading}
-              className="w-full rounded-2xl bg-muted border border-border px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all resize-none"
-            />
-            <div className="flex justify-between mt-1.5">
-              <p className="text-[10px] text-muted-foreground opacity-60">
-                Mínimo 4 caracteres.
-              </p>
-              <p className="text-[10px] text-muted-foreground opacity-60">
-                {reason.length}/300
-              </p>
-            </div>
+            {predefinedReasons && predefinedReasons.length > 0 && (
+              <div className="mb-3">
+                <select
+                  value={selectedPredefined}
+                  onChange={(e) => setSelectedPredefined(e.target.value)}
+                  disabled={isLoading}
+                  className="h-11 w-full rounded-xl border border-input bg-input px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
+                >
+                  <option value="">Selecciona un motivo...</option>
+                  {predefinedReasons.map((p, idx) => (
+                    <option key={idx} value={p.nombre}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                  <option value="OTRO">Otro motivo...</option>
+                </select>
+              </div>
+            )}
+            {showTextArea && (
+              <>
+                <textarea
+                  id="confirm-modal-reason"
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={reasonPlaceholder}
+                  maxLength={300}
+                  disabled={isLoading}
+                  className="w-full rounded-2xl bg-muted border border-border px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all resize-none"
+                />
+                <div className="flex justify-between mt-1.5">
+                  <p className="text-[10px] text-muted-foreground opacity-60">
+                    Mínimo 4 caracteres.
+                  </p>
+                  <p className="text-[10px] text-muted-foreground opacity-60">
+                    {reason.length}/300
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         )}
 

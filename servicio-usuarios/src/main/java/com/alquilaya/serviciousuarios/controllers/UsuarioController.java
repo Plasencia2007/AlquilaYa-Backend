@@ -3,6 +3,7 @@ package com.alquilaya.serviciousuarios.controllers;
 import com.alquilaya.serviciousuarios.dto.ActualizarPerfilAcademicoRequest;
 import com.alquilaya.serviciousuarios.dto.ActualizarPerfilPersonalRequest;
 import com.alquilaya.serviciousuarios.dto.ActualizarUsuarioRequest;
+import com.alquilaya.serviciousuarios.dto.ApiPeruDTOs;
 import com.alquilaya.serviciousuarios.dto.ArrendadorInfoResponse;
 import com.alquilaya.serviciousuarios.dto.ArrendadorPublicoResponse;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordPerfilRequest;
@@ -18,6 +19,7 @@ import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
+import com.alquilaya.serviciousuarios.services.ApiPeruService;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ public class UsuarioController {
     private final UsuarioRepository usuarioRepository;
     private final com.alquilaya.serviciousuarios.services.DeteccionDuplicadosService deteccionDuplicadosService;
     private final com.alquilaya.serviciousuarios.services.ReputacionService reputacionService;
+    private final ApiPeruService apiPeruService;
 
     /** Usuario autenticado, resuelto por el correo que el JWT pone como principal. */
     private Usuario usuarioActual() {
@@ -303,5 +306,49 @@ public class UsuarioController {
                 .score(rep.score())
                 .nivelReputacion(rep.nivel().name())
                 .build());
+    }
+
+    @PostMapping("/arrendador/verificar-ruc")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> verificarRuc(
+            @RequestParam("ruc") String ruc) {
+
+        Usuario u = usuarioActual();
+        if (u.getRol() != Rol.ARRENDADOR) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Solo los arrendadores pueden verificar RUC."));
+        }
+
+        ApiPeruDTOs.RucResponse rucRes = apiPeruService.consultarRuc(ruc);
+        if (!rucRes.isSuccess() || rucRes.getData() == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", rucRes.getMessage() != null ? rucRes.getMessage() : "No se pudo validar el RUC."));
+        }
+
+        ApiPeruDTOs.RucData data = rucRes.getData();
+
+        // Validar que esté ACTIVO
+        if (!"ACTIVO".equalsIgnoreCase(data.getEstado())) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "El RUC no está activo. Estado actual: " + data.getEstado()));
+        }
+
+        // Actualizar datos del arrendador
+        Arrendador a = arrendadorRepository.findByUsuario(u)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el perfil de arrendador"));
+
+        a.setRuc(ruc);
+        if (data.getNombreORazonSocial() != null) {
+            a.setNombreComercial(data.getNombreORazonSocial());
+        }
+        if (data.getDireccion() != null) {
+            a.setDireccionPropiedades(data.getDireccion());
+        }
+        arrendadorRepository.save(a);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "ruc", ruc,
+            "razonSocial", data.getNombreORazonSocial() != null ? data.getNombreORazonSocial() : "",
+            "direccion", data.getDireccion() != null ? data.getDireccion() : ""
+        ));
     }
 }

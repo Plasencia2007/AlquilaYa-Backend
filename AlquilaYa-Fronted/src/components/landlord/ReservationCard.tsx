@@ -190,6 +190,13 @@ export function ReservationCard({
             </div>
           )}
 
+          {reserva.motivoCancelacion && reserva.estado === 'CANCELADA' && (
+            <div className="text-[11px] bg-muted border border-border text-muted-foreground rounded-2xl px-3 py-2">
+              <span className="font-black uppercase text-[9px] tracking-widest">Cancelación: </span>
+              <span className="font-medium">{reserva.motivoCancelacion}</span>
+            </div>
+          )}
+
           {!readOnly && (puedeAprobarRechazar || puedeFinalizar) && (
             <div className={cn('flex flex-wrap gap-2 pt-1')}>
               {puedeAprobarRechazar && (

@@ -22,6 +22,7 @@ interface ReservaResponseDTO {
   estudianteScore?: number;
   estudianteNivelReputacion?: string;
   motivoRechazo?: string;
+  motivoCancelacion?: string;
   fechaCreacion: string;
 }
 
@@ -49,6 +50,7 @@ function fromDTO(dto: ReservaResponseDTO): Reserva {
     comision: dto.comision != null ? Number(dto.comision) : undefined,
     estado: dto.estado,
     motivoRechazo: dto.motivoRechazo,
+    motivoCancelacion: dto.motivoCancelacion,
     fechaCreacion: dto.fechaCreacion,
     estudianteCorreo: dto.estudianteCorreo,
     estudianteTelefono: dto.estudianteTelefono,
@@ -110,8 +112,10 @@ export const reservationService = {
     return fromDTO(data);
   },
 
-  cancelar: async (id: string): Promise<Reserva> => {
-    const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/cancelar`);
+  cancelar: async (id: string, motivo?: string): Promise<Reserva> => {
+    const { data } = await api.patch<ReservaResponseDTO>(`/reservas/${id}/cancelar`, {
+      motivo: motivo ?? '',
+    });
     return fromDTO(data);
   },
 

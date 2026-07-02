@@ -4,7 +4,10 @@ export type TipoItemCatalogo =
   | 'SERVICIO'
   | 'REGLA'
   | 'TIPO_CUARTO'
-  | 'PERIODO_ALQUILER';
+  | 'PERIODO_ALQUILER'
+  | 'MOTIVO_CANCELACION'
+  | 'MOTIVO_RECHAZO'
+  | 'BANNER';
 
 export interface ItemCatalogo {
   id: number;
@@ -12,6 +15,7 @@ export interface ItemCatalogo {
   valor: string;
   tipo: TipoItemCatalogo;
   icono?: string | null;
+  descripcion?: string | null;
   activo: boolean;
 }
 
@@ -20,6 +24,7 @@ export interface ItemCatalogoInput {
   valor: string;
   tipo: TipoItemCatalogo;
   icono?: string;
+  descripcion?: string;
   activo: boolean;
 }
 

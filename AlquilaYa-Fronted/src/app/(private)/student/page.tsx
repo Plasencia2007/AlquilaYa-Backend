@@ -14,9 +14,50 @@ import { distanciaAUpeuKm } from '@/lib/geo';
 import { PropertyCarousel } from '@/components/student/property-carousel';
 import { StatCard } from '@/components/student/stat-card';
 import { OnboardingBanner, type OnboardingPaso } from '@/components/student/onboarding-banner';
+import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Propiedad } from '@/types/propiedad';
 import type { Reserva } from '@/types/reserva';
+
+const FA_TO_MATERIAL: Record<string, string> = {
+  'fa-wifi':             'wifi',
+  'fa-tint':             'water_drop',
+  'fa-bolt':             'bolt',
+  'fa-lightbulb':        'lightbulb',
+  'fa-tshirt':           'checkroom',
+  'fa-shirt':            'checkroom',
+  'fa-utensils':         'restaurant',
+  'fa-key':              'key',
+  'fa-tv':               'tv',
+  'fa-snowflake':        'ac_unit',
+  'fa-parking':          'local_parking',
+  'fa-bus':              'directions_bus',
+  'fa-lock':             'lock',
+  'fa-couch':            'weekend',
+  'fa-bed':              'bed',
+  'fa-paw':              'pets',
+  'fa-smoking-ban':     'smoke_free',
+  'fa-graduation-cap':  'school',
+  'fa-music':           'music_note',
+  'fa-volume-mute':     'volume_off',
+  'fa-glass-cheers':    'celebration',
+  'fa-ban':             'block',
+  'fa-user-times':      'person_remove',
+  'fa-wrench':          'build',
+  'fa-comments-slash':  'speaker_notes_off',
+  'fa-plane-slash':     'flight_land',
+  'fa-heartbeat':       'favorite',
+  'fa-calendar-times':  'event_busy',
+  'fa-exclamation-circle': 'warning',
+};
+
+function resolveIcon(icon: string | undefined): string | undefined {
+  if (!icon) return undefined;
+  const key = icon.toLowerCase().trim();
+  if (key.startsWith('fa-')) return FA_TO_MATERIAL[key] ?? 'label';
+  return icon;
+}
 
 export default function StudentDashboardPage() {
   const { usuario } = useAuth();
@@ -26,6 +67,7 @@ export default function StudentDashboardPage() {
 
   const [reservas,              setReservas]              = useState<Reserva[]>([]);
   const [destacados,            setDestacados]            = useState<Propiedad[]>([]);
+  const [banners,               setBanners]               = useState<ItemCatalogo[]>([]);
   const [cargandoSugerencias,   setCargandoSugerencias]   = useState(true);
 
   useEffect(() => {
@@ -33,10 +75,12 @@ export default function StudentDashboardPage() {
     Promise.all([
       reservationService.listarMias().catch(() => [] as Reserva[]),
       servicioPropiedades.obtenerDestacadas(8),
-    ]).then(([rs, props]) => {
+      catalogosService.obtenerPorTipo('BANNER').catch(() => [] as ItemCatalogo[]),
+    ]).then(([rs, props, bnrs]) => {
       if (cancelado) return;
       setReservas(rs);
       setDestacados(props);
+      setBanners(bnrs);
       setCargandoSugerencias(false);
     });
     return () => { cancelado = true; };
@@ -94,6 +138,54 @@ export default function StudentDashboardPage() {
           Aquí tienes lo que pasa con tus cuartos y reservas hoy.
         </p>
       </header>
+
+      {/* ── Banners Dinámicos ── */}
+      {banners.length > 0 && (
+        <div className="grid gap-5">
+          {banners.map((b) => (
+            <div
+              key={b.id}
+              className="relative overflow-hidden group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 p-6 rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/[0.03] via-violet-500/[0.02] to-pink-500/[0.04] dark:from-primary/[0.08] dark:to-pink-500/[0.04] backdrop-blur-md shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
+            >
+              {/* Background Ambient Glows */}
+              <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl opacity-60 group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+              <div className="absolute -left-20 -bottom-20 w-48 h-48 rounded-full bg-pink-500/10 blur-3xl opacity-55 pointer-events-none" />
+
+              <div className="flex items-start gap-5 relative z-10 flex-1">
+                {b.icono && (
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary via-violet-500 to-pink-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 group-hover:rotate-6 transition-transform duration-300 animate-[pulse_3s_infinite_ease-in-out]">
+                    <span className="material-symbols-outlined text-[24px]">
+                      {resolveIcon(b.icono)}
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-foreground tracking-tight">
+                    {b.nombre}
+                  </h3>
+                  {b.descripcion && (
+                    <p className="text-xs text-muted-foreground leading-relaxed font-medium max-w-2xl">
+                      {b.descripcion}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {b.valor && (
+                <Link href={b.valor} className="shrink-0 self-stretch sm:self-auto">
+                  <Button
+                    size="default"
+                    className="relative z-10 font-bold text-xs gap-1.5 h-10 px-5 rounded-2xl bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 text-white shadow-lg shadow-primary/25 border-none w-full flex items-center justify-center group/btn"
+                  >
+                    Saber más
+                    <ArrowRight className="size-3.5 group-hover/btn:translate-x-0.5 transition-transform duration-200" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Onboarding ── */}
       <OnboardingBanner pasos={onboardingPasos} />

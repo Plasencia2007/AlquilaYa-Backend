@@ -29,6 +29,7 @@ export interface Reserva {
   solicitaVisitaPrevia?: boolean;
   notaEstudiante?: string;
   motivoRechazo?: string;
+  motivoCancelacion?: string;
   montoTotal: number;
   /** Comisión de plataforma de esta venta (según la zona). El estudiante paga montoTotal + comisión; el arrendador recibe montoTotal. */
   comision?: number;

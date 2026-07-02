@@ -186,7 +186,7 @@ public class ReservaService {
     }
 
     @Transactional
-    public Reserva cancelar(Long reservaId, CurrentUser current) {
+    public Reserva cancelar(Long reservaId, String motivo, CurrentUser current) {
         Reserva r = obtenerPorId(reservaId);
         if (current == null || current.getPerfilId() == null) {
             throw new IllegalStateException("Sin perfilId en contexto");
@@ -203,6 +203,7 @@ public class ReservaService {
         }
         EstadoReserva estadoPrevio = r.getEstado();
         r.setEstado(EstadoReserva.CANCELADA);
+        r.setMotivoCancelacion(motivo);
         Reserva guardada = reservaRepository.save(r);
         emitirEvento("RESERVA_CANCELADA", guardada, current);
         habitacionService.recomputarTrasCambioReserva(guardada);

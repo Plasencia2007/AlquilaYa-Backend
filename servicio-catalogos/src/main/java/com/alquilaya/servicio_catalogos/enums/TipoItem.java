@@ -4,5 +4,8 @@ public enum TipoItem {
     SERVICIO,
     REGLA,
     TIPO_CUARTO,
-    PERIODO_ALQUILER
+    PERIODO_ALQUILER,
+    MOTIVO_CANCELACION,
+    MOTIVO_RECHAZO,
+    BANNER
 }

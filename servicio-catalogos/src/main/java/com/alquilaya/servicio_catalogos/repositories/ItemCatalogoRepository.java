@@ -11,4 +11,5 @@ import java.util.List;
 public interface ItemCatalogoRepository extends JpaRepository<ItemCatalogo, Long> {
     List<ItemCatalogo> findByTipoAndActivoTrue(TipoItem tipo);
     List<ItemCatalogo> findByActivoTrue();
+    long countByTipo(TipoItem tipo);
 }

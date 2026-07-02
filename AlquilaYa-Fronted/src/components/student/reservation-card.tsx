@@ -23,6 +23,7 @@ import { notify } from '@/lib/notify';
 import { metaEstadoReserva } from '@/lib/reservation-status';
 import { formatearFecha } from '@/lib/relative-time';
 import type { Reserva } from '@/types/reserva';
+import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
 
 import { ReservationTimeline } from './reservation-timeline';
 import { ReviewFormDialog } from './review-form-dialog';
@@ -31,13 +32,51 @@ import { StayPanelDialog } from './stay-panel-dialog';
 
 interface Props {
   reserva: Reserva;
-  onCancelar?: (id: string) => Promise<boolean>;
+  onCancelar?: (id: string, motivo?: string) => Promise<boolean>;
 }
 
 const cancelable: Reserva['estado'][] = ['SOLICITADA', 'APROBADA'];
 
 export function ReservationCard({ reserva, onCancelar }: Props) {
   const [expandido, setExpandido] = useState(false);
+  const [motivosCancelacion, setMotivosCancelacion] = useState<ItemCatalogo[]>([]);
+  const [motivoSeleccionado, setMotivoSeleccionado] = useState('');
+  const [motivoOtro, setMotivoOtro] = useState('');
+  const [cargandoMotivos, setCargandoMotivos] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+
+  const handleOpenCancelDialog = async (open: boolean) => {
+    setCancelDialogOpen(open);
+    if (open) {
+      setMotivoSeleccionado('');
+      setMotivoOtro('');
+      if (motivosCancelacion.length === 0) {
+        setCargandoMotivos(true);
+        try {
+          const res = await catalogosService.obtenerPorTipo('MOTIVO_CANCELACION');
+          setMotivosCancelacion(res);
+        } catch (e) {
+          console.error('Error cargando motivos de cancelación:', e);
+        } finally {
+          setCargandoMotivos(false);
+        }
+      }
+    }
+  };
+
+  const showCustomTextArea = motivoSeleccionado === 'OTRO' || motivosCancelacion.length === 0;
+  const cancelReasonInvalid = showCustomTextArea
+    ? motivoOtro.trim().length < 4
+    : !motivoSeleccionado;
+
+  const handleConfirmCancel = async () => {
+    if (cancelReasonInvalid) return;
+    const finalReason = showCustomTextArea ? motivoOtro.trim() : motivoSeleccionado;
+    const ok = await onCancelar?.(reserva.id, finalReason);
+    if (ok) {
+      setCancelDialogOpen(false);
+    }
+  };
   const [pagando, setPagando] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -136,6 +175,18 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
             </div>
           </div>
 
+          {reserva.estado === 'RECHAZADA' && reserva.motivoRechazo && (
+            <div className="mt-1.5 rounded-xl bg-red-50 p-2.5 text-xs text-red-800 dark:bg-red-950/20 dark:text-red-300">
+              <strong className="font-bold">Motivo de rechazo:</strong> {reserva.motivoRechazo}
+            </div>
+          )}
+
+          {reserva.estado === 'CANCELADA' && reserva.motivoCancelacion && (
+            <div className="mt-1.5 rounded-xl bg-muted p-2.5 text-xs text-muted-foreground border border-border">
+              <strong className="font-semibold">Motivo de cancelación:</strong> {reserva.motivoCancelacion}
+            </div>
+          )}
+
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -152,7 +203,7 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
             </Button>
 
             {puedeCancelar && onCancelar && (
-              <AlertDialog>
+              <AlertDialog open={cancelDialogOpen} onOpenChange={handleOpenCancelDialog}>
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="ghost"
@@ -162,7 +213,7 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                     Cancelar reserva
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent>
+                <AlertDialogContent className="max-w-md rounded-2xl">
                   <AlertDialogHeader>
                     <AlertDialogTitle>¿Cancelar esta reserva?</AlertDialogTitle>
                     <AlertDialogDescription>
@@ -170,9 +221,61 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                       Esta acción no se puede deshacer.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+
+                  <div className="my-4 space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-70">
+                      Motivo de cancelación
+                    </label>
+                    {cargandoMotivos ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 animate-pulse">
+                        <Loader2 className="size-3.5 animate-spin" /> Cargando motivos del catálogo...
+                      </div>
+                    ) : (
+                      motivosCancelacion.length > 0 && (
+                        <select
+                          value={motivoSeleccionado}
+                          onChange={(e) => setMotivoSeleccionado(e.target.value)}
+                          className="h-10 w-full rounded-xl border border-input bg-input px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">Selecciona un motivo...</option>
+                          {motivosCancelacion.map((m) => (
+                            <option key={m.id} value={m.nombre}>
+                              {m.nombre}
+                            </option>
+                          ))}
+                          <option value="OTRO">Otro motivo...</option>
+                        </select>
+                      )
+                    )}
+
+                    {showCustomTextArea && (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={3}
+                          value={motivoOtro}
+                          onChange={(e) => setMotivoOtro(e.target.value)}
+                          placeholder="Explica brevemente el motivo..."
+                          maxLength={300}
+                          className="w-full rounded-xl bg-muted border border-border px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all resize-none"
+                        />
+                        <div className="flex justify-between text-[9px] text-muted-foreground opacity-60">
+                          <span>Mínimo 4 caracteres.</span>
+                          <span>{motivoOtro.length}/300</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <AlertDialogFooter>
                     <AlertDialogCancel>Mantener reserva</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onCancelar(reserva.id)}>
+                    <AlertDialogAction
+                      disabled={cancelReasonInvalid}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleConfirmCancel();
+                      }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                       Sí, cancelar
                     </AlertDialogAction>
                   </AlertDialogFooter>

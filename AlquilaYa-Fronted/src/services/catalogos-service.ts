@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
  *   - TIPO_CUARTO       : alias visual del enum TipoPropiedad
  *   - PERIODO_ALQUILER  : alias visual del enum PeriodoAlquiler
  */
-export type TipoItemCatalogo = 'SERVICIO' | 'REGLA' | 'TIPO_CUARTO' | 'PERIODO_ALQUILER';
+export type TipoItemCatalogo = 'SERVICIO' | 'REGLA' | 'TIPO_CUARTO' | 'PERIODO_ALQUILER' | 'MOTIVO_CANCELACION' | 'MOTIVO_RECHAZO' | 'BANNER';
 
 /**
  * Item individual del catálogo, tal como lo devuelve el backend
@@ -39,6 +39,9 @@ export interface CatalogosActivos {
   REGLA?: ItemCatalogo[];
   TIPO_CUARTO?: ItemCatalogo[];
   PERIODO_ALQUILER?: ItemCatalogo[];
+  MOTIVO_CANCELACION?: ItemCatalogo[];
+  MOTIVO_RECHAZO?: ItemCatalogo[];
+  BANNER?: ItemCatalogo[];
 }
 
 export const catalogosService = {

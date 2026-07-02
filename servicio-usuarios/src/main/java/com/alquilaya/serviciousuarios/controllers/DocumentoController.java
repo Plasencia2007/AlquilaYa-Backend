@@ -4,6 +4,7 @@ import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
 import com.alquilaya.serviciousuarios.dto.TipoDocumentoConfigDTO;
 import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
+import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
 import com.alquilaya.serviciousuarios.services.DocumentoService;
 import com.alquilaya.serviciousuarios.validaciones.anotaciones.ArchivoValido;
@@ -40,6 +41,15 @@ public class DocumentoController {
             @RequestParam("archivo") @ArchivoValido MultipartFile archivo) {
 
         return ResponseEntity.ok(documentoService.subirDocumento(usuarioId, tipo, archivo));
+    }
+
+    @PostMapping("/verificar-dni-instantaneo")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Usuario> verificarDniInstantaneo(
+            @RequestParam("usuarioId") Long usuarioId,
+            @RequestParam("dni") String dni) {
+
+        return ResponseEntity.ok(documentoService.verificarDniInstantaneo(usuarioId, dni));
     }
 
     @GetMapping("/{id}")

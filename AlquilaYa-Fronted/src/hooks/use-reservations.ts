@@ -30,9 +30,9 @@ export function useReservations() {
     cargar();
   }, [cargar]);
 
-  const cancelar = useCallback(async (id: string) => {
+  const cancelar = useCallback(async (id: string, motivo?: string) => {
     try {
-      const actualizada = await reservationService.cancelar(id);
+      const actualizada = await reservationService.cancelar(id, motivo);
       setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...actualizada } : r)));
       notify.success('Reserva cancelada');
       return true;

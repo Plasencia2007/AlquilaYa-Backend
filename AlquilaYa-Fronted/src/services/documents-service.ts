@@ -48,4 +48,11 @@ export const documentsService = {
   eliminarDocumento: async (id: number): Promise<void> => {
     await api.delete(`/usuarios/documentos/${id}`);
   },
+  
+  verificarDniInstantaneo: async (dni: string): Promise<any> => {
+    const userId = obtenerMiUserId();
+    if (!userId) throw new Error('No hay sesión activa');
+    const { data } = await api.post(`/usuarios/documentos/verificar-dni-instantaneo?usuarioId=${userId}&dni=${dni}`);
+    return data;
+  },
 };

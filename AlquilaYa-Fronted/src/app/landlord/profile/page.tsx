@@ -223,6 +223,8 @@ export default function LandlordProfilePage() {
 
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [savingArrendador, setSavingArrendador] = useState(false);
+  const [verificandoRuc, setVerificandoRuc] = useState(false);
+  const [verificandoDni, setVerificandoDni] = useState(false);
   const [savingUbicacion, setSavingUbicacion] = useState(false);
   const [savingSeguridad, setSavingSeguridad] = useState(false);
   const [savingFoto, setSavingFoto] = useState(false);
@@ -317,6 +319,54 @@ export default function LandlordProfilePage() {
     latitud: formUbicacion.lat,
     longitud: formUbicacion.lng,
   });
+
+  const handleVerificarDni = async () => {
+    if (formPersonal.dni.length !== 8) {
+      notify.error(null, 'El DNI debe tener exactamente 8 dígitos.');
+      return;
+    }
+    setVerificandoDni(true);
+    try {
+      await documentsService.verificarDniInstantaneo(formPersonal.dni);
+      notify.success('DNI verificado con RENIEC', 'Tu identidad ha sido validada.');
+      const actualizado = await profileService.obtenerMiPerfil();
+      setPerfil(actualizado);
+    } catch (err) {
+      notify.error(err, 'Error de verificación de DNI');
+    } finally {
+      setVerificandoDni(false);
+    }
+  };
+
+  const handleVerificarRuc = async () => {
+    if (formArrendador.ruc.length !== 11) {
+      notify.error(null, 'El RUC debe tener exactamente 11 dígitos.');
+      return;
+    }
+    setVerificandoRuc(true);
+    try {
+      const res = await profileService.verificarRuc(formArrendador.ruc);
+      if (res.success) {
+        notify.success('RUC verificado con SUNAT', 'Datos comerciales cargados.');
+        setFormArrendador(p => ({
+          ...p,
+          nombreComercial: res.razonSocial || p.nombreComercial,
+        }));
+        if (res.direccion) {
+          setFormUbicacion(p => ({
+            ...p,
+            direccionCuartos: res.direccion,
+          }));
+        }
+      } else {
+        notify.error(null, res.message || 'No se pudo verificar el RUC.');
+      }
+    } catch (err) {
+      notify.error(err, 'Error de validación de RUC');
+    } finally {
+      setVerificandoRuc(false);
+    }
+  };
 
   const guardarArrendador = async () => {
     if (!formUbicacion.direccionCuartos.trim()) {
@@ -472,9 +522,31 @@ export default function LandlordProfilePage() {
             onChange={v => setFormPersonal(p => ({ ...p, nombre: v }))} />
           <InputField label="Apellido" value={formPersonal.apellido}
             onChange={v => setFormPersonal(p => ({ ...p, apellido: v }))} />
-          <InputField label="DNI" value={formPersonal.dni}
-            onChange={v => setFormPersonal(p => ({ ...p, dni: v }))}
-            placeholder="12345678" />
+          <div className="flex flex-col sm:flex-row items-end gap-2">
+            <div className="flex-1 w-full">
+              <InputField label="DNI" value={formPersonal.dni}
+                onChange={v => setFormPersonal(p => ({ ...p, dni: v }))}
+                placeholder="12345678" />
+            </div>
+            <button
+              type="button"
+              onClick={handleVerificarDni}
+              disabled={verificandoDni || formPersonal.dni.length !== 8}
+              className="h-[42px] px-4 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-slate-700 disabled:to-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/10 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+            >
+              {verificandoDni ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  Validando...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[16px]">verified</span>
+                  Validar DNI
+                </>
+              )}
+            </button>
+          </div>
           <InputField label="Teléfono" value={formPersonal.telefono}
             onChange={v => setFormPersonal(p => ({ ...p, telefono: v }))}
             placeholder="+51 9XX XXX XXX" />
@@ -496,9 +568,31 @@ export default function LandlordProfilePage() {
             <InputField label="Nombre comercial" value={formArrendador.nombreComercial}
               onChange={v => setFormArrendador(p => ({ ...p, nombreComercial: v }))}
               placeholder="Ej: Cuartos Plasencia" />
-            <InputField label="RUC" value={formArrendador.ruc}
-              onChange={v => setFormArrendador(p => ({ ...p, ruc: v }))}
-              placeholder="20XXXXXXXXX" />
+            <div className="flex flex-col sm:flex-row items-end gap-2">
+              <div className="flex-1 w-full">
+                <InputField label="RUC" value={formArrendador.ruc}
+                  onChange={v => setFormArrendador(p => ({ ...p, ruc: v }))}
+                  placeholder="20XXXXXXXXX" />
+              </div>
+              <button
+                type="button"
+                onClick={handleVerificarRuc}
+                disabled={verificandoRuc || formArrendador.ruc.length !== 11}
+                className="h-[42px] px-4 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-slate-700 disabled:to-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/10 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+              >
+                {verificandoRuc ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Validando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">verified</span>
+                    Validar RUC
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

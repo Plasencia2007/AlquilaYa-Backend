@@ -93,8 +93,9 @@ public class ReservaController {
 
     @PatchMapping("/{id}/cancelar")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ReservaResponseDTO> cancelar(@PathVariable Long id) {
-        Reserva r = reservaService.cancelar(id, CurrentUserProvider.get());
+    public ResponseEntity<ReservaResponseDTO> cancelar(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+        String motivo = body != null ? body.getOrDefault("motivo", "") : "";
+        Reserva r = reservaService.cancelar(id, motivo, CurrentUserProvider.get());
         return ResponseEntity.ok(toResponseDTO(r));
     }
 

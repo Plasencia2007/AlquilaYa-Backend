@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { documentUploadSchema } from '@/schemas/document-schema';
 import { documentsService } from '@/services/documents-service';
+import { useAuth } from '@/hooks/use-auth';
 import type { Documento, EstadoDocumento, TipoDocConfig } from '@/types/profile';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
@@ -224,11 +225,15 @@ function ProgressBar({ aprobados, total }: ProgressBarProps) {
 const STORAGE_KEY = 'verification_panel_collapsed';
 
 export default function VerificationPanel() {
+  const { usuario, inicializar } = useAuth();
   const [tipos, setTipos] = useState<TipoDocConfig[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [cargando, setCargando] = useState(true);
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  const [dniInput, setDniInput] = useState('');
+  const [dniVerificando, setDniVerificando] = useState(false);
   const [colapsado, setColapsado] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(STORAGE_KEY) === 'true';
@@ -283,6 +288,25 @@ export default function VerificationPanel() {
       notify.error(err, 'Error al subir el documento');
     } finally {
       setSubiendo(null);
+    }
+  };
+
+  const handleVerificarDniInstantaneo = async () => {
+    if (dniInput.length !== 8) {
+      notify.error(null, 'El DNI debe tener exactamente 8 dígitos.');
+      return;
+    }
+    setDniVerificando(true);
+    try {
+      await documentsService.verificarDniInstantaneo(dniInput);
+      notify.success('¡Identidad verificada!', 'Tus datos coinciden con RENIEC.');
+      setDniInput('');
+      await cargar();
+      inicializar();
+    } catch (err) {
+      notify.error(err, 'Error de verificación');
+    } finally {
+      setDniVerificando(false);
     }
   };
 
@@ -364,6 +388,63 @@ export default function VerificationPanel() {
             {/* Barra de progreso completa */}
             {!cargando && total > 0 && (
               <ProgressBar aprobados={aprobados} total={total} />
+            )}
+
+            {/* Tarjeta de verificación instantánea */}
+            {!cargando && !todosAprobados && (
+              <div className="bg-gradient-to-r from-primary/10 via-violet-500/5 to-pink-500/5 border border-primary/25 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-tr from-primary to-violet-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-primary/25">
+                    <span className="material-symbols-outlined text-[20px]">bolt</span>
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <p className="text-sm font-black text-foreground leading-tight">Verificación Digital por RENIEC</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Verifica tu identidad al instante. Ingresa tu número de DNI y el sistema validará tu nombre con la base de datos oficial.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <div className="relative flex-1">
+                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-[18px]">
+                      badge
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={8}
+                      placeholder="Ingresa tu DNI (8 dígitos)"
+                      value={dniInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 8);
+                        setDniInput(val);
+                      }}
+                      disabled={dniVerificando}
+                      className="w-full h-11 bg-white/60 border border-input rounded-xl pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-semibold placeholder:text-muted-foreground/45"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleVerificarDniInstantaneo}
+                    disabled={dniVerificando || dniInput.length !== 8}
+                    className="h-11 px-5 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-muted disabled:to-muted text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {dniVerificando ? (
+                      <>
+                        <span className="animate-spin mr-1">⏳</span>
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[16px]">verified</span>
+                        Validar Identidad
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Document cards */}

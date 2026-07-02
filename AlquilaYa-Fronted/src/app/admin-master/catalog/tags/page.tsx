@@ -1,15 +1,20 @@
 'use client';
 
-export default function AdminPlaceholderPage() {
+import { CatalogosTable } from '@/components/admin/CatalogosTable';
+
+export default function AdminCatalogTagsPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
-      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
-        <span className="material-symbols-outlined text-primary text-3xl">sell</span>
-      </div>
-      <h1 className="text-3xl font-black text-foreground tracking-tighter mb-2">Etiquetas de Servicios</h1>
-      <p className="text-muted-foreground font-medium opacity-70 max-w-md">
-        Gestiona las etiquetas de Wi-Fi, lavandería, mascotas y otros servicios.
-      </p>
+    <div className="p-6 sm:p-8 max-w-6xl mx-auto animate-fade-in">
+      <header className="mb-8 space-y-2">
+        <h1 className="text-3xl font-black text-foreground tracking-tighter">
+          Gestor de Catálogos
+        </h1>
+        <p className="text-sm text-muted-foreground font-medium opacity-70">
+          Administra servicios, reglas, tipos de cuarto, periodos y motivos de cancelación o rechazo.
+        </p>
+      </header>
+
+      <CatalogosTable />
     </div>
   );
 }

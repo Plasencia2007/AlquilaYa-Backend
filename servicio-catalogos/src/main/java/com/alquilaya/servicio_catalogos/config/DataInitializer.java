@@ -31,7 +31,10 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         seedUniversidades();
         seedCarreras();
+        seedCatalogos();
+    }
 
+    private void seedCatalogos() {
         if (repository.count() == 0) {
             log.info("Iniciando precarga de datos en el catálogo...");
 
@@ -45,9 +48,7 @@ public class DataInitializer implements CommandLineRunner {
                 createItem("Entrada Independiente", "ENTRADA_IND", TipoItem.SERVICIO, "fa-key")
             ));
 
-            // TIPOS DE CUARTO — los 'valor' deben coincidir con el enum TipoPropiedad de
-            // servicio-propiedades (CUARTO_INDIVIDUAL/.../MINI_DEPA/CASA), porque ese valor se
-            // guarda tal cual en la propiedad y decide si exige distribución (depa/mini depa/casa).
+            // TIPOS DE CUARTO
             repository.saveAll(List.of(
                 createItem("Cuarto individual", "CUARTO_INDIVIDUAL", TipoItem.TIPO_CUARTO, "fa-user"),
                 createItem("Cuarto compartido", "CUARTO_COMPARTIDO", TipoItem.TIPO_CUARTO, "fa-users"),
@@ -71,8 +72,37 @@ public class DataInitializer implements CommandLineRunner {
                 createItem("Pago Semestral (Ciclo)", "SEMESTRAL", TipoItem.PERIODO_ALQUILER, "fa-university"),
                 createItem("Pago Anual", "ANUAL", TipoItem.PERIODO_ALQUILER, "fa-calendar-check")
             ));
+        }
 
-            log.info("Precarga de catálogo completada exitosamente.");
+        // Sembrar incrementalmente si no existen
+        if (repository.countByTipo(TipoItem.MOTIVO_CANCELACION) == 0) {
+            log.info("Sembrando motivos de cancelación...");
+            repository.saveAll(List.of(
+                createItem("Cambio de planes de viaje", "CAMBIO_PLANES", TipoItem.MOTIVO_CANCELACION, "fa-plane-slash"),
+                createItem("Problemas personales o de salud", "PROBLEMAS_PERSONALES", TipoItem.MOTIVO_CANCELACION, "fa-heartbeat"),
+                createItem("Encontré otro alojamiento", "OTRO_ALOJAMIENTO", TipoItem.MOTIVO_CANCELACION, "fa-home"),
+                createItem("Inconvenientes con las fechas", "INCONVENIENTE_FECHAS", TipoItem.MOTIVO_CANCELACION, "fa-calendar-times"),
+                createItem("Error al realizar la reserva", "ERROR_RESERVA", TipoItem.MOTIVO_CANCELACION, "fa-exclamation-circle")
+            ));
+        }
+
+        if (repository.countByTipo(TipoItem.MOTIVO_RECHAZO) == 0) {
+            log.info("Sembrando motivos de rechazo...");
+            repository.saveAll(List.of(
+                createItem("Habitación no disponible", "NO_DISPONIBLE", TipoItem.MOTIVO_RECHAZO, "fa-ban"),
+                createItem("El perfil del estudiante no coincide", "PERFIL_INCOMPATIBLE", TipoItem.MOTIVO_RECHAZO, "fa-user-times"),
+                createItem("Precio o detalles incorrectos", "DETALLES_INCORRECTOS", TipoItem.MOTIVO_RECHAZO, "fa-edit"),
+                createItem("Mantenimiento o reparaciones", "MANTENIMIENTO", TipoItem.MOTIVO_RECHAZO, "fa-wrench"),
+                createItem("Falta de respuesta/comunicación", "FALTA_COMUNICACION", TipoItem.MOTIVO_RECHAZO, "fa-comments-slash")
+            ));
+        }
+
+        if (repository.countByTipo(TipoItem.BANNER) == 0) {
+            log.info("Sembrando banners informativos...");
+            repository.saveAll(List.of(
+                createBanner("¡Descuento en tu primer mes!", "/search", "local_offer", "Reserva y paga a través de la plataforma para obtener incentivos en tu comisión de alquiler."),
+                createBanner("Completa tu verificación", "/student/profile?tab=verificacion", "verified_user", "Sube tu DNI en tu perfil de estudiante para que tus reservas se aprueben de forma prioritaria.")
+            ));
         }
     }
 
@@ -82,6 +112,17 @@ public class DataInitializer implements CommandLineRunner {
                 .valor(valor)
                 .tipo(tipo)
                 .icono(icono)
+                .activo(true)
+                .build();
+    }
+
+    private ItemCatalogo createBanner(String nombre, String valor, String icono, String descripcion) {
+        return ItemCatalogo.builder()
+                .nombre(nombre)
+                .valor(valor)
+                .tipo(TipoItem.BANNER)
+                .icono(icono)
+                .descripcion(descripcion)
                 .activo(true)
                 .build();
     }

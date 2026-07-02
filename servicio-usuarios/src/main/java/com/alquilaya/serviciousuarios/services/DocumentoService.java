@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.services;
 
+import com.alquilaya.serviciousuarios.dto.ApiPeruDTOs;
 import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
@@ -33,6 +34,7 @@ public class DocumentoService {
     private final CloudinaryDocumentService cloudinaryDocumentService;
     private final NotificationService notificationService;
     private final UserEventProducer userEventProducer;
+    private final ApiPeruService apiPeruService;
 
     @Transactional
     public DocumentoVerificacion subirDocumento(Long usuarioId, TipoDocumento tipo, MultipartFile archivo) {
@@ -165,5 +167,92 @@ public class DocumentoService {
 
         log.debug("Enviando notificación de documento {} a {}", doc.getEstadoVerificacion(), LogMask.phone(telefono));
         notificationService.enviarMensajeWhatsApp(telefono, mensaje);
+    }
+
+    @Transactional
+    public Usuario verificarDniInstantaneo(Long usuarioId, String dni) {
+        // 1. Consultar ApiPeru
+        ApiPeruDTOs.DniResponse apiPeruRes = apiPeruService.consultarDni(dni);
+        if (!apiPeruRes.isSuccess() || apiPeruRes.getData() == null) {
+            throw new IllegalArgumentException(apiPeruRes.getMessage() != null ? apiPeruRes.getMessage() : "No se pudo validar el DNI.");
+        }
+
+        ApiPeruDTOs.DniData data = apiPeruRes.getData();
+        String nombresCompletosApi = (data.getNombreCompleto() != null ? data.getNombreCompleto() : "").toLowerCase().trim();
+
+        // 2. Obtener usuario
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + usuarioId));
+
+        // 3. Validar coincidencia de nombre (insensible a acentos/mayúsculas)
+        String nombreUser = (usuario.getNombre() != null ? usuario.getNombre() : "").toLowerCase().trim();
+        String apellidoUser = (usuario.getApellido() != null ? usuario.getApellido() : "").toLowerCase().trim();
+
+        // Limpiar acentos para mayor flexibilidad
+        String nombreUserClean = normalizarTexto(nombreUser);
+        String apellidoUserClean = normalizarTexto(apellidoUser);
+        String nombresCompletosApiClean = normalizarTexto(nombresCompletosApi);
+
+        // Validar si el nombre y el apellido del usuario están contenidos en la respuesta de RENIEC
+        boolean coincideNombre = nombresCompletosApiClean.contains(nombreUserClean);
+        boolean coincideApellido = nombresCompletosApiClean.contains(apellidoUserClean);
+
+        if (!coincideNombre || !coincideApellido) {
+            log.warn("El nombre del usuario '{} {}' no coincide con el DNI consultado en RENIEC '{}'",
+                    usuario.getNombre(), usuario.getApellido(), data.getNombreCompleto());
+            throw new IllegalArgumentException("El DNI consultado pertenece a otra persona ('" + data.getNombreCompleto() + "'). " +
+                    "Por favor, verifica que tu DNI sea correcto o actualiza tu nombre en tu perfil.");
+        }
+
+        // 4. Si coincide: Guardar DNI
+        usuario.setDni(dni);
+        usuarioRepository.save(usuario);
+
+        // 5. Crear registros virtuales y marcarlos como aprobados para DNI_FRONTAL y DNI_REVERSO
+        crearDocumentoAprobadoVirtual(usuario, TipoDocumento.DNI_FRONTAL, "Instantáneo (RENIEC)");
+        crearDocumentoAprobadoVirtual(usuario, TipoDocumento.DNI_REVERSO, "Instantáneo (RENIEC)");
+
+        // 6. Recalcular la verificación del estudiante
+        recalcularVerificacionEstudiante(usuario, EstadoVerificacion.APROBADO, "Verificación instantánea por DNI.");
+
+        return usuario;
+    }
+
+    private void crearDocumentoAprobadoVirtual(Usuario usuario, TipoDocumento tipo, String metadata) {
+        // Eliminar si ya existe uno anterior
+        List<DocumentoVerificacion> existentes = documentoRepository.findByUsuario(usuario);
+        existentes.stream()
+                .filter(d -> d.getTipoDocumento() == tipo)
+                .forEach(d -> {
+                    try {
+                        cloudinaryDocumentService.eliminarDocumento(d.getArchivoUrl());
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                    documentoRepository.delete(d);
+                });
+        documentoRepository.flush();
+
+        DocumentoVerificacion doc = DocumentoVerificacion.builder()
+                .usuario(usuario)
+                .tipoDocumento(tipo)
+                .archivoUrl("verificacion-digital-auto-" + metadata) // URL marcador virtual
+                .estadoVerificacion(EstadoVerificacion.APROBADO)
+                .comentarioRechazo(null)
+                .build();
+        documentoRepository.save(doc);
+    }
+
+    private String normalizarTexto(String str) {
+        if (str == null) return "";
+        return str.toLowerCase()
+                .replace("á", "a")
+                .replace("é", "e")
+                .replace("í", "i")
+                .replace("ó", "o")
+                .replace("ú", "u")
+                .replace("ñ", "n")
+                .replaceAll("[^a-z0-9 ]", "")
+                .trim();
     }
 }
