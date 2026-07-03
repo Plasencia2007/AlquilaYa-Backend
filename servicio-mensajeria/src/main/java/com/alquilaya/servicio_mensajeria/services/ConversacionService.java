@@ -282,6 +282,13 @@ public class ConversacionService {
             RequestContextHolder.setRequestAttributes(attrs);
             try {
                 return usuariosClient.obtenerArrendador(perfilId);
+            } catch (Exception e) {
+                log.error("[FALLBACK LOCAL] obtenerArrendadorResiliente({}) — {}: {}",
+                        perfilId, e.getClass().getSimpleName(), e.getMessage());
+                UsuarioPerfilDTO defaultDto = new UsuarioPerfilDTO();
+                defaultDto.setId(perfilId);
+                defaultDto.setNombre("Arrendador");
+                return defaultDto;
             } finally {
                 RequestContextHolder.resetRequestAttributes();
             }
@@ -309,6 +316,13 @@ public class ConversacionService {
             RequestContextHolder.setRequestAttributes(attrs);
             try {
                 return usuariosClient.obtenerEstudiante(perfilId);
+            } catch (Exception e) {
+                log.error("[FALLBACK LOCAL] obtenerEstudianteResiliente({}) — {}: {}",
+                        perfilId, e.getClass().getSimpleName(), e.getMessage());
+                UsuarioPerfilDTO defaultDto = new UsuarioPerfilDTO();
+                defaultDto.setId(perfilId);
+                defaultDto.setNombre("Estudiante");
+                return defaultDto;
             } finally {
                 RequestContextHolder.resetRequestAttributes();
             }
@@ -336,6 +350,13 @@ public class ConversacionService {
             RequestContextHolder.setRequestAttributes(attrs);
             try {
                 return propiedadesClient.obtenerPropiedad(propiedadId);
+            } catch (Exception e) {
+                log.error("[FALLBACK LOCAL] obtenerPropiedadResiliente({}) — {}: {}",
+                        propiedadId, e.getClass().getSimpleName(), e.getMessage());
+                PropiedadResumenDTO defaultDto = new PropiedadResumenDTO();
+                defaultDto.setId(propiedadId);
+                defaultDto.setTitulo("Propiedad #" + propiedadId);
+                return defaultDto;
             } finally {
                 RequestContextHolder.resetRequestAttributes();
             }
