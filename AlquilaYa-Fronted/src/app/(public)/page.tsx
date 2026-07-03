@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PropertyCarousel } from '@/components/student/property-carousel';
+import { PropertyCard } from '@/components/student/property-card';
 import { TIPOS_PROPIEDAD, type TipoPropiedadFiltro } from '@/schemas/search-schema';
 import { distanciaAUpeuKm } from '@/lib/geo';
 
@@ -229,7 +229,17 @@ export default function Home() {
             ))}
           </div>
         ) : (
-          <PropertyCarousel propiedades={destacados} />
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {destacados.map((p) => (
+              <PropertyCard
+                key={p.id}
+                propiedad={p}
+                variant="compact"
+                showFavorite
+                showDistance
+              />
+            ))}
+          </div>
         )}
       </section>
 

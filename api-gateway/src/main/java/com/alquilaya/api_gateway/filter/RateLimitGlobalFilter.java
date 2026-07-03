@@ -18,24 +18,29 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Rate limiter global distribuido para el api-gateway (MVC servlet, no reactivo).
+ * Rate limiter global distribuido para el api-gateway (MVC servlet, no
+ * reactivo).
  *
- * <p>Algoritmo principal: <b>fixed window counter en Redis</b>.
+ * <p>
+ * Algoritmo principal: <b>fixed window counter en Redis</b>.
  * Para cada IP cliente, se incrementa atómicamente un contador asociado a la
  * ventana actual (epochSecond / WINDOW_SECONDS). Si el contador supera
  * {@value #MAX_REQUESTS_PER_MINUTE}, se responde HTTP 429.
  *
- * <p>Key Redis: {@code gateway:ratelimit:ip:<ip>:<windowStart>}.
+ * <p>
+ * Key Redis: {@code gateway:ratelimit:ip:<ip>:<windowStart>}.
  * El TTL es 2× la ventana para tolerar relojes ligeramente desincronizados
  * entre réplicas del gateway.
  *
- * <p><b>Graceful degradation:</b> si Redis no responde, se hace fallback al
+ * <p>
+ * <b>Graceful degradation:</b> si Redis no responde, se hace fallback al
  * algoritmo in-memory previo basado en {@link ConcurrentHashMap} +
  * {@link ArrayDeque} de timestamps. En modo degradado el límite NO es
  * coherente entre réplicas (cada instancia tiene su propio contador),
  * pero no se bloquea tráfico legítimo.
  *
- * <p>Registrado en {@link com.alquilaya.api_gateway.config.RateLimitConfig}
+ * <p>
+ * Registrado en {@link com.alquilaya.api_gateway.config.RateLimitConfig}
  * como interceptor de Spring MVC.
  */
 @Component
@@ -44,7 +49,7 @@ public class RateLimitGlobalFilter implements HandlerInterceptor {
     private static final Logger log = LoggerFactory.getLogger(RateLimitGlobalFilter.class);
 
     /** Máximo de peticiones permitidas por IP en una ventana de 60 segundos. */
-    static final int MAX_REQUESTS_PER_MINUTE = 100;
+    static final int MAX_REQUESTS_PER_MINUTE = 1000;
 
     /** Tamaño de la ventana en segundos. */
     private static final long WINDOW_SECONDS = 60L;
@@ -79,8 +84,7 @@ public class RateLimitGlobalFilter implements HandlerInterceptor {
     public boolean preHandle(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull Object handler
-    ) throws Exception {
+            @NonNull Object handler) throws Exception {
 
         String ip = resolveClientIp(request);
         long nowSeconds = System.currentTimeMillis() / 1000L;
@@ -183,8 +187,7 @@ public class RateLimitGlobalFilter implements HandlerInterceptor {
                 "{\"error\":\"Too Many Requests\","
                         + "\"mensaje\":\"Has superado el límite de " + MAX_REQUESTS_PER_MINUTE
                         + " peticiones por minuto. Intenta de nuevo más tarde.\","
-                        + "\"status\":429}"
-        );
+                        + "\"status\":429}");
     }
 
     /**

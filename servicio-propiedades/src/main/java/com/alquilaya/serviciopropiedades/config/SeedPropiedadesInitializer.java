@@ -72,7 +72,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "AGUA_CALIENTE", "LUZ"),
                 List.of("SOLO_ESTUDIANTES", "NO_FUMAR"),
                 "Cuarto luminoso con baño propio, escritorio, closet y cama de 1.5 plazas. "
-                        + "Ideal para estudiante. A 5 minutos caminando del campus UPeU."));
+                        + "Ideal para estudiante. A 5 minutos caminando del campus UPeU.",
+                "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=800&q=70"));
 
         seeds.add(nueva("Cuarto compartido económico para 2 estudiantes", 280,
                 "Jr. Los Pinos 234, Ñaña, Lurigancho-Chosica", arrendador1,
@@ -80,7 +81,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "LUZ", "LAVANDERIA"),
                 List.of("SOLO_ESTUDIANTES", "NO_MASCOTAS", "HORARIO_VISITAS"),
                 "Habitación compartida para dos personas, con literas, ropero y zona de "
-                        + "estudio. Lavandería compartida incluida. Precio por persona."));
+                        + "estudio. Lavandería compartida incluida. Precio por persona.",
+                "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800&q=70"));
 
         seeds.add(nueva("Mini-departamento independiente cerca al campus", 750,
                 "Av. Los Eucaliptos 567, Ñaña, Lurigancho-Chosica", arrendador1,
@@ -88,7 +90,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "AGUA_CALIENTE", "LUZ", "COCINA", "ENTRADA_IND"),
                 List.of("NO_FUMAR"),
                 "Mini-departamento con cocina equipada, baño propio y entrada independiente. "
-                        + "Perfecto para quien busca privacidad. Pago por ciclo."));
+                        + "Perfecto para quien busca privacidad. Pago por ciclo.",
+                "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=70"));
 
         seeds.add(nueva("Suite amoblada premium con todos los servicios", 1100,
                 "Calle Las Magnolias 890, Ñaña, Lurigancho-Chosica", arrendador1,
@@ -96,7 +99,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "AGUA_CALIENTE", "LUZ", "COCINA", "LAVANDERIA", "ENTRADA_IND"),
                 List.of("NO_FUMAR", "NO_MASCOTAS"),
                 "Suite de lujo totalmente amoblada, cocina completa, smart TV y vista a la "
-                        + "ciudad. Servicios incluidos en el precio."));
+                        + "ciudad. Servicios incluidos en el precio.",
+                "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=800&q=70"));
 
         // ---- 2 propiedades de arrendador2@ (perfilId = arrendador2) ----
         seeds.add(nueva("Cuarto individual con WiFi y agua caliente", 400,
@@ -105,7 +109,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "AGUA_CALIENTE", "LUZ"),
                 List.of("SOLO_ESTUDIANTES"),
                 "Cuarto cómodo y seguro en residencia estudiantil. Incluye internet de alta "
-                        + "velocidad y agua caliente las 24h."));
+                        + "velocidad y agua caliente las 24h.",
+                "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=70"));
 
         seeds.add(nueva("Cuarto compartido en residencia estudiantil", 250,
                 "Jr. Las Flores 458, Ñaña, Lurigancho-Chosica", arrendador2,
@@ -113,7 +118,8 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 List.of("WIFI", "LUZ", "LAVANDERIA", "COCINA"),
                 List.of("SOLO_ESTUDIANTES", "NO_FUMAR", "HORARIO_VISITAS"),
                 "Ambiente tranquilo para estudiar, con cocina y lavandería compartidas. "
-                        + "Convivencia entre estudiantes UPeU."));
+                        + "Convivencia entre estudiantes UPeU.",
+                "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=70"));
 
         for (Propiedad p : seeds) {
             propiedadService.calcularYSetearDistancia(p);
@@ -126,7 +132,7 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
     private Propiedad nueva(String titulo, int precio, String direccion, Long arrendadorId,
                             String tipo, String periodo, double lat, double lon,
                             double area, int piso, List<String> servicios, List<String> reglas,
-                            String descripcion) {
+                            String descripcion, String imagenUrl) {
         return Propiedad.builder()
                 .titulo(titulo)
                 .descripcion(descripcion)
@@ -141,7 +147,7 @@ public class SeedPropiedadesInitializer implements CommandLineRunner {
                 .nroPiso(piso)
                 .serviciosIncluidos(new ArrayList<>(servicios))
                 .reglas(new ArrayList<>(reglas))
-                .imagenUrl(IMG_PLACEHOLDER)
+                .imagenUrl(imagenUrl)
                 .imagenes(new ArrayList<>())
                 .estaDisponible(true)
                 .estado(EstadoPropiedad.APROBADO)

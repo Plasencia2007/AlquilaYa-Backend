@@ -90,6 +90,7 @@ function PropertyCardImpl({
     <article
       className={cn(
         'group relative flex h-full cursor-pointer select-none flex-col bg-transparent',
+        isCompact && 'rounded-3xl border border-stone-100 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]',
         className,
       )}
     >
@@ -212,8 +213,9 @@ function PropertyCardImpl({
             )}
             <span
               className={cn(
-                'text-[15px] font-[500] leading-[19px] text-foreground underline decoration-[1px] underline-offset-2',
-                isFeature && 'text-lg font-semibold',
+                'text-[15px] font-bold leading-[19px]',
+                hayRebaja ? 'text-primary' : 'text-foreground',
+                isFeature && 'text-lg',
               )}
             >
               S/ {propiedad.precio.toLocaleString('es-PE')}
