@@ -146,8 +146,8 @@ resilience4j:
   bulkhead:
     instances:
       obtenerArrendadorCB:
-        maxConcurrentCalls: 5
-        maxWaitDuration: 100ms
+        maxConcurrentCalls: 5  # Máximo 5 llamadas simultáneas a este servicio
+        maxWaitDuration: 100ms # Si hay más de 5, espera 100ms; si no hay slot, rechaza con HTTP 429
       obtenerEstudianteCB:
         maxConcurrentCalls: 5
         maxWaitDuration: 100ms

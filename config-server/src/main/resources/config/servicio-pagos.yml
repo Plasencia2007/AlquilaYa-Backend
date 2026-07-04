@@ -56,22 +56,22 @@ feign:
   client:
     config:
       default:
-        connectTimeout: 3000
-        readTimeout: 10000
+        connectTimeout: 3000 # Límite de 3 segundos para establecer conexión TCP
+        readTimeout: 10000   # Límite de 10 segundos para recibir la respuesta HTTP
         loggerLevel: basic
 
 resilience4j:
   circuitbreaker:
     instances:
       crearPreferenciaCB:
-        registerHealthIndicator: true
-        slidingWindowType: COUNT_BASED
-        slidingWindowSize: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 15s
-        permittedNumberOfCallsInHalfOpenState: 3
-        minimumNumberOfCalls: 5
-        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true            # Registra el estado en el endpoint de salud
+        slidingWindowType: COUNT_BASED           # Tipo de ventana
+        slidingWindowSize: 5                     # Tamaño de la ventana
+        failureRateThreshold: 50                 # Porcentaje de errores para abrir el circuito
+        waitDurationInOpenState: 15s             # Tiempo en estado abierto
+        permittedNumberOfCallsInHalfOpenState: 3 # Número de llamadas en estado semiabierto
+        minimumNumberOfCalls: 5                  # Número mínimo de llamadas para abrir el circuito
+        automaticTransitionFromOpenToHalfOpenEnabled: true # Habilita la transición automática
         # Los errores de negocio (MP 4xx) no son fallo del servicio: no deben abrir el circuito.
         ignoreExceptions:
           - java.lang.IllegalStateException
@@ -95,17 +95,15 @@ resilience4j:
   retry:
     instances:
       crearPreferenciaCB:
-        maxAttempts: 3
-        waitDuration: 1s
-        enableExponentialBackoff: true
-        exponentialBackoffMultiplier: 2
-        retryExceptions:
+        maxAttempts: 3                  # Máximo 3 reintentos
+        waitDuration: 1s                # Tiempo de espera inicial entre reintentos
+        enableExponentialBackoff: true  # Habilita el reintento exponencial
+        exponentialBackoffMultiplier: 2 # 1s, 2s, 4s
+        retryExceptions:                # Excepciones que provocan reintento
           - java.io.IOException
           - java.util.concurrent.TimeoutException
           - java.lang.RuntimeException
-        # Crear preferencia NO es idempotente: los errores de negocio (MP 4xx, IDOR,
-        # reserva ya pagada) se marcan como IllegalStateException y NO se reintentan.
-        ignoreExceptions:
+        ignoreExceptions:               # Excepciones que NO provocan reintento
           - java.lang.IllegalStateException
       obtenerReservaCB:
         maxAttempts: 3
@@ -121,10 +119,10 @@ resilience4j:
   timelimiter:
     instances:
       crearPreferenciaCB:
-        timeoutDuration: 8s
-        cancelRunningFuture: true
+        timeoutDuration: 8s       # Espera hasta 8s antes de time out
+        cancelRunningFuture: true # Cancela la petición si excede el tiempo
       servicio-propiedades:
-        timeoutDuration: 10s
+        timeoutDuration: 100ms
         cancelRunningFuture: true
       obtenerReservaCB:
         timeoutDuration: 4s
@@ -132,17 +130,17 @@ resilience4j:
   bulkhead:
     instances:
       obtenerReservaCB:
-        maxConcurrentCalls: 5
-        maxWaitDuration: 100ms
+        maxConcurrentCalls: 5   # Máximo 5 llamadas concurrentes
+        maxWaitDuration: 100ms  # Espera hasta 100ms si están todas ocupadas
       crearPreferenciaCB:
-        maxConcurrentCalls: 10
-        maxWaitDuration: 100ms
+        maxConcurrentCalls: 10  # Máximo 10 llamadas concurrentes
+        maxWaitDuration: 100ms  # Espera hasta 100ms si están todas ocupadas
   ratelimiter:
     instances:
       crearPreferenciaCB:
-        limitForPeriod: 10
-        limitRefreshPeriod: 1s
-        timeoutDuration: 5s
+        limitForPeriod: 10     # Máximo 10 preferencias de pago por segundo
+        limitRefreshPeriod: 1s # Cada segundo
+        timeoutDuration: 5s    # Espera hasta 5 segundos por un permiso
 
 # Seguridad JWT sincronizada
 jwt:

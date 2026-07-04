@@ -131,12 +131,12 @@ resilience4j:
         maxWaitDuration: 100ms
   ratelimiter:
     instances:
-      enviarWhatsAppCB:
-        limitForPeriod: 10
+      enviarWhatsAppCB: 
+        limitForPeriod: 10 # Máximo 10 mensajes WhatsApp por segundo
         limitRefreshPeriod: 1s
         timeoutDuration: 5s
       enviarEmailCB:
-        limitForPeriod: 1
+        limitForPeriod: 1 # Máximo 1 email por segundo (protección contra spam)
         limitRefreshPeriod: 1s
         timeoutDuration: 5s
 
