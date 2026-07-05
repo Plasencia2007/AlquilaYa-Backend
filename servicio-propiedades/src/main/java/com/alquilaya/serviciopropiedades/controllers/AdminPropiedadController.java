@@ -68,6 +68,7 @@ public class AdminPropiedadController {
 
     @PatchMapping("/{id}/aprobar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<Propiedad> aprobar(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> {
@@ -90,6 +91,7 @@ public class AdminPropiedadController {
 
     @PatchMapping("/{id}/rechazar")
     @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_PROPIEDADES')")
+    @CacheEvict(value = "propiedades:listado", allEntries = true)
     public ResponseEntity<Propiedad> rechazar(@PathVariable Long id) {
         return propiedadRepository.findById(id)
                 .map(p -> {

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+
 import {
   adminModerationService,
   ConversacionAdmin,
@@ -44,8 +46,15 @@ function MotivoDialog({
   onConfirm, onCancel, loading,
 }: MotivoDialogProps) {
   const [motivo, setMotivo] = useState('');
+  const [mounted, setMounted] = useState(false);
 
-  return (
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
         <div className="flex items-center gap-3 mb-6">
@@ -87,7 +96,8 @@ function MotivoDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -104,6 +114,11 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
   const [bloquearTarget, setBloquearTarget] = useState<MensajeAdmin | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -155,7 +170,9 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-center justify-end bg-black/30 backdrop-blur-sm">
       {bloquearTarget && (
         <MotivoDialog
@@ -301,7 +318,8 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

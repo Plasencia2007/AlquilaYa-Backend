@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/legacy-button';
 import { cn } from '@/lib/cn';
+
 
 interface ConfirmActionModalProps {
   open: boolean;
@@ -57,6 +59,11 @@ export function ConfirmActionModal({
 }: ConfirmActionModalProps) {
   const [reason, setReason] = useState('');
   const [selectedPredefined, setSelectedPredefined] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Reset cuando se abre
   useEffect(() => {
@@ -76,7 +83,7 @@ export function ConfirmActionModal({
     return () => window.removeEventListener('keydown', handler);
   }, [open, isLoading, onCancel]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const showTextArea = !predefinedReasons || predefinedReasons.length === 0 || selectedPredefined === 'OTRO';
   const reasonInvalido = requireReason && (
@@ -91,7 +98,7 @@ export function ConfirmActionModal({
     await onConfirm(requireReason ? finalReason : undefined);
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in"
       role="dialog"
@@ -202,7 +209,8 @@ export function ConfirmActionModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

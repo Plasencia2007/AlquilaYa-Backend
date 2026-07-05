@@ -159,25 +159,32 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[248px] bg-[#0f172a] border-r border-white/5 flex flex-col z-[60] overflow-hidden">
-      <div className="px-6 py-7 flex items-center gap-3 border-b border-white/5">
-        <div className="w-11 h-11 bg-primary/10 border border-primary/20 rounded-md flex items-center justify-center">
-          <span className="material-symbols-outlined text-primary text-2xl">terminal</span>
+    <aside className="fixed left-0 top-0 h-screen w-[248px] bg-[#0b0f19] border-r border-white/5 flex flex-col z-[60] overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-6 flex items-center gap-3 border-b border-white/5 bg-black/10">
+        <div className="w-11 h-11 bg-gradient-to-br from-[#8f0304]/20 to-[#c14b4c]/10 border border-[#8f0304]/30 rounded-xl flex items-center justify-center shadow-inner shrink-0">
+          <span className="material-symbols-outlined text-[#c14b4c] text-2xl">admin_panel_settings</span>
         </div>
-        <div>
-          <p className="text-xl font-bold text-white tracking-tight leading-none">Master</p>
-          <p className="text-[9px] font-bold text-primary/80 uppercase tracking-[0.2em] mt-1.5">Torre de Control</p>
+        <div className="min-w-0">
+          <p className="text-sm font-black text-white tracking-tight leading-none truncate">
+            AlquilaYa <span className="text-[#c14b4c]">Master</span>
+          </p>
+          <p className="text-[9px] font-black text-[#94a3b8] uppercase tracking-[0.25em] mt-2 flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c14b4c] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#c14b4c]"></span>
+            </span>
+            Torre de Control
+          </p>
         </div>
       </div>
 
-
-
       {/* Navigation */}
-      <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar pb-4">
+      <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar py-4 space-y-4">
         {NAVIGATION.map((category, idx) => (
-          <div key={idx} className={cn(idx > 0 && category.items.some(puedeVer) && 'mt-5')}>
+          <div key={idx} className={cn(idx > 0 && category.items.some(puedeVer) && 'mt-4')}>
             {category.title && category.items.some(puedeVer) && (
-              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[#475569]">
+              <p className="px-3 pb-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#475569] leading-none">
                 {category.title}
               </p>
             )}
@@ -188,53 +195,59 @@ export default function AdminSidebar() {
                 const isAnySubItemActive = item.subItems?.some(si => pathname === si.href);
 
                 return (
-                  <div key={item.label} className="space-y-1">
+                  <div key={item.label} className="space-y-0.5">
                     {/* Item directo (sin subItems) */}
                     {!hasSubItems && item.href ? (
                       <Link
                         href={item.href}
                         className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors duration-150",
+                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 border-l-[3px] text-sm",
                           pathname === item.href
-                            ? "bg-primary text-white"
-                            : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
+                            ? "bg-white/5 text-white border-l-[#c14b4c] font-bold shadow-sm"
+                            : "text-[#94a3b8] hover:bg-white/5 hover:text-white border-l-transparent hover:pl-4"
                         )}
                       >
-                        <span className="material-symbols-outlined text-[20px] opacity-80">
+                        <span className={cn(
+                          "material-symbols-outlined text-[20px] transition-colors duration-200",
+                          pathname === item.href ? "text-[#c14b4c]" : "opacity-70"
+                        )}>
                           {item.icon}
                         </span>
-                        <span className="text-sm font-semibold tracking-tight">{item.label}</span>
+                        <span className="tracking-tight">{item.label}</span>
                       </Link>
                     ) : (
                       /* Item con acordeón (con subItems) */
                       <button
                         onClick={() => toggleItem(item.label)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors duration-150 group",
+                          "w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 border-l-[3px] text-sm group",
                           isAnySubItemActive
-                            ? "bg-primary text-white"
-                            : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-white"
+                            ? "bg-white/5 text-white border-l-[#c14b4c] font-bold"
+                            : "text-[#94a3b8] hover:bg-white/5 hover:text-white border-l-transparent hover:pl-4"
                         )}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-[20px] opacity-80">
+                          <span className={cn(
+                            "material-symbols-outlined text-[20px] transition-colors duration-200",
+                            isAnySubItemActive ? "text-[#c14b4c]" : "opacity-70"
+                          )}>
                             {item.icon}
                           </span>
-                          <span className="text-sm font-semibold tracking-tight">{item.label}</span>
+                          <span className="tracking-tight">{item.label}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
                           {item.badge && (
                             <span className={cn(
-                              "min-w-[20px] h-5 px-1.5 rounded flex items-center justify-center text-[10px] font-bold",
-                              isAnySubItemActive ? "bg-white/20 text-white" : "bg-red-500/20 text-red-500"
+                              "min-w-[18px] h-4.5 px-1 rounded flex items-center justify-center text-[9px] font-black",
+                              isAnySubItemActive ? "bg-[#c14b4c]/20 text-white" : "bg-red-500/10 text-red-400"
                             )}>
                               {item.badge}
                             </span>
                           )}
                           {hasSubItems && (
                             <span className={cn(
-                              "material-symbols-outlined text-[18px] transition-transform duration-300",
+                              "material-symbols-outlined text-[16px] transition-transform duration-300 text-slate-500 group-hover:text-slate-300",
                               isExpanded ? "rotate-180" : ""
                             )}>
                               expand_more
@@ -246,7 +259,7 @@ export default function AdminSidebar() {
 
                     {/* Sub Items Accordion */}
                     {hasSubItems && isExpanded && (
-                      <div className="mt-0.5 mb-1 flex flex-col gap-0.5">
+                      <div className="mt-0.5 mb-1 pl-1 flex flex-col gap-0.5">
                         {item.subItems?.map((subItem) => {
                           const subActive = pathname === subItem.href;
                           return (
@@ -255,10 +268,10 @@ export default function AdminSidebar() {
                               href={subItem.href}
                               replace
                               className={cn(
-                                "block rounded-md pl-11 pr-3 py-2 text-[13px] font-medium transition-colors duration-150",
+                                "block rounded-lg pl-10 pr-3 py-2 text-[12.5px] font-medium transition-all duration-200 relative",
                                 subActive
-                                  ? "bg-primary/20 text-white"
-                                  : "text-[#64748b] hover:text-white hover:bg-white/5"
+                                  ? "text-white bg-[#c14b4c]/10 font-bold before:absolute before:left-5 before:top-[15px] before:w-1.5 before:h-1.5 before:bg-[#c14b4c] before:rounded-full before:shadow-[0_0_8px_#c14b4c]"
+                                  : "text-slate-400 hover:text-white hover:bg-white/5 hover:pl-11"
                               )}
                             >
                               {subItem.label}
@@ -276,25 +289,31 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="p-3 bg-black/30 border-t border-white/5">
-        <div className="p-3 rounded-md bg-[#1e293b]/60 border border-white/5 flex items-center justify-between group hover:border-white/10 transition-colors">
+      <div className="p-4 bg-black/20 border-t border-white/5">
+        <div className="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-center justify-between group hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 shadow-lg">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 bg-primary rounded-md flex items-center justify-center shrink-0">
-              <span className="text-white text-xs font-bold">
+            <div className="w-9 h-9 bg-gradient-to-br from-[#8f0304] to-[#c14b4c] rounded-lg flex items-center justify-center shrink-0 shadow-md">
+              <span className="text-white text-xs font-black tracking-wider">
                 {usuario?.nombre?.substring(0, 2).toUpperCase() || 'JD'}
               </span>
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-bold text-white tracking-tight truncate">{usuario?.nombre || 'Jhon'}</p>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                <p className="text-[10px] text-primary font-bold uppercase tracking-wider">God View</p>
+              <p className="text-xs font-bold text-white tracking-tight truncate">
+                {usuario?.nombre || 'Jhon'}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                </span>
+                <p className="text-[9px] text-[#c14b4c] font-black uppercase tracking-wider">God View</p>
               </div>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-white/40 hover:bg-red-500 hover:text-white transition-colors shrink-0 ml-2"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200 shrink-0 ml-2"
+            title="Cerrar sesión"
           >
             <span className="material-symbols-outlined text-[20px]">logout</span>
           </button>

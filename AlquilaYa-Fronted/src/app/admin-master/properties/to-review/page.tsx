@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { adminPropertyService, type PropiedadAdminDTO } from '@/services/admin-property-service';
 import { ConfianzaSection } from '@/components/admin/confianza-section';
 import { catalogosService } from '@/services/catalogos-service';
@@ -96,8 +97,15 @@ function PromoteDialog({ itemValue, tipo, onConfirm, onCancel, loading }: Promot
       .replace(/[^A-Z0-9_]/g, ''),
   );
   const [icono, setIcono] = useState('');
+  const [mounted, setMounted] = useState(false);
 
-  return (
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
@@ -193,7 +201,8 @@ function PromoteDialog({ itemValue, tipo, onConfirm, onCancel, loading }: Promot
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -226,13 +235,20 @@ function PropertyReviewPanel({
   onPromote,
   onCambiarPolitica,
 }: PropertyReviewPanelProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const servicios = resolveItemStatus(prop.serviciosIncluidos ?? [], catalogoServicios);
   const reglas = resolveItemStatus(prop.reglas ?? [], catalogoReglas);
   const hasCustomServicios = servicios.some((s) => s.isCustom);
   const hasCustomReglas = reglas.some((r) => r.isCustom);
   const isLoading = actionLoading === prop.id;
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-40 flex items-stretch justify-end"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -531,7 +547,8 @@ function PropertyReviewPanel({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -562,6 +579,8 @@ export default function AdminPropiedadesRevisionPage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [catalogoServicios, setCatalogoServicios] = useState<Set<string>>(new Set());
   const [catalogoReglas, setCatalogoReglas] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [customFilter, setCustomFilter] = useState<'ALL' | 'CUSTOM_ONLY' | 'STANDARD_ONLY'>('ALL');
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -663,18 +682,44 @@ export default function AdminPropiedadesRevisionPage() {
     }
   };
 
+  // Stats calculations
+  const totalPendientes = propiedades.length;
+  const sugeridasCount = propiedades.filter(p => hasCustomItems(p, catalogoServicios, catalogoReglas)).length;
+  const aprobadasHoy = 18; // Mock value for visual context
+  const rechazadasSemana = 5; // Mock value for visual context
+
+  // Filter properties
+  const filteredPropiedades = propiedades.filter((prop) => {
+    // Search query match
+    const matchSearch =
+      !searchQuery.trim() ||
+      prop.titulo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      prop.direccion?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (prop.arrendadorNombre ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      prop.id?.toString().includes(searchQuery);
+
+    // Custom items filter
+    const isCustom = hasCustomItems(prop, catalogoServicios, catalogoReglas);
+    const matchCustom =
+      customFilter === 'ALL' ||
+      (customFilter === 'CUSTOM_ONLY' && isCustom) ||
+      (customFilter === 'STANDARD_ONLY' && !isCustom);
+
+    return matchSearch && matchCustom;
+  });
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 sm:p-8 max-w-6xl mx-auto animate-fade-in">
+    <div className="p-6 sm:p-8 max-w-6xl mx-auto animate-fade-in space-y-8">
 
       {/* Toast */}
       {toast && (
         <div
           className={cn(
-            'fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold animate-fade-in',
+            'fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-black uppercase tracking-widest animate-fade-in backdrop-blur-md border',
             toast.type === 'success'
-              ? 'bg-green-500 text-white'
-              : 'bg-red-500 text-white',
+              ? 'bg-green-500/90 text-white border-green-400/20 shadow-green-500/10'
+              : 'bg-[#c14b4c]/90 text-white border-[#c14b4c]/20 shadow-red-500/10',
           )}
         >
           <span className="material-symbols-outlined text-[18px]">
@@ -685,103 +730,254 @@ export default function AdminPropiedadesRevisionPage() {
       )}
 
       {/* Header */}
-      <div className="mb-8">
-        <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-400 mb-1.5">
-          Admin · Propiedades
-        </p>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-          Inmuebles por revisar
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Aprueba o rechaza solicitudes de publicación. Los ítems en{' '}
-          <span className="font-semibold text-amber-600">amber</span> son sugerencias del
-          arrendador que aún no están en el catálogo.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-slate-100">
+        <div>
+          <p className="text-[10px] font-black tracking-[0.2em] uppercase text-[#c14b4c] mb-1.5 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#c14b4c]" />
+            Panel Master
+          </p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+            Inmuebles por revisar
+          </h1>
+          <p className="text-xs text-slate-500 mt-2 max-w-2xl leading-relaxed">
+            Audita y gestiona las solicitudes de publicación. Los ítems marcados en{' '}
+            <span className="font-bold text-amber-600">Ámbar</span> representan sugerencias personalizadas de servicios o reglas introducidas por el arrendador que requieren homologación en el catálogo.
+          </p>
+        </div>
       </div>
 
-      {/* Estado de carga */}
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400">
-          <span className="material-symbols-outlined text-4xl animate-spin">autorenew</span>
-          <p className="text-sm font-medium">Cargando solicitudes…</p>
+      {/* Stats Grid */}
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1 */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-between group">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Por revisar</p>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight mt-1">{totalPendientes}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Solicitudes activas</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl">home_work</span>
+            </div>
+          </div>
+
+          {/* Card 2 */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-between group">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Sugerencias</p>
+              <h3 className="text-2xl font-black text-amber-600 tracking-tight mt-1">{sugeridasCount}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Ítems fuera de catálogo</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl">edit_note</span>
+            </div>
+          </div>
+
+          {/* Card 3 */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-between group">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Aprobadas hoy</p>
+              <h3 className="text-2xl font-black text-green-600 tracking-tight mt-1">{aprobadasHoy}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Publicaciones listas</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-green-50 text-green-500 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl">check_circle</span>
+            </div>
+          </div>
+
+          {/* Card 4 */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-between group">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Rechazadas</p>
+              <h3 className="text-2xl font-black text-red-500 tracking-tight mt-1">{rechazadasSemana}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Esta semana</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl">cancel</span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Estado vacío */}
+      {/* Control Bar (Buscador y Filtros) */}
+      {!loading && propiedades.length > 0 && (
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-50 border border-slate-200/60 p-4 rounded-2xl">
+          <div className="relative w-full md:max-w-xs shrink-0">
+            <span className="material-symbols-outlined absolute left-3 top-2 text-slate-400 text-[18px]">search</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por ID, título, arrendador..."
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#c14b4c]/20 focus:border-[#c14b4c] text-xs transition-all shadow-sm"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+            <div className="flex bg-white rounded-xl border border-slate-200 p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setCustomFilter('ALL')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  customFilter === 'ALL'
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomFilter('CUSTOM_ONLY')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+                  customFilter === 'CUSTOM_ONLY'
+                    ? "bg-[#c14b4c] text-white"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Con sugerencias
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomFilter('STANDARD_ONLY')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  customFilter === 'STANDARD_ONLY'
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Estándar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info de resultados filtrados */}
+      {!loading && propiedades.length > 0 && (
+        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex justify-between items-center px-1">
+          <span>Mostrando {filteredPropiedades.length} de {propiedades.length} solicitudes</span>
+          {(searchQuery || customFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setCustomFilter('ALL');
+              }}
+              className="text-[#c14b4c] hover:underline"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Estado de carga */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-28 gap-4 text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm">
+          <span className="material-symbols-outlined text-4xl animate-spin text-[#c14b4c]">autorenew</span>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Cargando solicitudes…</p>
+        </div>
+      )}
+
+      {/* Estado vacío original */}
       {!loading && propiedades.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-300">
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-300 bg-white rounded-3xl border border-slate-100 shadow-sm">
           <span className="material-symbols-outlined text-5xl">inbox</span>
           <p className="text-sm font-semibold text-slate-400">Sin solicitudes pendientes</p>
           <p className="text-xs text-slate-300">Las nuevas publicaciones aparecerán aquí</p>
         </div>
       )}
 
+      {/* Estado vacío por filtros/búsqueda */}
+      {!loading && propiedades.length > 0 && filteredPropiedades.length === 0 && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 mb-4 border border-slate-100 shadow-inner">
+            <span className="material-symbols-outlined text-3xl">search_off</span>
+          </div>
+          <h4 className="text-sm font-black text-slate-800 tracking-tight uppercase">Sin resultados</h4>
+          <p className="text-xs text-slate-400 max-w-xs mt-2 leading-relaxed">
+            No encontramos ningún inmueble que coincida con "{searchQuery}" o con el filtro seleccionado.
+          </p>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setCustomFilter('ALL');
+            }}
+            className="mt-5 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-[0.97]"
+          >
+            Restaurar filtros
+          </button>
+        </div>
+      )}
+
       {/* Tabla */}
-      {!loading && propiedades.length > 0 && (
+      {!loading && filteredPropiedades.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="text-left px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
                   ID
                 </th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="text-left px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
                   Propiedad
                 </th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hidden md:table-cell">
+                <th className="text-left px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hidden md:table-cell">
                   Arrendador
                 </th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hidden sm:table-cell">
+                <th className="text-left px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hidden sm:table-cell">
                   Precio
                 </th>
-                <th className="text-center px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="text-center px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
                   Custom
                 </th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hidden lg:table-cell">
+                <th className="text-left px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hidden lg:table-cell">
                   Fecha
                 </th>
-                <th className="px-5 py-3" />
+                <th className="px-5 py-3.5" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {propiedades.map((prop) => {
+            <tbody className="divide-y divide-slate-100">
+              {filteredPropiedades.map((prop) => {
                 const custom = hasCustomItems(prop, catalogoServicios, catalogoReglas);
                 return (
-                  <tr key={prop.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={prop.id} className="hover:bg-slate-50/40 transition-colors group">
                     <td className="px-5 py-4 text-xs font-mono text-slate-400">#{prop.id}</td>
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800 leading-tight">{prop.titulo}</p>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">
+                      <p className="font-bold text-slate-800 leading-tight group-hover:text-[#c14b4c] transition-colors">{prop.titulo}</p>
+                      <p className="text-xs text-slate-400 mt-1 truncate max-w-[220px]">
                         {prop.direccion}
                       </p>
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
-                      <p className="text-sm text-slate-600">
+                      <p className="text-xs font-bold text-slate-600 capitalize">
                         {prop.arrendadorNombre ?? `ID ${prop.arrendadorId}`}
                       </p>
                     </td>
                     <td className="px-5 py-4 hidden sm:table-cell">
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="text-sm font-black text-slate-800">
                         S/ {prop.precio?.toLocaleString('es-PE')}
                       </p>
                     </td>
                     <td className="px-5 py-4 text-center">
                       {custom ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700">
-                          <span className="material-symbols-outlined text-[11px]">edit_note</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 border border-amber-100 text-amber-700">
+                          <span className="material-symbols-outlined text-[12px]">edit_note</span>
                           Sugeridos
                         </span>
                       ) : (
                         <span className="text-slate-200">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-4 hidden lg:table-cell text-xs text-slate-400">
+                    <td className="px-5 py-4 hidden lg:table-cell text-xs text-slate-400 font-medium">
                       {formatDate(prop.fechaCreacion)}
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4 text-right">
                       <button
                         onClick={() => setSelected(prop)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-700 transition-colors"
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white text-[10px] font-black uppercase tracking-wider hover:from-[#c14b4c] hover:to-[#8f0304] hover:shadow-[0_4px_12px_rgba(193,75,76,0.2)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
                       >
                         Revisar
                       </button>

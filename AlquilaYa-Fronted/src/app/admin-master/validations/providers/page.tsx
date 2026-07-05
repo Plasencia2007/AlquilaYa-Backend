@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+
 import {
   ShieldAlert, CheckCircle, XCircle, ExternalLink, X,
   Star, Home, Calendar, AlertTriangle, Trash2, Shield,
@@ -75,7 +77,14 @@ function ConfirmModal({
   variant: 'danger' | 'warning';
   onConfirm: () => void; onCancel: () => void;
 }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
         <div className={cn(
@@ -104,14 +113,22 @@ function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 // ─── Reject modal ──────────────────────────────────────────────────────────────
 function RejectModal({ onConfirm, onCancel }: { onConfirm: (motivo: string) => void; onCancel: () => void }) {
   const [motivo, setMotivo] = useState('');
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
         <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
@@ -141,7 +158,8 @@ function RejectModal({ onConfirm, onCancel }: { onConfirm: (motivo: string) => v
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -220,6 +238,11 @@ function ProveedorDrawer({
 }) {
   const [propCount, setPropCount] = useState<PropiedadCount | null>(null);
   const [loadingProps, setLoadingProps] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!user.perfilArrendadorId) return;
@@ -241,7 +264,9 @@ function ProveedorDrawer({
     ? new Date(user.fechaCreacion).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
     : '---';
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-fade-in" onClick={onClose} />
       <div className="fixed right-0 top-0 h-full w-[380px] bg-[#0f172a] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-slide-in-right overflow-y-auto">
@@ -378,7 +403,8 @@ function ProveedorDrawer({
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Loader2, Lock, Pencil, Plus, Shield, Trash2, UserCog, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -145,6 +146,11 @@ function RolModal({
   const [descripcion, setDescripcion] = useState(rol?.descripcion ?? '');
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set(rol?.funcionalidades ?? []));
   const [guardando, setGuardando] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const porCategoria = useMemo(() => {
     const map = new Map<string, Funcionalidad[]>();
@@ -186,7 +192,9 @@ function RolModal({
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:items-center">
       <div className="relative my-auto w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
@@ -272,7 +280,8 @@ function RolModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
