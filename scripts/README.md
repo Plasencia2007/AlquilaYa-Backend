@@ -26,7 +26,7 @@ Levanta en este orden:
 2. **discovery-server** :8761 → espera 20s.
 3. **config-server** :8888 → espera 15s.
 4. **Paralelo**: `api-gateway` :8080, `servicio-usuarios` (random), `servicio-propiedades` :8082, `servicio-pagos` :8084, `servicio-catalogos` :8085, `servicio-mensajeria` :8086.
-5. **servicio-notificaciones** :8081 (Node).
+5. **servicio-notificaciones** :8081 (Nod   e).
 6. **frontend** :3000 (Next.js).
 
 ### Flags útiles

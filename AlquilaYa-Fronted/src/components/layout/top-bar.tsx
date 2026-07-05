@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 
+import { Logo } from './logo';
 import { MobileNav } from './mobile-nav';
 import { UserMenu } from './user-menu';
 
@@ -51,8 +52,9 @@ export function TopBar() {
       <div className="flex items-center gap-12">
         <Link
           href="/"
-          className="flex items-center gap-2 transition-transform active:scale-95"
+          className="flex items-center gap-2.5 transition-transform active:scale-95"
         >
+          <Logo className={cn("h-7 w-7 transition-colors", isTransparent ? "text-white" : "text-[#e87272]")} />
           <span className={cn("text-xl font-black tracking-tighter", isTransparent ? "text-white" : "text-primary")}>
             AlquilaYa
           </span>
