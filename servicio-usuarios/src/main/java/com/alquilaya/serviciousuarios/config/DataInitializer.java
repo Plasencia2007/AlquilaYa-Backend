@@ -6,6 +6,7 @@ import com.alquilaya.serviciousuarios.entities.Funcionalidad;
 import com.alquilaya.serviciousuarios.entities.Permiso;
 import com.alquilaya.serviciousuarios.entities.RolPersonalizado;
 import com.alquilaya.serviciousuarios.entities.Usuario;
+import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
@@ -13,10 +14,13 @@ import com.alquilaya.serviciousuarios.repositories.FuncionalidadRepository;
 import com.alquilaya.serviciousuarios.repositories.PermisoRepository;
 import com.alquilaya.serviciousuarios.repositories.RolPersonalizadoRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
+import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumSet;
@@ -36,6 +40,16 @@ public class DataInitializer implements CommandLineRunner {
     private final EstudianteRepository estudianteRepository;
     private final FuncionalidadRepository funcionalidadRepository;
     private final RolPersonalizadoRepository rolPersonalizadoRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    // Bootstrap del primer admin en un despliegue NUEVO. Se inyecta por env
+    // (ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD vía .env.prod → config-server).
+    // Vacío por defecto (dev normalmente ya tiene admin): si está vacío, no siembra nada.
+    @Value("${admin.bootstrap.email:}")
+    private String adminBootstrapEmail;
+
+    @Value("${admin.bootstrap.password:}")
+    private String adminBootstrapPassword;
 
     @Override
     @Transactional
@@ -44,6 +58,7 @@ public class DataInitializer implements CommandLineRunner {
         inicializarCatalogoFuncionalidades();
         inicializarRolesSistema();
         inicializarPerfilesFaltantes();
+        inicializarAdminBootstrap();
     }
 
     /** Catálogo de funcionalidades (permisos atómicos) para el panel RBAC (#32). */
@@ -164,5 +179,44 @@ public class DataInitializer implements CommandLineRunner {
                 }
             }
         }
+    }
+
+    /**
+     * Siembra el PRIMER admin en un despliegue nuevo, tomando las credenciales de
+     * {@code ADMIN_BOOTSTRAP_EMAIL} / {@code ADMIN_BOOTSTRAP_PASSWORD} (env → config-server).
+     * La contraseña se hashea en runtime (nunca se persiste en claro ni se commitea a git).
+     *
+     * <p>Solo actúa si (a) ambas variables están seteadas y (b) NO existe ya ningún ADMIN.
+     * En dev normalmente las variables van vacías y ya hay admin, así que es no-op.
+     * Es la única forma de crear el primer admin desde que se cerró el registro-admin abierto (B2).
+     */
+    private void inicializarAdminBootstrap() {
+        if (adminBootstrapEmail == null || adminBootstrapEmail.isBlank()
+                || adminBootstrapPassword == null || adminBootstrapPassword.isBlank()) {
+            return; // no configurado
+        }
+        if (!usuarioRepository.findByRol(Rol.ADMIN).isEmpty()) {
+            log.debug("Bootstrap admin omitido: ya existe al menos un ADMIN.");
+            return;
+        }
+        if (usuarioRepository.existsByCorreo(adminBootstrapEmail)) {
+            log.warn("Bootstrap admin omitido: el correo {} ya está registrado (no ADMIN).",
+                    LogMask.email(adminBootstrapEmail));
+            return;
+        }
+
+        Usuario admin = Usuario.builder()
+                .nombre("Admin")
+                .apellido("AlquilaYa")
+                .dni("00000000")
+                .correo(adminBootstrapEmail)
+                .password(passwordEncoder.encode(adminBootstrapPassword))
+                .rol(Rol.ADMIN)
+                .estado(EstadoUsuario.ACTIVE)
+                .telefonoVerificado(true)
+                .emailVerificado(true)
+                .build();
+        usuarioRepository.save(admin);
+        log.info("✅ Admin inicial sembrado por bootstrap (env): {}", LogMask.email(adminBootstrapEmail));
     }
 }

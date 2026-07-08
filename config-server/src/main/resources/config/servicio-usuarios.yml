@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_USUARIOS:postgres}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:oracle123}
+    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -39,13 +39,22 @@ server:
   port: 0 # Puerto aleatorio para permitir múltiples instancias si fuera necesario
 
 jwt:
-  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
+  # Sin default real: el secreto se inyecta por env (.env en dev, .env.prod en prod). Nunca en git.
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
   expiration: ${JWT_EXPIRATION:7200000}   # 2h por default; bajar a 3600000 (1h) + refresh tokens en prod
 
 notification:
   service:
     url: ${NOTIFICATION_SERVICE_URL:http://localhost:8081}
-    api-key: ${INTERNAL_API_KEY:8673447309720e49f32ed79859ac8639003ab9bd92ccc72a3241c3dde3e80662}
+    api-key: ${INTERNAL_API_KEY:PLACEHOLDER_SET_ENV_VAR}
+
+# Bootstrap del primer admin en un despliegue NUEVO (solo si la BD no tiene ningún ADMIN).
+# Vacío por defecto: en dev normalmente ya existe admin. En prod se setea en .env.prod.
+# La contraseña se hashea en runtime; nunca se guarda en git.
+admin:
+  bootstrap:
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
 
 resilience4j:
   circuitbreaker:
@@ -146,7 +155,7 @@ spring.mail:
   host: ${SMTP_HOST:smtp.gmail.com}
   port: ${SMTP_PORT:587}
   username: ${SMTP_USERNAME:jhonsonsplasencia25@gmail.com}
-  password: ${SMTP_PASSWORD:ngyjauecgcegkmqe}
+  password: ${SMTP_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
   properties:
     mail:
       smtp:
@@ -173,7 +182,7 @@ turnstile:
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:ddiyaoxkt}
   api-key: ${CLOUDINARY_API_KEY:387589685746197}
-  api-secret: ${CLOUDINARY_API_SECRET:ccDoynk9aR2ibapCNqo6LWxyZao}
+  api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 # URL pública del frontend para construir links (reset password, etc.)
 app:

@@ -47,6 +47,9 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     networks:
       - alquilaya-prod-network
 
@@ -92,6 +95,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - alquilaya-prod-network
 
@@ -102,6 +107,7 @@ services:
       context: ./discovery-server
       dockerfile: Dockerfile
     container_name: alquilaya-discovery
+    mem_limit: 512m
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
@@ -119,6 +125,7 @@ services:
       context: ./config-server
       dockerfile: Dockerfile
     container_name: alquilaya-config
+    mem_limit: 512m
     restart: unless-stopped
     depends_on:
       discovery-server:
@@ -139,7 +146,14 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      # Primer admin en un despliegue nuevo (se siembra solo si la BD no tiene ningún ADMIN).
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
       HIBERNATE_DDL_AUTO: validate
+      # Flyway ON en prod: cada servicio aplica sus migraciones V1__baseline (+ V2+ en usuarios)
+      # sobre la BD nueva antes de que Hibernate valide el esquema. Sin esto, `validate` falla
+      # en el primer deploy porque init.sql solo crea las BD vacías.
+      FLYWAY_ENABLED: "true"
       SHOW_SQL: "false"
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
@@ -147,6 +161,8 @@ services:
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET}
+      # Firma del webhook: default true (validar). En sandbox con secret vacío, el .env lo pone en false.
+      MP_WEBHOOK_REQUIRED_SIGNATURE: ${MP_WEBHOOK_REQUIRED_SIGNATURE:-true}
       MP_NOTIFICATION_URL: ${MP_NOTIFICATION_URL}
       MP_BACK_URL_SUCCESS: ${MP_BACK_URL_SUCCESS}
       MP_BACK_URL_FAILURE: ${MP_BACK_URL_FAILURE}
@@ -157,6 +173,8 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      # Token de ApiPeru (verificación de DNI). Sin esto, la verificación de DNI falla en prod.
+      APIPERU_TOKEN: ${APIPERU_TOKEN:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       NOTIFICATION_SERVICE_URL: http://servicio-notificaciones:8081
       APP_BASE_URL: ${APP_BASE_URL}
@@ -174,6 +192,7 @@ services:
       context: ./api-gateway
       dockerfile: Dockerfile
     container_name: alquilaya-gateway
+    mem_limit: 768m
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -201,6 +220,7 @@ services:
       context: ./servicio-usuarios
       dockerfile: Dockerfile
     container_name: alquilaya-usuarios
+    mem_limit: 1g
     restart: unless-stopped
     depends_on:
       config-server:
@@ -224,6 +244,7 @@ services:
       context: ./servicio-propiedades
       dockerfile: Dockerfile
     container_name: alquilaya-propiedades
+    mem_limit: 1g
     restart: unless-stopped
     depends_on:
       config-server:
@@ -249,6 +270,7 @@ services:
       context: ./servicio-pagos
       dockerfile: Dockerfile
     container_name: alquilaya-pagos
+    mem_limit: 1g
     restart: unless-stopped
     depends_on:
       config-server:
@@ -258,6 +280,8 @@ services:
     environment:
       EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      # Perfil prod: excluye el DevOnlyPagoController (endpoint /pagos/simular-exito, @Profile("!prod")).
+      SPRING_PROFILES_ACTIVE: prod
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -274,6 +298,7 @@ services:
       context: ./servicio-catalogos
       dockerfile: Dockerfile
     container_name: alquilaya-catalogos
+    mem_limit: 768m
     restart: unless-stopped
     depends_on:
       config-server:
@@ -296,6 +321,7 @@ services:
       context: ./servicio-mensajeria
       dockerfile: Dockerfile
     container_name: alquilaya-mensajeria
+    mem_limit: 1g
     restart: unless-stopped
     depends_on:
       config-server:
@@ -323,6 +349,7 @@ services:
       context: ./servicio-notificaciones
       dockerfile: Dockerfile
     container_name: alquilaya-notificaciones
+    mem_limit: 1g
     restart: unless-stopped
     depends_on:
       - kafka
@@ -330,6 +357,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       PORT: 8081
+      # La sesión de WhatsApp se guarda en el volumen montado → no se re-escanea el QR (I6).
+      WWEBJS_DATA_PATH: /home/app/.wwebjs_auth
     volumes:
       - whatsapp_auth:/home/app/.wwebjs_auth
     networks:
@@ -374,11 +403,30 @@ services:
     networks:
       - alquilaya-prod-network
 
+  # ===================== ngrok (demo de producción) =====================
+  # Expone TODA la app (nginx :80 → web + API + WebSocket) por un link HTTPS; ngrok pone el TLS.
+  # Con esto, abrir https://${NGROK_DOMAIN} sirve la app completa (chat incluido, gracias a F1).
+  # ⚠️ Al pasar a un VPS con dominio real: ELIMINA este servicio y activa TLS en nginx (S6).
+  ngrok:
+    image: ngrok/ngrok:3
+    container_name: alquilaya-ngrok
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?NGROK_AUTHTOKEN no configurado en .env}
+    command: http nginx:80 --url=${NGROK_DOMAIN}
+    networks:
+      - alquilaya-prod-network
+
 volumes:
   postgres_data:
   mysql_data:
   redis_data:
   whatsapp_auth:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
 
 networks:
   alquilaya-prod-network:

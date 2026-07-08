@@ -10,7 +10,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB_PAGOS:alquilaya_pagos}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:oracle123}
+    password: ${POSTGRES_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:10}
@@ -33,7 +33,7 @@ spring:
     locations: classpath:db/migration
 
 mercadopago:
-  access-token: ${MP_ACCESS_TOKEN:APP_USR-6972773445273571-042223-e0045fabe17f71c927be919fa2fdd4d3-1888687462}
+  access-token: ${MP_ACCESS_TOKEN:PLACEHOLDER_SET_ENV_VAR}
   public-key: ${MP_PUBLIC_KEY:APP_USR-8864dcdc-7880-4cfd-b41e-f5d5b09c5e41}
   webhook-secret: ${MP_WEBHOOK_SECRET:}
   webhook:
@@ -144,7 +144,8 @@ resilience4j:
 
 # Seguridad JWT sincronizada
 jwt:
-  secret: ${JWT_SECRET:amlob25zLWJha2VuZC1zZWNyZXQta2V5LTIwMjYtYWxxdWlsYXlhLWFwcGxpY2F0aW9u}
+  # Sin default real: el secreto se inyecta por env (.env en dev, .env.prod en prod). Nunca en git.
+  secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
   expiration: ${JWT_EXPIRATION:7200000}
 
 ---

@@ -65,14 +65,14 @@ public class ReservaController {
     @PutMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<ReservaResponseDTO> actualizar(@PathVariable Long id, @RequestBody Reserva updates) {
-        Reserva r = reservaService.actualizarReserva(id, updates);
+        Reserva r = reservaService.actualizarReserva(id, updates, CurrentUserProvider.get());
         return ResponseEntity.ok(toResponseDTO(r));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_RESERVAS')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-        reservaService.eliminarReserva(id);
+        reservaService.eliminarReserva(id, CurrentUserProvider.get());
         return ResponseEntity.noContent().build();
     }
 

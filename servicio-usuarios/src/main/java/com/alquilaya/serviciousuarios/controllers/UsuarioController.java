@@ -68,7 +68,12 @@ public class UsuarioController {
         u.setNombre(req.getNombre().trim());
         u.setApellido(req.getApellido().trim());
         if (req.getTelefono() != null && !req.getTelefono().isBlank()) {
-            u.setTelefono(req.getTelefono().trim());
+            String nuevoTel = req.getTelefono().trim();
+            // Si el número CAMBIÓ, debe re-verificarse por OTP → se limpia el flag de verificado (U6).
+            if (!nuevoTel.equals(u.getTelefono())) {
+                u.setTelefono(nuevoTel);
+                u.setTelefonoVerificado(false);
+            }
         }
         u.setFechaNacimiento(req.getFechaNacimiento());
         usuarioRepository.save(u);

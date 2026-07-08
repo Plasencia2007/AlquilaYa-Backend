@@ -43,7 +43,9 @@ public class RegisterRequest {
     private String telefono;
 
     @NotBlank(message = "El rol es obligatorio")
-    @Pattern(regexp = "^(ESTUDIANTE|ARRENDADOR|ADMIN)$", message = "El rol debe ser ESTUDIANTE, ARRENDADOR o ADMIN")
+    // Solo roles auto-registrables desde el registro público. ADMIN queda excluido a propósito:
+    // se crea únicamente vía /register-admin (protegido) o por semilla, nunca por auto-registro.
+    @Pattern(regexp = "^(ESTUDIANTE|ARRENDADOR)$", message = "El rol debe ser ESTUDIANTE o ARRENDADOR")
     private String rol;
 
     @Valid

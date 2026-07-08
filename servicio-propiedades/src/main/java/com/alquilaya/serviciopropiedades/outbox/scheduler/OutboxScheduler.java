@@ -65,6 +65,41 @@ public class OutboxScheduler {
         }
     }
 
+    /**
+     * Recuperación de eventos VARADOS (attempts >= MAX). El drenado normal ya no los toca
+     * (su query filtra attempts < 5), así que sin esto quedaban perdidos para siempre tras una
+     * caída de Kafka mayor a ~10s. Corre cada 5 min: reintenta el envío y ALERTA por ERROR.
+     * Seguro: los consumidores son idempotentes (processed_events), reenviar no duplica efectos.
+     */
+    @Scheduled(fixedDelay = 300_000L)
+    @Transactional
+    public void recuperarVarados() {
+        List<OutboxEvent> varados;
+        try {
+            varados = outboxRepository.findVarados(BATCH_SIZE);
+        } catch (Exception e) {
+            log.debug("Outbox recuperar: no se pudo leer varados ({}).", e.getMessage());
+            return;
+        }
+        if (varados.isEmpty()) {
+            return;
+        }
+        log.error("🚨 Outbox: {} evento(s) VARADO(s) (attempts>={}). Reintentando envío...",
+                varados.size(), MAX_ATTEMPTS);
+        for (OutboxEvent ev : varados) {
+            try {
+                kafkaTemplate.send(ev.getTopic(), ev.getAggregateId(), ev.getPayload()).get();
+                ev.setSentAt(LocalDateTime.now());
+                ev.setLastError(null);
+                outboxRepository.save(ev);
+                log.warn("Outbox VARADO recuperado eventId={} topic={}", ev.getEventId(), ev.getTopic());
+            } catch (Exception e) {
+                // Ya está en el tope de attempts: no lo incrementamos, se reintenta en el próximo ciclo.
+                log.error("Outbox VARADO sigue fallando eventId={} err={}", ev.getEventId(), e.getMessage());
+            }
+        }
+    }
+
     private static String truncar(String s, int max) {
         if (s == null) return null;
         return s.length() <= max ? s : s.substring(0, max);

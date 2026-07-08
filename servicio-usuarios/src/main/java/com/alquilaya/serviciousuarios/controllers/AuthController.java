@@ -70,7 +70,10 @@ public class AuthController {
                 .build());
     }
 
+    // Solo un ADMIN autenticado puede crear otros administradores. El primer ADMIN se crea
+    // por semilla inicial (data.sql / DataInitializer), nunca por este endpoint público.
     @PostMapping("/register-admin")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuthResponse> registerAdmin(@Valid @RequestBody AdminRegisterRequest request) {
         Usuario admin = usuarioService.registrarAdmin(request);
         String token = jwtService.generateToken(admin, null);
@@ -148,11 +151,15 @@ public class AuthController {
     }
 
     @PostMapping("/login-admin")
-    public ResponseEntity<AuthResponse> loginAdmin(@Valid @RequestBody LoginRequest request) {
-        Usuario admin = usuarioService.buscarPorCorreo(request.getCorreo())
-                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos"));
+    public ResponseEntity<AuthResponse> loginAdmin(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        String ip = clientIp(http);
 
-        if (!usuarioService.verificarPassword(request.getPassword(), admin.getPassword())) {
+        // Mismo lockout que el login normal (5 fallos/15min): evita fuerza bruta de credenciales admin.
+        loginAttemptService.verificarBloqueo(request.getCorreo());
+
+        Usuario admin = usuarioService.buscarPorCorreo(request.getCorreo()).orElse(null);
+        if (admin == null || !usuarioService.verificarPassword(request.getPassword(), admin.getPassword())) {
+            loginAttemptService.registrarFallo(request.getCorreo(), ip);
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
 
@@ -160,6 +167,7 @@ public class AuthController {
             throw new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException("No tienes permisos de administrador para acceder a este recurso");
         }
 
+        loginAttemptService.registrarExito(admin.getCorreo(), ip);
         String token = jwtService.generateToken(admin, null);
         
         return ResponseEntity.ok(AuthResponse.builder()

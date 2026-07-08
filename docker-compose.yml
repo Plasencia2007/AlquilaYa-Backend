@@ -41,6 +41,9 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -59,6 +62,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
   redis:
     image: redis:7.4-alpine
@@ -118,6 +123,9 @@ volumes:
   postgres_data:
   mysql_data:
   redis_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
 
 networks:
   default:

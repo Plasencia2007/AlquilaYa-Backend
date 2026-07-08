@@ -395,8 +395,10 @@ public class ReservaService {
      * cancelar, finalizar) para transiciones específicas.
      */
     @Transactional
-    public Reserva actualizarReserva(Long id, Reserva updates) {
+    public Reserva actualizarReserva(Long id, Reserva updates, CurrentUser current) {
         Reserva r = obtenerPorId(id);
+        // Anti-IDOR: solo el arrendador dueño (o un admin) puede mutar esta reserva.
+        validarGestorReserva(r, current);
 
         if (updates.getEstado() != null && updates.getEstado() != r.getEstado()) {
             if (!r.getEstado().puedeTransicionarA(updates.getEstado())) {
@@ -414,11 +416,11 @@ public class ReservaService {
     }
 
     @Transactional
-    public void eliminarReserva(Long id) {
-        if (!reservaRepository.existsById(id)) {
-            throw new IllegalArgumentException("No existe la reserva " + id);
-        }
-        reservaRepository.deleteById(id);
+    public void eliminarReserva(Long id, CurrentUser current) {
+        Reserva r = obtenerPorId(id);
+        // Anti-IDOR: solo el arrendador dueño (o un admin) puede eliminar esta reserva.
+        validarGestorReserva(r, current);
+        reservaRepository.delete(r);
     }
 
     private void validarArrendador(Reserva r, CurrentUser current) {
@@ -428,6 +430,20 @@ public class ReservaService {
         if (!"ARRENDADOR".equalsIgnoreCase(current.getRol())
                 || !current.getPerfilId().equals(r.getArrendadorId())) {
             throw new IllegalStateException("Solo el arrendador dueño puede gestionar esta reserva");
+        }
+    }
+
+    /** Como {@link #validarArrendador} pero también admite ADMIN (gestión/soporte). */
+    private void validarGestorReserva(Reserva r, CurrentUser current) {
+        if (current == null || current.getPerfilId() == null) {
+            throw new IllegalStateException("Sin perfilId en contexto");
+        }
+        if ("ADMIN".equalsIgnoreCase(current.getRol())) {
+            return;
+        }
+        if (!"ARRENDADOR".equalsIgnoreCase(current.getRol())
+                || !current.getPerfilId().equals(r.getArrendadorId())) {
+            throw new IllegalStateException("Solo el arrendador dueño o un admin puede gestionar esta reserva");
         }
     }
 

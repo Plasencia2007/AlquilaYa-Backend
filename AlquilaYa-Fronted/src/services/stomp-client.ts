@@ -3,8 +3,27 @@
 import { Client, type IFrame, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import Cookies from 'js-cookie';
 
-const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8086/ws-mensajeria';
+/**
+ * Resuelve la URL del WebSocket. Igual que `api.ts` para la API REST:
+ * - Dev (la página es localhost): usa el default `ws://localhost:8086/ws-mensajeria`.
+ * - Prod/ngrok (la página NO es localhost): usa el MISMO origen que la página, con `wss://`
+ *   si la página es https. nginx enruta `/ws-mensajeria` → servicio-mensajeria:8086.
+ * - Si `NEXT_PUBLIC_WS_URL` apunta a un host propio, se respeta tal cual.
+ * Se resuelve en el connect (cliente), no al importar, para leer bien `window.location`.
+ */
+function resolveWsUrl(): string {
+  const configured =
+    process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8086/ws-mensajeria';
+  if (
+    typeof window !== 'undefined' &&
+    configured.includes('localhost') &&
+    window.location.hostname !== 'localhost'
+  ) {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/ws-mensajeria`;
+  }
+  return configured;
+}
 
 type Listener = (msg: IMessage) => void;
 
@@ -53,7 +72,7 @@ class StompClientSingleton {
     if (!token) return; // no logueado, no conectar
 
     this.client = new Client({
-      brokerURL: WS_URL,
+      brokerURL: resolveWsUrl(),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,

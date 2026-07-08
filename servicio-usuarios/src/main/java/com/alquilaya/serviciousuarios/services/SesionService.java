@@ -129,6 +129,11 @@ public class SesionService {
         }
     }
 
+    /** Cierra TODAS las sesiones del usuario (p.ej. tras reset o cambio de contraseña). */
+    public int revocarTodas(Long userId) {
+        return revocarOtras(userId, null);
+    }
+
     /** Cierra todas las sesiones del usuario excepto la actual. */
     public int revocarOtras(Long userId, String jtiActual) {
         if (redis == null || userId == null) return 0;

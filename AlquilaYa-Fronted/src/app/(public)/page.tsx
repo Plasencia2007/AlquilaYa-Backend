@@ -17,7 +17,6 @@ import {
 
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
-import { MOCK_PROPIEDADES } from '@/mocks/propiedades';
 import { servicioPropiedades } from '@/services/property-service';
 import type { Propiedad } from '@/types/propiedad';
 import { Button } from '@/components/ui/button';
@@ -31,7 +30,6 @@ import {
 } from '@/components/ui/select';
 import { PropertyCard } from '@/components/student/property-card';
 import { TIPOS_PROPIEDAD, type TipoPropiedadFiltro } from '@/schemas/search-schema';
-import { distanciaAUpeuKm } from '@/lib/geo';
 
 const TIPO_LABELS: Record<TipoPropiedadFiltro, string> = {
   CUARTO_INDIVIDUAL: 'Cuarto individual',
@@ -41,17 +39,6 @@ const TIPO_LABELS: Record<TipoPropiedadFiltro, string> = {
   CASA: 'Casa',
   SUITE: 'Suite',
 };
-
-function fallbackDestacados(): Propiedad[] {
-  return MOCK_PROPIEDADES.filter((p) => p.disponible)
-    .slice()
-    .sort((a, b) => {
-      const da = distanciaAUpeuKm(a.coordenadas) ?? Number.POSITIVE_INFINITY;
-      const db = distanciaAUpeuKm(b.coordenadas) ?? Number.POSITIVE_INFINITY;
-      return da - db;
-    })
-    .slice(0, 4);
-}
 
 export default function Home() {
   const { estaAutenticado, usuario, cargando } = useAuth();
@@ -76,12 +63,12 @@ export default function Home() {
       .obtenerDestacadas(4)
       .then((props) => {
         if (cancelado) return;
-        // Si el backend aún no tiene propiedades publicadas, mostrar los mocks
-        // de muestra para que el Home nunca quede vacío.
-        setDestacados(props.length > 0 ? props : fallbackDestacados());
+        setDestacados(props);
       })
       .catch(() => {
-        if (!cancelado) setDestacados(fallbackDestacados());
+        // Sin mocks: si el backend falla o no hay propiedades, mostramos vacío (no falsas
+        // que enlazaban a /property/[id] → 404 en prod).
+        if (!cancelado) setDestacados([]);
       })
       .finally(() => {
         if (!cancelado) setCargandoDestacados(false);

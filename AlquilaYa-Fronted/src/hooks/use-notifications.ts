@@ -73,17 +73,12 @@ export function useNotifications() {
       );
     };
 
-    if (stompClient.isConnected()) {
-      connect();
-    } else {
-      const off = stompClient.onConnect(connect);
-      return () => {
-        off();
-        if (unsubscribe) unsubscribe();
-      };
-    }
-
+    // Registrar SIEMPRE onConnect: dispara connect() ahora si ya está conectado, y también en
+    // cada reconexión (stompjs no re-suscribe solo tras un corte). Antes, si ya estaba conectado
+    // al montar, no se registraba y las notificaciones dejaban de llegar tras reconectar (F2).
+    const off = stompClient.onConnect(connect);
     return () => {
+      off();
       if (unsubscribe) unsubscribe();
     };
   }, [estaAutenticado, userId, pushNueva]);

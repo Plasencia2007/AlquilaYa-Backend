@@ -78,19 +78,14 @@ export function useStompChat(conversacionId: number | string | null | undefined)
       );
     };
 
-    if (stompClient.isConnected()) {
-      suscribir();
-    } else {
-      const off = stompClient.onConnect(suscribir);
-      const offD = stompClient.onDisconnect(() => setConectado(false));
-      return () => {
-        off();
-        offD();
-        if (unsub) unsub();
-      };
-    }
-
+    // Registrar SIEMPRE onConnect/onDisconnect: onConnect dispara suscribir() ahora si ya está
+    // conectado y en cada reconexión (stompjs no re-suscribe solo). Antes, si ya estaba conectado
+    // al montar, no se registraban y tras un corte el chat dejaba de recibir mensajes (F2).
+    const off = stompClient.onConnect(suscribir);
+    const offD = stompClient.onDisconnect(() => setConectado(false));
     return () => {
+      off();
+      offD();
       if (unsub) unsub();
     };
   }, [conversacionId]);

@@ -195,6 +195,16 @@ public class PagoService {
                         "Esta reserva es grupal: cada miembro paga su cuota (pago dividido).");
             }
 
+            // Solo se puede pagar una reserva APROBADA por el arrendador. Antes de aprobar
+            // (SOLICITADA) o en cualquier otro estado (CANCELADA/RECHAZADA/EXPIRADA/PAGADA) NO
+            // se genera el link: evita capturar dinero sobre una reserva que no va a avanzar
+            // (y que la saga no reconciliaría, dejando el pago sin reembolso).
+            if (!"APROBADA".equalsIgnoreCase(reserva.getEstado())) {
+                throw new IllegalStateException(
+                        "Solo puedes pagar una reserva aprobada por el arrendador. Estado actual: "
+                                + reserva.getEstado());
+            }
+
             // Validar campos críticos para Mercado Pago
             String nombrePagador = (reserva.getEstudianteNombre() != null && !reserva.getEstudianteNombre().isEmpty())
                     ? reserva.getEstudianteNombre() : "Estudiante AlquilaYa";
@@ -413,13 +423,18 @@ public class PagoService {
         //    Si otro proceso ya tiene el lock → salir 200 OK (idempotente).
         String lockKey = REDIS_LOCK_PREFIX + paymentIdStr;
         String lockValue = UUID.randomUUID().toString();
-        boolean lockAcquired = adquirirLockRedis(lockKey, lockValue);
+        // Tri-estado: TRUE = lock adquirido; FALSE = Redis respondió y el lock lo tiene OTRO
+        // proceso (duplicado real); null = Redis no disponible/erró → degradar a idempotencia por BD.
+        Boolean lockResult = adquirirLockRedis(lockKey, lockValue);
+        boolean lockAcquired = Boolean.TRUE.equals(lockResult);
 
-        if (redisTemplate != null && !lockAcquired) {
-            // Lock detentado por otro proceso → idempotente, no procesamos.
-            log.info("🔒 Webhook concurrente detectado para paymentId={} (lock no adquirido). Ignorando.", paymentIdStr);
+        if (Boolean.FALSE.equals(lockResult)) {
+            // Duplicado concurrente real: otro proceso tiene el lock. Idempotente, no procesamos.
+            log.info("🔒 Webhook concurrente para paymentId={} (lock detentado por otro). Ignorando.", paymentIdStr);
             return;
         }
+        // lockResult == null → Redis caído: NO descartamos el webhook (bug histórico: se perdían
+        // pagos). Seguimos con la idempotencia por BD (esEstadoTerminal + @Version + unique payment_id).
 
         try {
             // 3. Consultar el pago real contra Mercado Pago (source of truth) FUERA de la
@@ -648,23 +663,26 @@ public class PagoService {
     }
 
     /**
-     * Intenta adquirir un lock con SET NX EX en Redis.
-     * Retorna true si el lock fue adquirido por nosotros.
-     * Si Redis no está disponible, retorna false y deja que el flujo continúe
-     * con el check no-atómico tradicional (graceful degradation).
+     * Intenta adquirir un lock con SET NX EX en Redis. Tri-estado:
+     * <ul>
+     *   <li>{@code TRUE}  → lock adquirido por nosotros.</li>
+     *   <li>{@code FALSE} → Redis respondió y el lock lo tiene OTRO proceso (duplicado real).</li>
+     *   <li>{@code null}  → Redis no configurado o erró → degradación: el caller debe SEGUIR
+     *       procesando con la idempotencia por BD, NO descartar el webhook.</li>
+     * </ul>
      */
-    private boolean adquirirLockRedis(String key, String value) {
+    private Boolean adquirirLockRedis(String key, String value) {
         if (redisTemplate == null) {
             log.warn("⚠️ Redis no configurado: idempotencia degradada al check de BD (no atómico).");
-            return false;
+            return null;
         }
         try {
             Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, value, REDIS_LOCK_TTL);
             return Boolean.TRUE.equals(ok);
         } catch (Exception e) {
-            log.warn("⚠️ Redis no disponible al adquirir lock '{}': {}. Fallback a check de BD.",
+            log.warn("⚠️ Redis no disponible al adquirir lock '{}': {}. Fallback a check de BD (no se descarta el webhook).",
                     key, e.getMessage());
-            return false;
+            return null;
         }
     }
 

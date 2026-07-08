@@ -27,7 +27,8 @@ if (!INTERNAL_API_KEY) {
 
 // Formato E.164 Perú: +51 + 9 dígitos.
 const PHONE_REGEX = /^\+?51\d{9}$/;
-const OTP_REGEX = /^\d{4,6}$/;
+// El OTP siempre se genera con 6 dígitos (usuarios: String.format("%06d", ...)). Exigir exactamente 6.
+const OTP_REGEX = /^\d{6}$/;
 
 app.disable('x-powered-by');
 app.use(helmet());
@@ -76,7 +77,12 @@ function markSuccess() {
 
 // WhatsApp Client
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    // En prod, WWEBJS_DATA_PATH apunta al volumen montado (/home/app/.wwebjs_auth) para que la
+    // sesión persista y NO haya que re-escanear el QR en cada reinicio (I6). En dev queda vacío
+    // → LocalAuth usa su default (<cwd>/.wwebjs_auth), como siempre.
+    authStrategy: new LocalAuth(
+        process.env.WWEBJS_DATA_PATH ? { dataPath: process.env.WWEBJS_DATA_PATH } : {}
+    ),
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -92,11 +98,21 @@ client.on('ready', async () => {
     logger.info('WhatsApp Client READY');
     isReady = true;
 
-    kafkaConsumerRef = new KafkaConsumer(client, {
+    // Arrancar el consumidor Kafka UNA sola vez. En cada reconexión de WhatsApp
+    // ('disconnected'→initialize→'ready') este handler vuelve a correr; sin este guard se
+    // creaba un consumidor nuevo sin parar el anterior (fuga de consumidores en el mismo grupo).
+    // El consumidor conserva la referencia a `client`, que sigue siendo válida tras reconectar.
+    if (kafkaConsumerRef) {
+        logger.info('Kafka Consumer ya activo (reconexión de WhatsApp); no se recrea.');
+        return;
+    }
+
+    const consumer = new KafkaConsumer(client, {
         onStateChange: (connected) => { kafkaConnected = connected; },
     });
     try {
-        await kafkaConsumerRef.start();
+        await consumer.start();
+        kafkaConsumerRef = consumer; // solo tras arranque exitoso → si falla, el próximo 'ready' reintenta
         logger.info('Kafka Consumer started successfully');
     } catch (err) {
         logger.error('Error starting Kafka Consumer', { error: err && err.message });

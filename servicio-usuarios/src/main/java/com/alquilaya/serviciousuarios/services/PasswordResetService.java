@@ -10,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.Optional;
 
 /**
@@ -31,6 +32,8 @@ public class PasswordResetService {
     private final JwtService jwtService;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final SesionService sesionService;
+    private final JwtBlacklistService jwtBlacklistService;
 
     /**
      * Si el correo existe, manda email con link de reset. Si no existe,
@@ -67,11 +70,29 @@ public class PasswordResetService {
             throw new IllegalArgumentException("El enlace de recuperación es inválido o expiró");
         }
 
+        // Un solo uso: si este token de reset ya fue utilizado, rechazar (evita reuso del link).
+        if (jwtBlacklistService.isBlacklisted(token)) {
+            throw new IllegalArgumentException("Este enlace de recuperación ya fue utilizado. Solicita uno nuevo.");
+        }
+
         Usuario u = usuarioRepository.findByCorreo(correo)
                 .orElseThrow(() -> new IllegalArgumentException("Cuenta no encontrada"));
 
         u.setPassword(passwordEncoder.encode(nuevaPassword));
         usuarioRepository.save(u);
-        log.info("[PasswordReset] Password actualizada para {}", LogMask.email(correo));
+
+        // Un solo uso: invalidar el token de reset tras usarlo.
+        Date exp;
+        try {
+            exp = jwtService.getExpiration(token);
+        } catch (Exception e) {
+            exp = new Date(System.currentTimeMillis() + 15 * 60_000L); // fallback: vida del reset (15min)
+        }
+        jwtBlacklistService.blacklist(token, exp);
+
+        // Revocar TODAS las sesiones del usuario: si la cuenta estaba comprometida, mata las sesiones del atacante.
+        sesionService.revocarTodas(u.getId());
+
+        log.info("[PasswordReset] Password actualizada + sesiones revocadas para {}", LogMask.email(correo));
     }
 }

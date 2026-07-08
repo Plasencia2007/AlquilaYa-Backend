@@ -35,6 +35,7 @@ public class Usuario {
     private String correo;
 
     @Column(nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore // Nunca serializar el hash en respuestas JSON (admin/perfil).
     private String password;
 
     @Enumerated(EnumType.STRING)

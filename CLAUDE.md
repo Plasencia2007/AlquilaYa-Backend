@@ -129,7 +129,7 @@ FKs entre esquemas no están enforced en BD; se mantienen vía Feign y Kafka.
 
 - **PostgreSQL :5433** — `postgres` (usuarios), `alquilaya_propiedades`, `alquilaya_pagos`, `alquilaya_mensajeria`
 - **MySQL :3307** — `alquilaya_catalogos`
-- Scripts init: `database/init.sql`, `data.sql`, `extra_permissions.sql`
+- Script init: `database/init.sql` (crea las BD vacías; montado en docker-compose). El esquema lo crean las migraciones Flyway (`V1__baseline_schema.sql` por servicio) en prod y `ddl-auto=update` en dev. Permisos/roles y el primer admin (env `ADMIN_BOOTSTRAP_*`) los siembra `DataInitializer`.
 
 ## Problemas comunes
 

@@ -37,6 +37,7 @@ public class UsuarioService {
     private final OtpService otpService;
     private final ConfiguracionAuthService configuracionAuthService;
     private final CloudinaryDocumentService cloudinaryDocumentService;
+    private final SesionService sesionService;
 
     @Transactional
     public Usuario registrarAdmin(AdminRegisterRequest request) {
@@ -80,7 +81,14 @@ public class UsuarioService {
         }
 
         Rol rol = Rol.valueOf(request.getRol().toUpperCase());
-        
+
+        // Defensa en profundidad: aunque el DTO ya restringe el rol, nunca se permite
+        // crear un ADMIN desde el registro público. Los ADMIN se crean vía /register-admin
+        // (protegido con @PreAuthorize) o por semilla inicial.
+        if (rol == Rol.ADMIN) {
+            throw new IllegalArgumentException("No se puede registrar una cuenta ADMIN desde el registro público");
+        }
+
         Usuario usuario = Usuario.builder()
                 .nombre(request.getNombre())
                 .apellido(request.getApellido())
@@ -89,8 +97,8 @@ public class UsuarioService {
                 .telefono(request.getTelefono())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .rol(rol)
-                .estado(rol == Rol.ADMIN ? EstadoUsuario.ACTIVE : EstadoUsuario.PENDING)
-                .telefonoVerificado(rol == Rol.ADMIN)
+                .estado(EstadoUsuario.PENDING)
+                .telefonoVerificado(false)
                 .build();
 
         Usuario savedUser = usuarioRepository.save(usuario);
@@ -125,13 +133,10 @@ public class UsuarioService {
                     .ciclo(det.getCiclo())
                     .build();
             estudianteRepository.save(estudiante);
-        } else if (rol == Rol.ADMIN) {
-            log.info("Registrando usuario con rol ADMIN de forma simplificada");
-            // No se requieren detalles adicionales para ADMIN
         }
 
         // Envía OTP solo si el método de verificación elegido por el admin exige teléfono (#3).
-        if (usuario.getTelefono() != null && rol != Rol.ADMIN
+        if (usuario.getTelefono() != null
                 && configuracionAuthService.getMetodo().requiereTelefono()) {
             log.debug("Enviando OTP a {}", LogMask.phone(usuario.getTelefono()));
             otpService.generarYEnviarOtp(usuario.getTelefono());
@@ -183,7 +188,11 @@ public class UsuarioService {
         if (updates.getNombre() != null) usuario.setNombre(updates.getNombre());
         if (updates.getApellido() != null) usuario.setApellido(updates.getApellido());
         if (updates.getDni() != null) usuario.setDni(updates.getDni());
-        if (updates.getTelefono() != null) usuario.setTelefono(updates.getTelefono());
+        // Si el teléfono cambia, se invalida la verificación (el número nuevo debe re-verificarse) (U6).
+        if (updates.getTelefono() != null && !updates.getTelefono().equals(usuario.getTelefono())) {
+            usuario.setTelefono(updates.getTelefono());
+            usuario.setTelefonoVerificado(false);
+        }
         if (updates.getEstado() != null) usuario.setEstado(updates.getEstado());
 
         if (usuario.getRol() == Rol.ARRENDADOR && updates.getDetallesArrendador() != null) {
@@ -251,6 +260,8 @@ public class UsuarioService {
         }
         usuario.setPassword(passwordEncoder.encode(nuevaPassword));
         usuarioRepository.save(usuario);
+        // Revocar todas las sesiones tras cambiar la contraseña (el usuario re-inicia sesión).
+        sesionService.revocarTodas(id);
     }
 
     @Transactional

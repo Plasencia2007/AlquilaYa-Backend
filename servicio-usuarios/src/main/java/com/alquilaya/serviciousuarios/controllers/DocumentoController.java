@@ -33,8 +33,9 @@ public class DocumentoController {
                 .toList());
     }
 
+    // Anti-IDOR: solo puedes subir documentos a TU propia cuenta (el usuarioId debe ser el del token).
     @PostMapping("/upload")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@permisoEnforcer.esPropioUsuario(#usuarioId)")
     public ResponseEntity<DocumentoVerificacion> uploadDocumento(
             @RequestParam("usuarioId") Long usuarioId,
             @RequestParam("tipo") TipoDocumento tipo,
@@ -43,8 +44,9 @@ public class DocumentoController {
         return ResponseEntity.ok(documentoService.subirDocumento(usuarioId, tipo, archivo));
     }
 
+    // Anti-IDOR: solo puedes verificar el DNI de TU propia cuenta (escribe usuario.dni + auto-aprueba).
     @PostMapping("/verificar-dni-instantaneo")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@permisoEnforcer.esPropioUsuario(#usuarioId)")
     public ResponseEntity<Usuario> verificarDniInstantaneo(
             @RequestParam("usuarioId") Long usuarioId,
             @RequestParam("dni") String dni) {
@@ -58,8 +60,9 @@ public class DocumentoController {
         return ResponseEntity.ok(documentoService.obtenerPorId(id));
     }
 
+    // Anti-IDOR: solo tus propios documentos (DNI/identidad son PII), salvo que seas admin con VER_USUARIOS.
     @GetMapping("/usuario/{usuarioId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS') or @permisoEnforcer.esPropioUsuario(#usuarioId)")
     public ResponseEntity<List<DocumentoVerificacion>> getDocumentosUsuario(@PathVariable Long usuarioId) {
         return ResponseEntity.ok(documentoService.obtenerDocumentosUsuario(usuarioId));
     }

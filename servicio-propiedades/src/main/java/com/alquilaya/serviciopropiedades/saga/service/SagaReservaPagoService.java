@@ -150,7 +150,19 @@ public class SagaReservaPagoService {
 
         if (saga.getEstadoSaga() == EstadoSaga.COMPLETADA
                 || saga.getEstadoSaga() == EstadoSaga.FALLIDA) {
-            log.debug("Saga {} ya en estado terminal {}. Skip.", saga.getSagaId(), saga.getEstadoSaga());
+            // La saga ya cerró, PERO si llega un pago tardío sobre una reserva
+            // cancelada/rechazada/expirada hay que reembolsar igual: antes se descartaba aquí
+            // y el dinero quedaba capturado sin refund. La idempotencia del refund (pago
+            // PAGADO→REEMBOLSADO) evita doble devolución si el evento se reentrega.
+            EstadoReserva est = reserva.getEstado();
+            if (est == EstadoReserva.CANCELADA || est == EstadoReserva.RECHAZADA
+                    || est == EstadoReserva.EXPIRADA) {
+                log.warn("Saga {} terminal ({}) pero pago tardío con reserva en {} → emitiendo refund.",
+                        saga.getSagaId(), saga.getEstadoSaga(), est);
+                aplicarLogicaDirecta(reserva, envelope);
+            } else {
+                log.debug("Saga {} ya en estado terminal {}. Skip.", saga.getSagaId(), saga.getEstadoSaga());
+            }
             return;
         }
 
