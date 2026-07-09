@@ -84,6 +84,13 @@ public class Reserva {
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 
+    /**
+     * G4: aceptación electrónica del contrato por cada parte (timestamp, no firma
+     * criptográfica — placeholder honesto hasta integrar un proveedor real de firma digital).
+     */
+    private LocalDateTime firmaEstudianteAt;
+    private LocalDateTime firmaArrendadorAt;
+
     @Version
     @Column(nullable = false)
     private Long version;

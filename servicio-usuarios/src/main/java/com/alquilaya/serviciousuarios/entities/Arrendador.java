@@ -48,6 +48,11 @@ public class Arrendador {
     @Column(columnDefinition = "boolean default false")
     private boolean esEmpresa;
 
+    /** KYC: true cuando un admin aprobó sus documentos requeridos (DNI). Badge "verificado" real (U3). */
+    @Builder.Default
+    @Column(columnDefinition = "boolean default false")
+    private boolean verificado = false;
+
     @Builder.Default
     @DecimalMin("0.0") @DecimalMax("5.0")
     private Double calificacion = 5.0;

@@ -168,6 +168,12 @@ export interface Propiedad {
   badges?: BadgePropiedad[];
   /** Aviso revisado y aprobado por un admin → sello "Verificado por AlquilaYa" (#47). */
   verificado?: boolean;
+  /**
+   * Distancia en km desde la ubicación del usuario (geolocalización), solo presente
+   * cuando el resultado viene de `GET /propiedades/buscar/cerca` ("Cerca de mí").
+   * No confundir con la distancia al campus que ya calcula `PropertyCard`.
+   */
+  distanciaKm?: number;
 }
 
 // =============================================================================

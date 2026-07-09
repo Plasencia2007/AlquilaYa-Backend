@@ -8,7 +8,7 @@ export interface UsuarioMaster {
   correo: string;
   telefono: string;
   rol: 'ADMIN' | 'ARRENDADOR' | 'ESTUDIANTE';
-  estado: 'PENDING' | 'ACTIVE' | 'BANNED';
+  estado: 'PENDING' | 'ACTIVE' | 'BANNED' | 'REJECTED' | 'SUSPENDED';
   telefonoVerificado: boolean;
   perfilId?: number;
   // Campos del endpoint /admin/arrendadores
@@ -27,7 +27,7 @@ export interface CuentaDuplicada {
   dni: string;
   telefono?: string;
   rol: string;
-  estado: 'PENDING' | 'ACTIVE' | 'BANNED';
+  estado: 'PENDING' | 'ACTIVE' | 'BANNED' | 'REJECTED' | 'SUSPENDED';
   fechaCreacion?: string;
 }
 
@@ -63,6 +63,16 @@ export const usuarioMasterService = {
 
   activarUsuario: async (id: number): Promise<UsuarioMaster> => {
     return usuarioMasterService.actualizarUsuario(id, { estado: 'ACTIVE' });
+  },
+
+  /** Suspensión temporal (bloquea el login hasta reactivar). U4. */
+  suspenderUsuario: async (id: number): Promise<UsuarioMaster> => {
+    return usuarioMasterService.actualizarUsuario(id, { estado: 'SUSPENDED' });
+  },
+
+  /** Rechazar el registro/KYC (bloquea el login). U4. */
+  rechazarUsuario: async (id: number): Promise<UsuarioMaster> => {
+    return usuarioMasterService.actualizarUsuario(id, { estado: 'REJECTED' });
   },
 
   /** Grupos de cuentas duplicadas (mismo DNI/teléfono/email canónico). #8 */

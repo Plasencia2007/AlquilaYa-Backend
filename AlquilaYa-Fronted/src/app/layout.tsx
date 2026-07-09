@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { GoogleAuthProvider } from '@/components/auth/google-auth-provider';
 import CampusHydrator from '@/components/shared/CampusHydrator';
+import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -47,21 +48,13 @@ const themeScript = `
 })();
 `;
 
-// Redirect blocking de rutas privadas si no hay cookie auth-token (defensa
-// adicional al proxy.ts; reduce flash de contenido protegido).
-const authGuardScript = `
-(function() {
-  try {
-    var token = document.cookie.split('; ').find(function(r) { return r.trim().startsWith('auth-token='); });
-    var path = window.location.pathname;
-    var protectedPaths = ['/admin-master', '/landlord', '/student'];
-    var isProtected = protectedPaths.some(function(p) { return path.startsWith(p); });
-    if (!token && isProtected) {
-      window.location.replace('/');
-    }
-  } catch (e) {}
-})();
-`;
+// S5: el guard client-side que había acá (leía `document.cookie` buscando 'auth-token=')
+// se ELIMINÓ — con el access token httpOnly, `document.cookie` NUNCA lo ve, así que el guard
+// SIEMPRE habría visto "sin token" y expulsado a CUALQUIER usuario logueado de las rutas
+// privadas. La protección real y verdadera sigue intacta en `proxy.ts` (el middleware de
+// Next 16): corre en el SERVIDOR, donde SÍ puede leer cookies httpOnly sin problema (el
+// httpOnly sólo bloquea el JS del navegador) — y de hecho es más segura que este guard
+// client-side, porque redirige ANTES de servir el HTML de la ruta protegida.
 
 export default async function RootLayout({
   children,
@@ -77,7 +70,6 @@ export default async function RootLayout({
           rel="stylesheet"
         />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <script dangerouslySetInnerHTML={{ __html: authGuardScript }} />
       </head>
 
       <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
@@ -85,6 +77,7 @@ export default async function RootLayout({
           <ThemeProvider>
             <GoogleAuthProvider>
               <CampusHydrator />
+              <ServiceWorkerRegister />
               <AuthDialog />
               <Navbar />
               <main className="flex-1">{children}</main>

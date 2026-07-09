@@ -4,6 +4,7 @@ import com.alquilaya.serviciopagos.config.CurrentUser;
 import com.alquilaya.serviciopagos.dto.EstadoPagoResponse;
 import com.alquilaya.serviciopagos.dto.ResumenFinancieroDTO;
 import com.alquilaya.serviciopagos.services.PagoService;
+import com.alquilaya.serviciopagos.services.ReconciliacionService;
 import com.alquilaya.serviciopagos.services.ResumenFinancieroService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ public class PagoController {
 
     private final PagoService pagoService;
     private final ResumenFinancieroService resumenFinancieroService;
+    private final ReconciliacionService reconciliacionService;
 
     @PostMapping("/preferencia/{reservaId}")
     public ResponseEntity<Map<String, String>> crearPreferencia(@PathVariable Long reservaId,
@@ -57,5 +59,23 @@ public class PagoController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ResumenFinancieroDTO> resumenFinanciero() {
         return ResponseEntity.ok(resumenFinancieroService.calcular());
+    }
+
+    /**
+     * Reconciliación on-demand (G5): re-consulta Mercado Pago y concilia los pagos en
+     * PENDIENTE_REVISION/DISCREPANCIA de una reserva. Solo ADMIN (además del filtro de seguridad
+     * sobre {@code /api/v1/pagos/admin/**}).
+     */
+    @PostMapping("/admin/reconciliar/{reservaId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> reconciliarReserva(@PathVariable Long reservaId) {
+        ReconciliacionService.Resumen r = reconciliacionService.reconciliarReserva(reservaId);
+        return ResponseEntity.ok(Map.of(
+                "reservaId", reservaId,
+                "escaneados", r.escaneados,
+                "conciliados", r.conciliados,
+                "sinCambio", r.sinCambio,
+                "revisionManual", r.revisionManual,
+                "fallidos", r.fallidos));
     }
 }

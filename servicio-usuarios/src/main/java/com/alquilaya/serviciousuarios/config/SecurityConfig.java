@@ -55,6 +55,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT,  "/api/v1/usuarios/{id}").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/cambiar-password").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/{id}/foto").authenticated()
+                        // Baja de cuenta propia (GDPR, G8-B): cualquier usuario autenticado puede
+                        // eliminar SU cuenta (el id se resuelve del token, no de la URL).
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/usuarios/me").authenticated()
                         // Perfil propio: el usuario autenticado edita SUS datos (resueltos por el token).
                         .requestMatchers("/api/v1/usuarios/perfil/**").authenticated()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN

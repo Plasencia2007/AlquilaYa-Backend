@@ -28,9 +28,11 @@ const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ESTADO_CFG: Record<EstadoUsuario, { label: string; cls: string }> = {
-  ACTIVE:   { label: 'Activo',    cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  PENDING:  { label: 'Pendiente', cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'  },
-  BANNED:   { label: 'Baneado',   cls: 'bg-red-500/20    text-red-400    border-red-500/30'    },
+  ACTIVE:    { label: 'Activo',     cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  PENDING:   { label: 'Pendiente',  cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'  },
+  BANNED:    { label: 'Baneado',    cls: 'bg-red-500/20    text-red-400    border-red-500/30'    },
+  SUSPENDED: { label: 'Suspendido', cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  REJECTED:  { label: 'Rechazado',  cls: 'bg-red-500/20    text-red-400    border-red-500/30'    },
 };
 
 const DOC_CFG = {

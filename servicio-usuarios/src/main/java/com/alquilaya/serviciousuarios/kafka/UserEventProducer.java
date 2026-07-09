@@ -30,12 +30,13 @@ public class UserEventProducer {
 
     private final OutboxPublisher outboxPublisher;
 
-    public void emitirEventoAprobacion(Long usuarioId, String correo, String nombre, String telefono) {
+    public void emitirEventoAprobacion(Long usuarioId, String correo, String nombre, String telefono, String rol) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("usuarioId", usuarioId);
         payload.put("correo", correo);
         payload.put("nombre", nombre);
         payload.put("telefono", telefono);
+        payload.put("rol", rol); // ESTUDIANTE | ARRENDADOR → la notificación se adapta al rol
 
         log.info("📤 Persistiendo en outbox USER_APROBADO usuario={} ({})", usuarioId, LogMask.email(correo));
         outboxPublisher.publicar(
@@ -47,13 +48,14 @@ public class UserEventProducer {
                 MDC.get("correlationId"));
     }
 
-    public void emitirEventoRechazo(Long usuarioId, String correo, String nombre, String telefono, String motivo) {
+    public void emitirEventoRechazo(Long usuarioId, String correo, String nombre, String telefono, String motivo, String rol) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("usuarioId", usuarioId);
         payload.put("correo", correo);
         payload.put("nombre", nombre);
         payload.put("telefono", telefono);
         payload.put("motivo", motivo);
+        payload.put("rol", rol); // ESTUDIANTE | ARRENDADOR → la notificación se adapta al rol
 
         log.info("📤 Persistiendo en outbox USER_RECHAZADO usuario={} ({})", usuarioId, LogMask.email(correo));
         outboxPublisher.publicar(

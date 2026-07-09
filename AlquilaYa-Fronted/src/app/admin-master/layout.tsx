@@ -41,12 +41,12 @@ export default function AdminMasterLayout({
   // Bloqueo visual mientras se verifica la sesión/permisos para evitar parpadeo a intrusos.
   if (!isMounted || cargando || cargandoPermisos || !puedeEntrar) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-[#0b1222] flex items-center justify-center">
+      <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
           <div className="text-center">
             <p className="text-[11px] font-black text-primary uppercase tracking-[0.3em] animate-pulse">Sincronizando Torre de Control</p>
-            <p className="text-[9px] text-[#64748b] font-bold mt-2 uppercase tracking-widest">Protección Admin Activa</p>
+            <p className="text-[9px] text-muted-foreground font-bold mt-2 uppercase tracking-widest">Protección Admin Activa</p>
           </div>
         </div>
       </div>
@@ -54,10 +54,10 @@ export default function AdminMasterLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] relative selection:bg-primary/20 animate-fade-in flex overflow-hidden">
+    <div className="min-h-screen bg-background relative selection:bg-primary/20 animate-fade-in flex overflow-hidden">
       <AdminSidebar />
-      <main className="flex-1 pl-[248px] h-screen overflow-y-auto custom-scrollbar bg-[#f8fafc]">
-        <div className="p-10 lg:p-14 max-w-[1600px] mx-auto min-h-full flex flex-col text-slate-900">
+      <main className="flex-1 pl-[248px] h-screen overflow-y-auto custom-scrollbar bg-background">
+        <div className="p-10 lg:p-14 max-w-[1600px] mx-auto min-h-full flex flex-col text-foreground">
           {children}
         </div>
       </main>

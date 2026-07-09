@@ -43,12 +43,12 @@ export default function LandlordLayout({
   // Bloqueo visual preventivo: No renderiza nada si hay dudas sobre la sesión o el rol
   if (!isMounted || cargando || !estaAutenticado || usuario?.rol !== 'ARRENDADOR') {
     return (
-      <div className="fixed inset-0 z-[9999] bg-[#0b1222] flex items-center justify-center">
+      <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
           <div className="text-center">
             <p className="text-[11px] font-black text-primary uppercase tracking-[0.3em] animate-pulse">Sincronizando Torre de Control</p>
-            <p className="text-[9px] text-[#64748b] font-bold mt-2 uppercase tracking-widest">Protección de Socio Activa</p>
+            <p className="text-[9px] text-muted-foreground font-bold mt-2 uppercase tracking-widest">Protección de Socio Activa</p>
           </div>
         </div>
       </div>

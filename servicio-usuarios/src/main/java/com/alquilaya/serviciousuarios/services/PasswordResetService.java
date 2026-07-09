@@ -33,6 +33,7 @@ public class PasswordResetService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final SesionService sesionService;
+    private final RefreshTokenService refreshTokenService;
     private final JwtBlacklistService jwtBlacklistService;
 
     /**
@@ -90,8 +91,10 @@ public class PasswordResetService {
         }
         jwtBlacklistService.blacklist(token, exp);
 
-        // Revocar TODAS las sesiones del usuario: si la cuenta estaba comprometida, mata las sesiones del atacante.
+        // Revocar TODAS las sesiones y refresh tokens (G7): si la cuenta estaba comprometida,
+        // mata tanto las sesiones activas del atacante como su capacidad de renovar el access token.
         sesionService.revocarTodas(u.getId());
+        refreshTokenService.revocarTodas(u.getId());
 
         log.info("[PasswordReset] Password actualizada + sesiones revocadas para {}", LogMask.email(correo));
     }

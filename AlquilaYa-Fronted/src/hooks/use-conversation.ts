@@ -6,8 +6,7 @@ import { stompClient } from '@/services/stomp-client';
 import { conversationService } from '@/services/conversation-service';
 import { notify } from '@/lib/notify';
 import { useAuth } from '@/hooks/use-auth';
-import { servicioAuth } from '@/services/auth-service';
-import Cookies from 'js-cookie';
+import { useAuthStore } from '@/stores/auth-store';
 import type {
   Conversacion,
   EventoConversacion,
@@ -183,11 +182,11 @@ export function useConversation(conversacionId: number | string) {
   };
 }
 
+// S5: el usuario actual ya no se decodifica de un token (es httpOnly, JS no puede leerlo) —
+// se lee del store, que `inicializar()`/`restaurarSesion()` ya hidrató desde el backend.
 function obtenerMiIdentidad(): { perfilId: number | null; rol: RolUsuario | null } {
-  const token = Cookies.get('auth-token');
-  if (!token) return { perfilId: null, rol: null };
-  const usuario = servicioAuth.obtenerUsuarioActualDesdeToken(token);
+  const usuario = useAuthStore.getState().usuario;
   const v = usuario?.perfilId;
   const perfilId = typeof v === 'number' ? v : v ? Number(v) : null;
-  return { perfilId, rol: usuario?.rol ?? null };
+  return { perfilId, rol: (usuario?.rol as RolUsuario) ?? null };
 }

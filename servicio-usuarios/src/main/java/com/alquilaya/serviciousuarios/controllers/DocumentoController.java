@@ -6,8 +6,10 @@ import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
+import com.alquilaya.serviciousuarios.services.AuditLogService;
 import com.alquilaya.serviciousuarios.services.DocumentoService;
 import com.alquilaya.serviciousuarios.validaciones.anotaciones.ArchivoValido;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +27,7 @@ import java.util.List;
 public class DocumentoController {
 
     private final DocumentoService documentoService;
+    private final AuditLogService auditLogService;
 
     @GetMapping("/tipos-requeridos")
     public ResponseEntity<List<TipoDocumentoConfigDTO>> getTiposRequeridos() {
@@ -77,9 +80,14 @@ public class DocumentoController {
     @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_DOCUMENTOS')")
     public ResponseEntity<DocumentoVerificacion> verifyDocumento(
             @PathVariable Long id,
-            @Valid @RequestBody VerificarDocumentoRequest request) {
+            @Valid @RequestBody VerificarDocumentoRequest request,
+            jakarta.servlet.http.HttpServletRequest req) {
 
-        return ResponseEntity.ok(documentoService.verificarDocumento(id, request.getEstado(), request.getComentario()));
+        DocumentoVerificacion resultado = documentoService.verificarDocumento(id, request.getEstado(), request.getComentario());
+        // G8: audita la aprobación/rechazo de documentos KYC por parte de un admin.
+        auditLogService.registrarActorActual("VERIFICAR_DOCUMENTO", "DocumentoVerificacion", id,
+                "estado=" + request.getEstado(), req);
+        return ResponseEntity.ok(resultado);
     }
 
     @DeleteMapping("/{id}")

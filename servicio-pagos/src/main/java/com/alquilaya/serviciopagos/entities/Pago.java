@@ -55,6 +55,15 @@ public class Pago {
     @Column(name = "estudiante_id")
     private Long estudianteId;
 
+    /** G1: dueño de la propiedad — a quién se le debe el payout de montoArrendador. Nullable
+     *  para pagos creados antes de G1 (quedan fuera de la agregación de payouts). */
+    @Column(name = "arrendador_id")
+    private Long arrendadorId;
+
+    /** G1: si no-nulo, este pago ya fue incluido en un desembolso (evita pagarlo dos veces). */
+    @Column(name = "desembolso_id")
+    private Long desembolsoId;
+
     /** Si es la cuota de una reserva grupal (#38 Fase 2). Null = pago individual. */
     @Column(name = "grupo_id")
     private Long grupoId;

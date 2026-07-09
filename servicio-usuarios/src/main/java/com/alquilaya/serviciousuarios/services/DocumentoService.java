@@ -2,6 +2,7 @@ package com.alquilaya.serviciousuarios.services;
 
 import com.alquilaya.serviciousuarios.dto.ApiPeruDTOs;
 import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
+import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
@@ -10,6 +11,7 @@ import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
 import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.kafka.UserEventProducer;
+import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.DocumentoVerificacionRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
@@ -31,6 +33,7 @@ public class DocumentoService {
     private final DocumentoVerificacionRepository documentoRepository;
     private final UsuarioRepository usuarioRepository;
     private final EstudianteRepository estudianteRepository;
+    private final ArrendadorRepository arrendadorRepository;
     private final CloudinaryDocumentService cloudinaryDocumentService;
     private final NotificationService notificationService;
     private final UserEventProducer userEventProducer;
@@ -83,7 +86,7 @@ public class DocumentoService {
         documento.setComentarioRechazo(comentario);
         DocumentoVerificacion guardado = documentoRepository.save(documento);
 
-        recalcularVerificacionEstudiante(guardado.getUsuario(), nuevoEstado, comentario);
+        recalcularVerificacion(guardado.getUsuario(), nuevoEstado, comentario);
 
         // Notificar al usuario via WhatsApp
         enviarNotificacionStatus(guardado);
@@ -92,35 +95,44 @@ public class DocumentoService {
     }
 
     /**
-     * Recalcula el flag {@code Estudiante.verificado} a partir de los documentos
-     * requeridos ({@link TipoDocumento#requeridos()}): todos APROBADOS → verificado.
-     * Solo emite eventos Kafka (vía outbox, atómico con esta TX) cuando hay una
-     * transición real del flag; re-aprobar un documento ya aprobado no re-emite.
+     * Recalcula el flag {@code verificado} del perfil (Estudiante o Arrendador) a partir de los
+     * documentos requeridos ({@link TipoDocumento#requeridos()}): todos APROBADOS → verificado.
+     * Solo emite eventos Kafka (vía outbox, atómico con esta TX) cuando hay una transición real
+     * del flag; re-aprobar un documento ya aprobado no re-emite. Despacha por rol (U3).
      */
-    private void recalcularVerificacionEstudiante(Usuario usuario, EstadoVerificacion nuevoEstado, String comentario) {
-        if (usuario.getRol() != Rol.ESTUDIANTE) return;
+    private void recalcularVerificacion(Usuario usuario, EstadoVerificacion nuevoEstado, String comentario) {
+        if (usuario.getRol() == Rol.ESTUDIANTE) {
+            recalcularVerificacionEstudiante(usuario, nuevoEstado, comentario);
+        } else if (usuario.getRol() == Rol.ARRENDADOR) {
+            recalcularVerificacionArrendador(usuario, nuevoEstado, comentario);
+        }
+    }
 
+    /** True si TODOS los documentos requeridos del usuario están APROBADOS. */
+    private boolean documentosRequeridosAprobados(Usuario usuario) {
+        List<DocumentoVerificacion> docs = documentoRepository.findByUsuario(usuario);
+        return TipoDocumento.requeridos().stream()
+                .allMatch(tipo -> docs.stream().anyMatch(d ->
+                        d.getTipoDocumento() == tipo
+                        && d.getEstadoVerificacion() == EstadoVerificacion.APROBADO));
+    }
+
+    private void recalcularVerificacionEstudiante(Usuario usuario, EstadoVerificacion nuevoEstado, String comentario) {
         Estudiante estudiante = estudianteRepository.findByUsuario(usuario).orElse(null);
         if (estudiante == null) {
             log.warn("Usuario {} con rol ESTUDIANTE no tiene perfil Estudiante; no se recalcula verificación", usuario.getId());
             return;
         }
-
-        List<DocumentoVerificacion> docs = documentoRepository.findByUsuario(usuario);
-        boolean todosAprobados = TipoDocumento.requeridos().stream()
-                .allMatch(tipo -> docs.stream().anyMatch(d ->
-                        d.getTipoDocumento() == tipo
-                        && d.getEstadoVerificacion() == EstadoVerificacion.APROBADO));
-
+        boolean todosAprobados = documentosRequeridosAprobados(usuario);
         String nombreCompleto = usuario.getNombre() + " " + usuario.getApellido();
 
         if (todosAprobados && !estudiante.isVerificado()) {
             estudiante.setVerificado(true);
             estudianteRepository.save(estudiante);
-            log.info("✅ Estudiante {} (usuario {}) verificado: todos los documentos requeridos APROBADOS",
+            log.info("✅ Estudiante {} (usuario {}) verificado: documentos requeridos APROBADOS",
                     estudiante.getId(), usuario.getId());
             userEventProducer.emitirEventoAprobacion(
-                    usuario.getId(), usuario.getCorreo(), nombreCompleto, usuario.getTelefono());
+                    usuario.getId(), usuario.getCorreo(), nombreCompleto, usuario.getTelefono(), "ESTUDIANTE");
         } else if (!todosAprobados && estudiante.isVerificado()) {
             estudiante.setVerificado(false);
             estudianteRepository.save(estudiante);
@@ -129,7 +141,36 @@ public class DocumentoService {
             if (nuevoEstado == EstadoVerificacion.RECHAZADO) {
                 userEventProducer.emitirEventoRechazo(
                         usuario.getId(), usuario.getCorreo(), nombreCompleto, usuario.getTelefono(),
-                        comentario != null ? comentario : "Documento de verificación rechazado");
+                        comentario != null ? comentario : "Documento de verificación rechazado", "ESTUDIANTE");
+            }
+        }
+    }
+
+    private void recalcularVerificacionArrendador(Usuario usuario, EstadoVerificacion nuevoEstado, String comentario) {
+        Arrendador arrendador = arrendadorRepository.findByUsuario(usuario).orElse(null);
+        if (arrendador == null) {
+            log.warn("Usuario {} con rol ARRENDADOR no tiene perfil Arrendador; no se recalcula verificación", usuario.getId());
+            return;
+        }
+        boolean todosAprobados = documentosRequeridosAprobados(usuario);
+        String nombreCompleto = usuario.getNombre() + " " + usuario.getApellido();
+
+        if (todosAprobados && !arrendador.isVerificado()) {
+            arrendador.setVerificado(true);
+            arrendadorRepository.save(arrendador);
+            log.info("✅ Arrendador {} (usuario {}) verificado: documentos requeridos APROBADOS",
+                    arrendador.getId(), usuario.getId());
+            userEventProducer.emitirEventoAprobacion(
+                    usuario.getId(), usuario.getCorreo(), nombreCompleto, usuario.getTelefono(), "ARRENDADOR");
+        } else if (!todosAprobados && arrendador.isVerificado()) {
+            arrendador.setVerificado(false);
+            arrendadorRepository.save(arrendador);
+            log.info("⚠️ Arrendador {} (usuario {}) pierde la verificación (documento pasó a {})",
+                    arrendador.getId(), usuario.getId(), nuevoEstado);
+            if (nuevoEstado == EstadoVerificacion.RECHAZADO) {
+                userEventProducer.emitirEventoRechazo(
+                        usuario.getId(), usuario.getCorreo(), nombreCompleto, usuario.getTelefono(),
+                        comentario != null ? comentario : "Documento de verificación rechazado", "ARRENDADOR");
             }
         }
     }
@@ -146,7 +187,7 @@ public class DocumentoService {
         cloudinaryDocumentService.eliminarDocumento(doc.getArchivoUrl());
         documentoRepository.delete(doc);
         documentoRepository.flush(); // el recálculo debe ver el documento ya eliminado
-        recalcularVerificacionEstudiante(usuario, EstadoVerificacion.PENDIENTE, null);
+        recalcularVerificacion(usuario, EstadoVerificacion.PENDIENTE, null);
         log.info("Documento {} eliminado", id);
     }
 
@@ -213,7 +254,7 @@ public class DocumentoService {
         crearDocumentoAprobadoVirtual(usuario, TipoDocumento.DNI_REVERSO, "Instantáneo (RENIEC)");
 
         // 6. Recalcular la verificación del estudiante
-        recalcularVerificacionEstudiante(usuario, EstadoVerificacion.APROBADO, "Verificación instantánea por DNI.");
+        recalcularVerificacion(usuario, EstadoVerificacion.APROBADO, "Verificación instantánea por DNI.");
 
         return usuario;
     }

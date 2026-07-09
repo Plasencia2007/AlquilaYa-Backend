@@ -352,11 +352,17 @@ public class ReservaService {
     }
 
     private void validarParticipante(Reserva r, CurrentUser current) {
-        if (current == null || current.getPerfilId() == null) {
+        if (current == null) {
             throw new IllegalStateException("Sin perfilId en contexto");
         }
+        // Bug real (no introducido por G4, encontrado al probarlo): un ADMIN no tiene perfilId
+        // (no es estudiante ni arrendador), así que el check de perfilId debe ir DESPUÉS del
+        // bypass de ADMIN — si no, un admin nunca podía ver el detalle de ninguna reserva.
         if ("ADMIN".equalsIgnoreCase(current.getRol())) {
             return;
+        }
+        if (current.getPerfilId() == null) {
+            throw new IllegalStateException("Sin perfilId en contexto");
         }
         boolean esEstudianteDueno = "ESTUDIANTE".equalsIgnoreCase(current.getRol())
                 && current.getPerfilId().equals(r.getEstudianteId());
@@ -435,13 +441,16 @@ public class ReservaService {
 
     /** Como {@link #validarArrendador} pero también admite ADMIN (gestión/soporte). */
     private void validarGestorReserva(Reserva r, CurrentUser current) {
-        if (current == null || current.getPerfilId() == null) {
+        if (current == null) {
             throw new IllegalStateException("Sin perfilId en contexto");
         }
+        // Mismo bug real que en validarParticipante: el ADMIN no tiene perfilId, así que el
+        // bypass debe evaluarse ANTES del check de perfilId nulo (si no, un admin nunca podía
+        // gestionar/eliminar ninguna reserva pese a que el mensaje de error lo prometía).
         if ("ADMIN".equalsIgnoreCase(current.getRol())) {
             return;
         }
-        if (!"ARRENDADOR".equalsIgnoreCase(current.getRol())
+        if (current.getPerfilId() == null || !"ARRENDADOR".equalsIgnoreCase(current.getRol())
                 || !current.getPerfilId().equals(r.getArrendadorId())) {
             throw new IllegalStateException("Solo el arrendador dueño o un admin puede gestionar esta reserva");
         }

@@ -135,6 +135,12 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- H2 en memoria: permite que el @SpringBootTest contextLoads cargue OFFLINE (T3) -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -150,6 +156,19 @@
 
 	<build>
 		<plugins>
+			<!-- Tests OFFLINE (T3): apaga el cliente de Config Server para usar la config
+			     de src/test/resources (H2), y excluye las pruebas @Tag("integration"). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>integration</excludedGroups>
+					<systemPropertyVariables>
+						<spring.cloud.config.enabled>false</spring.cloud.config.enabled>
+						<spring.cloud.config.discovery.enabled>false</spring.cloud.config.discovery.enabled>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

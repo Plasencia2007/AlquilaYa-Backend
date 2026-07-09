@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 public class ReservaDetalleDTO {
     private Long id;
     private Long estudianteId;
+    /** G1: dueño de la propiedad — a quién se le debe el payout de esta reserva. */
+    private Long arrendadorId;
     private Long propiedadId;
     private String propiedadTitulo;
     private String estudianteNombre;

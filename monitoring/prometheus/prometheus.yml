@@ -1,0 +1,75 @@
+# AlquilaYa - Prometheus scrape configuration (I3)
+#
+# Contexto de red:
+#   Prometheus corre como contenedor en la red docker `alquilaya-network`.
+#   En DEV los microservicios JVM corren como PROCESOS DEL HOST (via start-all.ps1),
+#   no como contenedores -> se alcanzan desde el contenedor con `host.docker.internal`
+#   (igual que hace el servicio ngrok en docker-compose.yml).
+#   Zipkin SI es un contenedor de la red -> se alcanza por su nombre DNS `zipkin`.
+#
+#   En PROD (docker-compose.prod.yml) los servicios SON contenedores: cambiar los
+#   targets `host.docker.internal:<puerto>` por el nombre del servicio
+#   (p.ej. `api-gateway:8080`, `servicio-propiedades:8082`). Ver monitoring/README.md.
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    stack: alquilaya
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # -------- Prometheus el mismo --------
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # -------- Microservicios JVM (puerto fijo) --------
+  # Todos exponen Micrometer en /actuator/prometheus.
+  - job_name: alquilaya-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels: {service: api-gateway}
+      - targets: ['host.docker.internal:8082']
+        labels: {service: servicio-propiedades}
+      - targets: ['host.docker.internal:8084']
+        labels: {service: servicio-pagos}
+      - targets: ['host.docker.internal:8085']
+        labels: {service: servicio-catalogos}
+      - targets: ['host.docker.internal:8086']
+        labels: {service: servicio-mensajeria}
+
+  # -------- servicio-usuarios (puerto ALEATORIO) via Eureka SD --------
+  # usuarios no tiene puerto fijo: se registra en Eureka (discovery-server:8761).
+  # Prometheus lo descubre y reescribe __address__ a host.docker.internal:<puerto_real>
+  # (ignora la IP registrada, que desde el contenedor no es alcanzable de forma fiable).
+  # Requiere que discovery-server + servicio-usuarios esten UP. Si no corren, este job
+  # simplemente no produce targets (no genera falsos 'down').
+  - job_name: eureka-usuarios
+    metrics_path: /actuator/prometheus
+    eureka_sd_configs:
+      - server: http://host.docker.internal:8761/eureka
+        refresh_interval: 30s
+    relabel_configs:
+      # Solo nos interesa usuarios aqui; el resto ya se scrapea por puerto fijo arriba.
+      - source_labels: [__meta_eureka_app_name]
+        regex: SERVICIO-USUARIOS
+        action: keep
+      - source_labels: [__meta_eureka_app_instance_port]
+        regex: (.+)
+        replacement: host.docker.internal:$1
+        target_label: __address__
+      - target_label: service
+        replacement: servicio-usuarios
+
+  # -------- Zipkin (contenedor de la red) --------
+  # Zipkin expone metricas Micrometer en /prometheus (verificado en vivo).
+  - job_name: zipkin
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ['zipkin:9411']
+        labels: {service: zipkin}

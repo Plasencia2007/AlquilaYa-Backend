@@ -1,0 +1,25 @@
+# =============================================================================
+# Test-only config (T3). El config-server usa el perfil `native` (repo de config
+# en classpath). En CI el job corre con `-Dspring.profiles.active=test`, lo que
+# SUSTITUIRIA a `native` y dejaria al server sin backend -> arranca en modo git y
+# falla ("You need to configure a uri for the git repository").
+#
+# `spring.profiles.include: native` es ADITIVO: garantiza que `native` siga activo
+# aunque el perfil activo sea `test`. Asi el contextLoads carga OFFLINE.
+# Solo vive en el classpath de test; NO afecta a produccion.
+# =============================================================================
+spring:
+  profiles:
+    include: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config
+
+# Eureka apagado en tests (evita ruido de conexion; no hace falta registrar).
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false

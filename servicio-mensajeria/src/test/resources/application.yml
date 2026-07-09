@@ -1,0 +1,44 @@
+# =============================================================================
+# Test-only config (T3): @SpringBootTest contextLoads OFFLINE, sin Postgres/Kafka/
+# Redis/Eureka/Config-Server. Se aplica SIEMPRE en tests. NO afecta a produccion.
+# =============================================================================
+spring:
+  cloud:
+    config:
+      enabled: false
+      discovery:
+        enabled: false
+    discovery:
+      enabled: false
+  # H2 en memoria (modo PostgreSQL). ddl-auto=none: mensajeria no tiene seeders ni
+  # acceso a BD al arrancar, asi que no creamos el esquema. Esto ademas evita el
+  # tipo Postgres-especifico `jsonb` de la entidad Notificacion (no existe en H2);
+  # el mapeo se valida contra el metamodelo de entidades, no contra la BD.
+  datasource:
+    url: jdbc:h2:mem:mensajeria;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    listener:
+      auto-startup: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+jwt:
+  secret: test-secret-at-least-256-bits-long-for-testing-purposes-only-0123456789
+  expiration: 7200000

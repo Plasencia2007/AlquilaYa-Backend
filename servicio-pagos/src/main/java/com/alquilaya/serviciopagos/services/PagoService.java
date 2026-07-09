@@ -291,6 +291,7 @@ public class PagoService {
                     .comision(comision)
                     .montoArrendador(montoArrendador)
                     .estudianteId(reserva.getEstudianteId())
+                    .arrendadorId(reserva.getArrendadorId())
                     .estado("PENDIENTE")
                     .build();
             pagoRepository.save(pago);
@@ -656,6 +657,142 @@ public class PagoService {
         outboxPublisher.publicar(
                 "pagos-topic",
                 "PAGO_DISCREPANCIA",
+                "Pago",
+                guardado.getId().toString(),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Reconciliación con Mercado Pago (G5)
+    // ------------------------------------------------------------------------------------
+
+    /** Resultado de reconciliar un pago concreto contra la verdad de Mercado Pago. */
+    public enum ResultadoReconciliacion {
+        /** MP aprobado y validado → PAGADO + PAGO_EXITOSO. */
+        CONFIRMADO,
+        /** MP rechazado/cancelado → RECHAZADO + PAGO_FALLIDO. */
+        RECHAZADO,
+        /** MP reembolsado → REEMBOLSADO + REFUND_COMPLETADO. */
+        REEMBOLSADO,
+        /** MP aprobado pero monto/moneda no cuadra → DISCREPANCIA + PAGO_DISCREPANCIA. */
+        DISCREPANCIA,
+        /** MP sigue en curso (pending/in_process/...): se reintenta en la próxima corrida. */
+        SIN_CAMBIO,
+        /** El pago ya no está en un estado reconciliable (webhook lo resolvió antes) o no existe. */
+        NO_APLICA
+    }
+
+    /**
+     * Reconciliación (G5): aplica el estado real de un {@link Payment} de Mercado Pago a un pago
+     * local que quedó en {@code PENDIENTE_REVISION} o {@code DISCREPANCIA}.
+     *
+     * <p>Reusa EXACTAMENTE los mismos emisores del webhook ({@link #manejarAprobado} /
+     * {@link #manejarRechazado}) y el outbox, así que emite los mismos eventos
+     * ({@code PAGO_EXITOSO} / {@code PAGO_FALLIDO} / {@code PAGO_DISCREPANCIA}). Añade el caso
+     * {@code refunded} → {@code REEMBOLSADO} (evento {@code REFUND_COMPLETADO}) que el webhook no
+     * cubría.
+     *
+     * <p><b>Idempotente:</b> re-lee el pago dentro de la transacción y solo actúa si sigue en un
+     * estado reconciliable; si el webhook ya lo llevó a un estado terminal, devuelve
+     * {@link ResultadoReconciliacion#NO_APLICA} sin re-emitir. A diferencia del webhook, NO
+     * re-emite {@code PAGO_EN_REVISION} mientras MP siga pendiente (evita spamear al estudiante).
+     */
+    @Transactional
+    public ResultadoReconciliacion reconciliarPago(Long pagoId, Payment payment) {
+        Pago pago = pagoRepository.findById(pagoId).orElse(null);
+        if (pago == null) {
+            return ResultadoReconciliacion.NO_APLICA;
+        }
+        String estadoLocal = pago.getEstado();
+        // Solo pagos en revisión o con discrepancia. Si entre la lectura del batch y ahora el
+        // webhook ya lo resolvió (PAGADO/RECHAZADO/REEMBOLSADO/...), NO re-emitimos.
+        if (!"PENDIENTE_REVISION".equals(estadoLocal) && !"DISCREPANCIA".equals(estadoLocal)) {
+            return ResultadoReconciliacion.NO_APLICA;
+        }
+
+        String paymentIdStr = pago.getPaymentId();
+        Long reservaId = pago.getReservaId();
+        String reservaIdStr = String.valueOf(reservaId);
+        String status = payment.getStatus() == null ? "" : payment.getStatus();
+
+        switch (status) {
+            case "approved" -> {
+                if ("DISCREPANCIA".equals(estadoLocal)) {
+                    // MP sigue reportando approved con los mismos datos: una discrepancia de
+                    // monto/moneda no se resuelve re-consultando. Queda para revisión manual.
+                    log.info("Reconciliación: pago {} en DISCREPANCIA sigue 'approved' en MP; sin cambio. paymentId={}",
+                            pagoId, paymentIdStr);
+                    return ResultadoReconciliacion.SIN_CAMBIO;
+                }
+                // PENDIENTE_REVISION + approved → misma validación monto/moneda y emisión del webhook.
+                manejarAprobado(pago, payment, paymentIdStr, reservaId, reservaIdStr);
+                return "PAGADO".equals(pago.getEstado())
+                        ? ResultadoReconciliacion.CONFIRMADO
+                        : ResultadoReconciliacion.DISCREPANCIA;
+            }
+            case "rejected", "cancelled" -> {
+                manejarRechazado(pago, paymentIdStr, reservaId, reservaIdStr);
+                return ResultadoReconciliacion.RECHAZADO;
+            }
+            case "refunded", "charged_back" -> {
+                manejarReembolsadoReconciliacion(pago, paymentIdStr, reservaId);
+                return ResultadoReconciliacion.REEMBOLSADO;
+            }
+            case "pending", "in_process", "in_mediation", "authorized" -> {
+                // Sigue en curso en MP: se reintenta en la próxima corrida. No re-emitimos
+                // PAGO_EN_REVISION para no notificar al estudiante en cada ciclo.
+                return ResultadoReconciliacion.SIN_CAMBIO;
+            }
+            default -> {
+                log.info("Reconciliación: status MP no reconciliable ({}). pagoId={} paymentId={}",
+                        status, pagoId, paymentIdStr);
+                return ResultadoReconciliacion.SIN_CAMBIO;
+            }
+        }
+    }
+
+    /**
+     * Reconciliación (G5): un pago cuyo {@code paymentId} es null o no numérico no puede
+     * consultarse contra MP. Lo marcamos {@code DISCREPANCIA} (estado de revisión manual del
+     * sistema) reusando la misma emisión del webhook. Idempotente: si ya está en DISCREPANCIA
+     * (o en un estado terminal distinto) no hace nada.
+     */
+    @Transactional
+    public void marcarParaRevisionManual(Long pagoId, String motivo) {
+        Pago pago = pagoRepository.findById(pagoId).orElse(null);
+        if (pago == null) {
+            return;
+        }
+        // Solo transicionamos desde PENDIENTE_REVISION; DISCREPANCIA ya está marcado (no re-emitir),
+        // y los estados terminales no se tocan.
+        if (!"PENDIENTE_REVISION".equals(pago.getEstado())) {
+            return;
+        }
+        marcarDiscrepancia(pago, pago.getPaymentId(), pago.getReservaId(),
+                "PAYMENT_ID_INVALIDO", motivo);
+    }
+
+    /**
+     * MP reportó el pago como reembolsado (fuera de nuestro flujo de refund): dejamos el pago
+     * en {@code REEMBOLSADO} y emitimos {@code REFUND_COMPLETADO} por el mismo outbox que usa
+     * el flujo de reembolsos (RefundService).
+     */
+    private void manejarReembolsadoReconciliacion(Pago pago, String paymentIdStr, Long reservaId) {
+        pago.setEstado("REEMBOLSADO");
+        Pago guardado = pagoRepository.save(pago);
+        log.info("↩️ Reconciliación: pago REEMBOLSADO según Mercado Pago. reservaId={} paymentId={}",
+                reservaId, paymentIdStr);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("reservaId", reservaId);
+        payload.put("pagoId", guardado.getId());
+        payload.put("paymentId", paymentIdStr);
+        payload.put("montoReembolsado", guardado.getMonto());
+        payload.put("motivo", "RECONCILIACION_MP");
+        outboxPublisher.publicar(
+                "pagos-topic",
+                "REFUND_COMPLETADO",
                 "Pago",
                 guardado.getId().toString(),
                 payload,

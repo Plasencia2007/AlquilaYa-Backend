@@ -41,7 +41,12 @@ server:
 jwt:
   # Sin default real: el secreto se inyecta por env (.env en dev, .env.prod en prod). Nunca en git.
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
-  expiration: ${JWT_EXPIRATION:7200000}   # 2h por default; bajar a 3600000 (1h) + refresh tokens en prod
+  expiration: ${JWT_EXPIRATION:7200000}   # 2h por default
+  # G7: refresh token de larga duración (30 días) en Redis, rotado en cada uso. Con esto ya
+  # no hace falta bajar `expiration` a 1h "a mano" — el access token expira rápido, el
+  # frontend lo renueva en silencio con POST /auth/refresh, y el usuario no vuelve a loguearse
+  # hasta que el refresh token expire o se revoque (logout, cambio de contraseña).
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:2592000000}
 
 notification:
   service:
@@ -187,6 +192,13 @@ cloudinary:
 # URL pública del frontend para construir links (reset password, etc.)
 app:
   base-url: ${APP_BASE_URL:http://localhost:3000}
+
+# Rate limit (S8): nº de proxies de confianza delante de usuarios que anexan a X-Forwarded-For.
+# dev = 0 → IP del socket. prod (ngrok→nginx→gateway→usuarios) = 2 → se fija en
+# docker-compose.prod.yml. usuarios sólo es accesible por red interna en prod, así que el
+# vector real de spoofing externo es el gateway; esto es defensa en profundidad.
+rate-limit:
+  trusted-hops: ${RATE_LIMIT_TRUSTED_HOPS:0}
 
 # Token JWT corto para reset password (15 min)
 password-reset:

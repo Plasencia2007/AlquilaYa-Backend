@@ -1,0 +1,106 @@
+# AlquilaYa - Stack de observabilidad (I3 Prometheus+Grafana / I4 Loki+Promtail)
+#
+# Uso (siempre MERGE con el compose base para compartir la red alquilaya-network):
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml down
+#
+# NO modifica ningun servicio existente: solo agrega 4 contenedores nuevos.
+# Puertos elegidos para no chocar con el frontend Next (:3000) ni el resto del stack:
+#   Grafana :3001  |  Prometheus :9090  |  Loki :3100
+#
+# mem_limit siguiendo la convencion I5 del proyecto (contenedores con tope de RAM).
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: alquilaya-prometheus
+    restart: unless-stopped
+    mem_limit: 512m
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    # Necesario para alcanzar los servicios JVM que corren como procesos del HOST
+    # (en Linux mapea host-gateway; en Docker Desktop ya existe por defecto, no molesta).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: alquilaya-grafana
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      - prometheus
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: alquilaya-loki
+    restart: unless-stopped
+    mem_limit: 512m
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: alquilaya-promtail
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      - loki
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+# Reutiliza la MISMA red del stack base (definida en docker-compose.yml).
+# Declararla identica aqui permite el merge sin conflicto y que Grafana alcance
+# a prometheus/loki y a zipkin por su nombre DNS.
+networks:
+  default:
+    name: alquilaya-network

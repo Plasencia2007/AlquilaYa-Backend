@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
@@ -54,6 +55,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // Clave = "path|clientIp". Buckets viven en memoria mientras la JVM corra.
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    /**
+     * Nº de proxies de confianza delante de este servicio que anexan a X-Forwarded-For (S8).
+     * Default 0 → usa la IP del socket (no falsificable). En prod usuarios sólo es accesible
+     * vía el gateway (red interna), así que el vector de spoofing externo real es el gateway.
+     */
+    @Value("${rate-limit.trusted-hops:0}")
+    private int trustedProxyHops;
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
@@ -92,15 +101,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
     }
 
-    private static String resolveClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        String real = request.getHeader("X-Real-IP");
-        if (real != null && !real.isBlank()) {
-            return real.trim();
+    // S8: resistente a X-Forwarded-For falsificado. Cuenta desde la DERECHA saltando los
+    // proxies de confianza; las entradas falsas del atacante quedan a la izquierda y nunca se
+    // eligen. Cadena corta (dev / spoof directo) → cae a getRemoteAddr() (IP del socket).
+    private String resolveClientIp(HttpServletRequest request) {
+        if (trustedProxyHops > 0) {
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) {
+                String[] parts = xff.split(",");
+                int idx = parts.length - 1 - trustedProxyHops;
+                if (idx >= 0) {
+                    String ip = parts[idx].trim();
+                    if (!ip.isBlank()) {
+                        return ip;
+                    }
+                }
+            }
         }
         return request.getRemoteAddr();
     }

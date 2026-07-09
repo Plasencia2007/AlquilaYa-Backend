@@ -6,9 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { stompClient } from '@/services/stomp-client';
 import { notificationService } from '@/services/notification-service';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { servicioAuth } from '@/services/auth-service';
 import { notify } from '@/lib/notify';
-import Cookies from 'js-cookie';
 import type { Notificacion } from '@/types/notificacion';
 
 /**
@@ -22,11 +20,13 @@ import type { Notificacion } from '@/types/notificacion';
  * Devuelve helpers reactivos. Usar UNA SOLA VEZ en el shell privado.
  */
 export function useNotifications() {
-  const { estaAutenticado, cargando } = useAuth();
+  const { estaAutenticado, cargando, usuario } = useAuth();
   const { items, noLeidas, cargada, setInicial, pushNueva, marcarLeida, marcarTodasLeidas, reset } =
     useNotificationsStore();
 
-  const userId = obtenerUserIdDeCookie();
+  // S5: el userId ya no se decodifica de un token (es httpOnly, JS no puede leerlo) — se lee
+  // del store, que `inicializar()`/`restaurarSesion()` ya hidrató desde el backend.
+  const userId = usuario?.id ?? null;
 
   useEffect(() => {
     if (cargando) return;
@@ -110,9 +110,3 @@ export function useNotifications() {
   };
 }
 
-function obtenerUserIdDeCookie(): string | null {
-  const token = Cookies.get('auth-token');
-  if (!token) return null;
-  const usuario = servicioAuth.obtenerUsuarioActualDesdeToken(token);
-  return usuario?.id ?? null;
-}

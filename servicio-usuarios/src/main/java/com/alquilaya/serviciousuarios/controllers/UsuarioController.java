@@ -50,7 +50,9 @@ public class UsuarioController {
     private final UsuarioRepository usuarioRepository;
     private final com.alquilaya.serviciousuarios.services.DeteccionDuplicadosService deteccionDuplicadosService;
     private final com.alquilaya.serviciousuarios.services.ReputacionService reputacionService;
+    private final com.alquilaya.serviciousuarios.services.PermisoEnforcerService permisoEnforcer;
     private final ApiPeruService apiPeruService;
+    private final com.alquilaya.serviciousuarios.services.AuditLogService auditLogService;
 
     /** Usuario autenticado, resuelto por el correo que el JWT pone como principal. */
     private Usuario usuarioActual() {
@@ -155,16 +157,34 @@ public class UsuarioController {
     @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO') or @permisoEnforcer.esPropioUsuario(#id)")
     public ResponseEntity<Usuario> actualizarUsuario(
             @PathVariable Long id,
-            @Valid @RequestBody ActualizarUsuarioRequest updates) {
+            @Valid @RequestBody ActualizarUsuarioRequest updates,
+            jakarta.servlet.http.HttpServletRequest req) {
+        // Cambiar el `estado` de la cuenta (ACTIVE/BANNED/SUSPENDED/REJECTED) es privilegio de admin.
+        // Un usuario que edita su PROPIO perfil (rama esPropioUsuario del @PreAuthorize) no puede
+        // auto-activarse ni quitarse un baneo/suspensión → se ignora el campo. U4: cierra escalada de privilegios.
+        boolean cambioEstadoAdmin = updates.getEstado() != null && permisoEnforcer.tienePermiso("EDITAR_USUARIO");
+        if (updates.getEstado() != null && !permisoEnforcer.tienePermiso("EDITAR_USUARIO")) {
+            log.warn("Intento de cambiar 'estado' sin permiso EDITAR_USUARIO en usuario ID {} — campo ignorado", id);
+            updates.setEstado(null);
+        }
         log.info("Actualizando datos del usuario ID: {}", id);
-        return ResponseEntity.ok(usuarioService.actualizarUsuario(id, updates));
+        Usuario actualizado = usuarioService.actualizarUsuario(id, updates);
+        // G8: audita el cambio de estado hecho por un admin (suspender/banear/rechazar/activar).
+        if (cambioEstadoAdmin) {
+            auditLogService.registrarActorActual("CAMBIO_ESTADO_USUARIO", "Usuario", id,
+                    "nuevo estado=" + updates.getEstado(), req);
+        }
+        return ResponseEntity.ok(actualizado);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('ELIMINAR_USUARIO')")
-    public ResponseEntity<Void> eliminarUsuario(@PathVariable Long id) {
+    public ResponseEntity<Void> eliminarUsuario(@PathVariable Long id,
+            jakarta.servlet.http.HttpServletRequest req) {
         log.warn("Eliminando usuario ID: {}", id);
         usuarioService.eliminarUsuario(id);
+        // G8: audita la baja de cuenta hecha por un admin.
+        auditLogService.registrarActorActual("ELIMINAR_USUARIO", "Usuario", id, null, req);
         return ResponseEntity.noContent().build();
     }
 
@@ -221,7 +241,7 @@ public class UsuarioController {
 
     private ArrendadorInfoResponse mapArrendadorInfo(Arrendador a) {
         Usuario u = a.getUsuario();
-        boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        boolean verificado = a.isVerificado(); // KYC real del arrendador (U3); antes se fingía como estado=ACTIVE
         ReputacionResumen rep = reputacionService.calcularArrendador(a);
         return ArrendadorInfoResponse.builder()
                 .id(a.getId())
@@ -270,7 +290,7 @@ public class UsuarioController {
 
     private ArrendadorPublicoResponse mapArrendadorPublico(Arrendador a) {
         Usuario u = a.getUsuario();
-        boolean verificado = u != null && u.getEstado() == EstadoUsuario.ACTIVE;
+        boolean verificado = a.isVerificado(); // KYC real del arrendador (U3); antes se fingía como estado=ACTIVE
         ReputacionResumen rep = reputacionService.calcularArrendador(a);
         return ArrendadorPublicoResponse.builder()
                 .id(a.getId())

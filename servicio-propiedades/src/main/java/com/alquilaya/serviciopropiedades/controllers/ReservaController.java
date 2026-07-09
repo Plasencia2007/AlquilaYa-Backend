@@ -23,6 +23,7 @@ import java.util.Map;
 public class ReservaController {
 
     private final ReservaService reservaService;
+    private final com.alquilaya.serviciopropiedades.services.ContratoService contratoService;
 
     @PostMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('RESERVAR')")
@@ -59,6 +60,28 @@ public class ReservaController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ReservaResponseDTO> obtenerPorId(@PathVariable Long id) {
         Reserva r = reservaService.obtenerPropia(id, CurrentUserProvider.get());
+        return ResponseEntity.ok(toResponseDTO(r));
+    }
+
+    /** G4: PDF del contrato. Misma regla de acceso que ver la reserva (dueños o admin). */
+    @GetMapping("/{id}/contrato")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<byte[]> contrato(@PathVariable Long id) {
+        // Reusa la MISMA validación de acceso que GET /{id} (participante o admin) antes de generar el PDF.
+        reservaService.obtenerPropia(id, CurrentUserProvider.get());
+        byte[] pdf = contratoService.generarPdf(id);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/pdf")
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"contrato-reserva-" + id + ".pdf\"")
+                .body(pdf);
+    }
+
+    /** G4: aceptación electrónica del contrato por la parte autenticada (estudiante o arrendador). */
+    @PostMapping("/{id}/contrato/firmar")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ReservaResponseDTO> firmarContrato(@PathVariable Long id) {
+        Reserva r = contratoService.firmar(id, CurrentUserProvider.get());
         return ResponseEntity.ok(toResponseDTO(r));
     }
 

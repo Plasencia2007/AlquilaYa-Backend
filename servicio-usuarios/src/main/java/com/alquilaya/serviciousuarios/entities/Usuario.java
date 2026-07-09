@@ -93,6 +93,17 @@ public class Usuario {
     @Builder.Default
     private java.util.Set<RolPersonalizado> rolesPersonalizados = new java.util.HashSet<>();
 
+    /** Baja de cuenta (GDPR, G8-B): true cuando la cuenta fue anonimizada/dada de baja.
+     *  Filtra la cuenta de los listados y bloquea su login (verificarCuentaHabilitada). */
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Builder.Default
+    private boolean eliminado = false;
+
+    /** Momento en que la cuenta fue anonimizada/dada de baja (null si activa). */
+    @Column(name = "fecha_eliminacion")
+    private LocalDateTime fechaEliminacion;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime fechaCreacion;

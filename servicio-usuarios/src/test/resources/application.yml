@@ -1,0 +1,70 @@
+# =============================================================================
+# Test-only config (T3): hace que el @SpringBootTest contextLoads cargue OFFLINE,
+# sin Postgres/Kafka/Redis/Eureka/Config-Server. Se aplica SIEMPRE en tests
+# (nombre "application.yml" en src/test/resources), tanto con `mvn test` como con
+# `mvn test -Dspring.profiles.active=test`.
+# NO afecta a produccion: vive solo en el classpath de test.
+# =============================================================================
+spring:
+  # No contactar al config-server en tests (evita el intento a :8888).
+  cloud:
+    config:
+      enabled: false
+      discovery:
+        enabled: false
+    discovery:
+      enabled: false
+  # BD en memoria (H2 en modo PostgreSQL). Hibernate crea el esquema desde las
+  # entidades (create-drop); no se necesita Postgres ni Flyway.
+  datasource:
+    url: jdbc:h2:mem:usuarios;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  # No arrancar los listener containers de Kafka (no hay broker en tests).
+  kafka:
+    bootstrap-servers: localhost:9092
+    listener:
+      auto-startup: false
+  # Host de mail para que se cree el bean JavaMailSender (EmailService lo requiere).
+  # No conecta al arrancar; solo se usa al enviar (que no ocurre en contextLoads).
+  mail:
+    host: localhost
+    port: 587
+
+# Eureka apagado: sin registro ni fetch en tests.
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+# Secreto JWT de test (>=256 bits) para que arranquen los beans de seguridad.
+jwt:
+  secret: test-secret-at-least-256-bits-long-for-testing-purposes-only-0123456789
+  expiration: 7200000
+
+# Desactiva los seeders de datos de ejemplo en tests (no hacen falta para contextLoads).
+alquilaya:
+  seed:
+    enabled: false
+
+# Sin credenciales externas reales en tests (los @PostConstruct degradan a no-op).
+google:
+  oauth:
+    client-id: ""
+
+# Cloudinary: valores dummy en tests (el bean solo se construye, no llama a la red).
+cloudinary:
+  cloud-name: test
+  api-key: test
+  api-secret: test

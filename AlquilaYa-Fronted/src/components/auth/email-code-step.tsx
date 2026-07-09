@@ -36,8 +36,10 @@ export function EmailCodeStep() {
 
   const onSubmit = async (data: OtpFormData) => {
     try {
-      await servicioAuth.verificarCodigoEmail(personal?.correo ?? '', data.codigo);
-      const usuario = servicioAuth.completarActivacion();
+      const res = await servicioAuth.verificarCodigoEmail(personal?.correo ?? '', data.codigo);
+      // U1/S5: verify-email devuelve autenticado=true si ya no falta verificación; el backend
+      // ya puso las cookies httpOnly, acá sólo hidratamos el store con los datos del usuario.
+      const usuario = servicioAuth.completarActivacion(res);
       if (usuario) inicializar();
       setStep('result');
     } catch (err) {

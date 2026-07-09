@@ -7,17 +7,19 @@ import {
   OctagonX,
   TriangleAlert,
 } from "lucide-react"
-import { useTheme } from "next-themes"
 import { Toaster as Sonner } from "sonner"
+import { useThemeStore } from "@/stores/theme-store"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  // Usa el tema real de la app (store Zustand + data-theme), no `next-themes`
+  // (no hay provider de next-themes montado; su useTheme siempre devolvía "system").
+  const theme = useThemeStore((s) => s.resolved)
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       icons={{
         success: <CircleCheck className="h-4 w-4" />,

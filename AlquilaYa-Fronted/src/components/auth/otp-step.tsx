@@ -36,9 +36,11 @@ export function OtpStep() {
 
   const onSubmit = async (data: OtpFormData) => {
     try {
-      await servicioAuth.verificarOtp(personal?.telefono ?? '', data.codigo);
+      const res = await servicioAuth.verificarOtp(personal?.telefono ?? '', data.codigo);
 
-      const usuario = servicioAuth.completarActivacion();
+      // U1/S5: verify-otp devuelve autenticado=true si ya no falta verificación; el backend
+      // ya puso las cookies httpOnly, acá sólo hidratamos el store con los datos del usuario.
+      const usuario = servicioAuth.completarActivacion(res);
       if (usuario) inicializar();
       setStep('result');
     } catch (err) {

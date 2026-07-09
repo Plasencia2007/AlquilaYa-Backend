@@ -1,7 +1,6 @@
 'use client';
 
 import { create } from 'zustand';
-import Cookies from 'js-cookie';
 import { Usuario, EstadoAuth } from '@/types/auth';
 import { servicioAuth } from '@/services/auth-service';
 import { parseAxiosError } from '@/lib/api-errors';
@@ -11,7 +10,7 @@ interface AccionesAuth {
   registrarse: (nombre: string, apellido: string, dni: string, correo: string, contrasena: string, rol: string, detallesPerfil: any, telefono: string) => Promise<Usuario | null>;
   loginConGoogle: (idToken: string, rolPreferido?: string) => Promise<Usuario | null>;
   cerrarSesion: () => void;
-  inicializar: () => void;
+  inicializar: () => Promise<void>;
   reiniciar: () => void;
 }
 
@@ -24,14 +23,20 @@ const estadoInicial: EstadoAuth = {
 export const useAuthStore = create<EstadoAuth & AccionesAuth>((set) => ({
   ...estadoInicial,
 
-  inicializar: () => {
-    const token = Cookies.get('auth-token');
-    if (token) {
-      const usuario = servicioAuth.obtenerUsuarioActualDesdeToken(token);
+  // S5: el access token es httpOnly — JS no puede leerlo para saber "¿sigo logueado?". Se
+  // apoya en el refresh token (también httpOnly, pero el navegador lo manda solo) llamando
+  // a /auth/refresh: si hay sesión válida, el backend la renueva y devuelve los datos del
+  // usuario; si no, no hay sesión (y no es un error — es el estado normal de un visitante
+  // no autenticado en la carga inicial de la página).
+  inicializar: async () => {
+    try {
+      const usuario = await servicioAuth.restaurarSesion();
       if (usuario) {
         set({ usuario, estaAutenticado: true, cargando: false });
         return;
       }
+    } catch {
+      // sin sesión válida — cae al estado no-autenticado abajo
     }
     set({ usuario: null, estaAutenticado: false, cargando: false });
   },

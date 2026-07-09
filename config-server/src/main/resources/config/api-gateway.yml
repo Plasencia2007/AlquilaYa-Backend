@@ -114,6 +114,12 @@ resilience4j:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
 
+# Rate limit (S8): nº de proxies de confianza delante del gateway que anexan a X-Forwarded-For.
+# dev (sin proxy) = 0 → usa la IP del socket (no falsificable).
+# prod (ngrok→nginx→gateway) = 1 → se fija en docker-compose.prod.yml (RATE_LIMIT_TRUSTED_HOPS).
+rate-limit:
+  trusted-hops: ${RATE_LIMIT_TRUSTED_HOPS:0}
+
 # Swagger UI agregado en el gateway: una sola UI con un dropdown para los 5 microservicios.
 # Accesible en  http://localhost:8080/swagger-ui.html
 springdoc:

@@ -16,6 +16,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor webSocketAuthInterceptor;
+    private final WebSocketCookieHandshakeInterceptor webSocketCookieHandshakeInterceptor;
 
     @Value("${mensajeria.websocket.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
@@ -28,6 +29,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         String[] origins = allowedOrigins.split("\\s*,\\s*");
         // Sin SockJS: todos los browsers modernos soportan WebSocket nativo.
         registry.addEndpoint(endpoint)
+                .addInterceptors(webSocketCookieHandshakeInterceptor)
                 .setAllowedOriginPatterns(origins);
     }
 

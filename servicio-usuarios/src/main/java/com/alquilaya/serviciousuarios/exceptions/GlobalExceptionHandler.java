@@ -92,6 +92,20 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, null);
     }
 
+    /**
+     * S5 (bug real preexistente, no introducido por S5 — sólo descubierto al probar el
+     * caso "petición 100% anónima" que antes nunca ocurría porque el navegador siempre
+     * mandaba el JWT): sin este handler, un {@code @PreAuthorize} denegado (sin sesión, o
+     * con rol incorrecto) caía al catch-all de {@code Exception} y devolvía 500 en vez de
+     * 401 — un error interno "falso" para lo que en realidad es "no autenticado", y que
+     * además rompe el auto-refresh del frontend (que sólo reintenta ante un 401 real).
+     */
+    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(
+            org.springframework.security.authorization.AuthorizationDeniedException ex, HttpServletRequest req) {
+        return build(HttpStatus.UNAUTHORIZED, "No autenticado o sin permisos para este recurso.", req, null);
+    }
+
     @ExceptionHandler(CuentaBloqueadaException.class)
     public ResponseEntity<ErrorResponse> handleLocked(
             CuentaBloqueadaException ex, HttpServletRequest req) {

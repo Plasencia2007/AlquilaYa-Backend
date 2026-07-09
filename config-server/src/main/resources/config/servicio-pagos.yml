@@ -148,6 +148,16 @@ jwt:
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
   expiration: ${JWT_EXPIRATION:7200000}
 
+# Reconciliación con Mercado Pago (G5): re-consulta los pagos en PENDIENTE_REVISION/DISCREPANCIA
+# contra MP (fuente de verdad) y concilia el estado local reusando el mismo path de eventos/outbox
+# del webhook. El disparo on-demand del admin no depende de 'enabled'.
+pagos:
+  reconciliacion:
+    enabled: ${PAGOS_RECONCILIACION_ENABLED:true}
+    interval-ms: ${PAGOS_RECONCILIACION_INTERVAL_MS:900000}       # 15 min entre corridas
+    initial-delay-ms: ${PAGOS_RECONCILIACION_INITIAL_DELAY_MS:60000} # espera al arranque
+    batch-size: ${PAGOS_RECONCILIACION_BATCH:50}                 # máx. pagos por corrida (antiguos primero)
+
 ---
 spring:
   config:
@@ -165,4 +175,19 @@ spring:
 mercadopago:
   webhook:
     required-signature: false
+
+---
+# S7: en PROD la firma HMAC del webhook es OBLIGATORIA (secure-by-default), sin importar el
+# valor de MP_WEBHOOK_REQUIRED_SIGNATURE del .env compartido (que va en false para dev, donde
+# se usa /simular-exito y no el webhook real). Requisito: setear MP_WEBHOOK_SECRET (panel de MP).
+# Si el secret falta, el webhook se RECHAZA con log ERROR (mejor que aceptar webhooks forjados).
+# Nota: aunque la firma estuviera off, el código re-consulta el pago a MP como fuente de verdad,
+# así que un webhook forjado no puede fingir un pago; esto es defensa en profundidad + anti-spam.
+spring:
+  config:
+    activate:
+      on-profile: prod
+mercadopago:
+  webhook:
+    required-signature: true
 

@@ -103,6 +103,24 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- H2 en memoria (por si se agrega un @SpringBootTest contextLoads offline) -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Testcontainers: pruebas de integracion (T1) contra Postgres real (Docker).
+		     Etiquetadas @Tag("integration"); excluidas del `mvn test` offline por defecto. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<!-- JWT (Copiado de Usuarios) -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
@@ -152,6 +170,12 @@
 			<artifactId>resilience4j-retry</artifactId>
 			<version>2.2.0</version>
 		</dependency>
+		<!-- G4: generación del PDF del contrato de alquiler. -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.3</version>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -166,6 +190,23 @@
 	</dependencyManagement>
 	<build>
 		<plugins>
+			<!-- Por defecto excluye las pruebas @Tag("integration") (T1, requieren Docker)
+			     para que el `mvn test` offline (T3) sólo corra los tests unitarios. Las de
+			     integracion se corren con `mvn test -Pintegration` (perfil de abajo). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>integration</excludedGroups>
+					<!-- Apaga el cliente de Config Server en TODOS los tests: garantiza que la
+					     integracion use el Postgres de Testcontainers (@DynamicPropertySource) y
+					     no la config remota si el config-server local esta corriendo (Docker). -->
+					<systemPropertyVariables>
+						<spring.cloud.config.enabled>false</spring.cloud.config.enabled>
+						<spring.cloud.config.discovery.enabled>false</spring.cloud.config.discovery.enabled>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -216,4 +257,24 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- Pruebas de integracion (T1) con Testcontainers. Requiere Docker corriendo.
+		     Uso: mvn test -Pintegration   (corre SOLO los tests @Tag("integration")) -->
+		<profile>
+			<id>integration</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<groups>integration</groups>
+							<excludedGroups combine.self="override"></excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

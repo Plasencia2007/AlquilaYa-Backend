@@ -1,0 +1,86 @@
+# AlquilaYa - Reglas de alerta Prometheus (I4)
+#
+# Estas reglas se evaluan dentro de Prometheus (visibles en la UI /alerts).
+# Para enrutar notificaciones (email/Slack) haria falta Alertmanager; ver README.
+#
+# Todas las metricas usadas fueron VERIFICADAS contra el /actuator/prometheus real
+# de un servicio Spring Boot del stack (api-gateway). No se usan nombres inventados.
+
+groups:
+  - name: disponibilidad
+    rules:
+      # Un target scrapeado deja de responder. `up` lo genera Prometheus.
+      - alert: ServicioCaido
+        expr: up{job=~"alquilaya-services|eureka-usuarios|zipkin"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Servicio caido: {{ $labels.service }}"
+          description: "El target {{ $labels.service }} ({{ $labels.instance }}) no responde al scrape desde hace >1m."
+
+  - name: http
+    rules:
+      # Tasa de errores 5xx > 5% del trafico durante 5m.
+      # http_server_requests_seconds_count lleva label `status`.
+      - alert: TasaError5xxAlta
+        expr: |
+          sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          clamp_min(sum by (service) (rate(http_server_requests_seconds_count[5m])), 0.001)
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx alto en {{ $labels.service }}"
+          description: "Mas del 5% de las peticiones HTTP en {{ $labels.service }} devuelven 5xx (ultimos 5m)."
+
+  - name: jvm
+    rules:
+      # Uso de heap > 90% del maximo, sostenido 5m.
+      # Nota G1/Java21: solo 'G1 Old Gen' expone un max>0 (los pools Eden/Survivor
+      # reportan max=-1), y ese max equivale al heap total -> el filtro `>0` en el
+      # denominador da el maximo real del heap. El numerador suma el heap usado real.
+      - alert: HeapAlto
+        expr: |
+          sum by (service) (jvm_memory_used_bytes{area="heap"})
+            /
+          sum by (service) (jvm_memory_max_bytes{area="heap"} > 0)
+            > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Heap >90% en {{ $labels.service }}"
+          description: "El heap de la JVM de {{ $labels.service }} lleva >5m por encima del 90% del maximo. Riesgo de GC thrashing / OOM."
+
+      # Errores logueados a ritmo sostenido (logback_events_total{level=error}).
+      - alert: LogsErrorFrecuentes
+        expr: sum by (service) (rate(logback_events_total{level="error"}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Errores en logs de {{ $labels.service }}"
+          description: "{{ $labels.service }} emite >0.2 logs ERROR/s (media 5m). Revisar en Grafana/Loki."
+
+  # -------------------------------------------------------------------------
+  # Kafka consumer lag: DELIBERADAMENTE OMITIDO.
+  # No pude verificar el nombre de la metrica en vivo porque los servicios con
+  # consumidores Kafka (usuarios/propiedades/pagos/mensajeria) no estaban corriendo
+  # al validar. Spring Boot suele exponer `kafka_consumer_fetch_manager_records_lag`
+  # (o `..._lag_max`) via KafkaClientMetrics cuando hay consumidores activos.
+  # Para habilitarla: verificar el nombre exacto en /actuator/prometheus de un
+  # servicio consumidor y descomentar/ajustar el bloque siguiente.
+  #
+  # - name: kafka
+  #   rules:
+  #     - alert: KafkaConsumerLagAlto
+  #       expr: max by (service, client_id) (kafka_consumer_fetch_manager_records_lag) > 1000
+  #       for: 5m
+  #       labels:
+  #         severity: warning
+  #       annotations:
+  #         summary: "Lag de consumidor Kafka alto en {{ $labels.service }}"
+  #         description: "El consumidor {{ $labels.client_id }} acumula >1000 mensajes de lag."

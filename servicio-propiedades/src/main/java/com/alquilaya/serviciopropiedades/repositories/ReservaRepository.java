@@ -21,6 +21,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     List<Reserva> findByArrendadorIdAndEstadoOrderByFechaCreacionDesc(Long arrendadorId, EstadoReserva estado);
 
+    /** Reservas en un estado dado (G2: candidatas PAGADA para generar cuotas de renta). */
+    List<Reserva> findByEstado(EstadoReserva estado);
+
     List<Reserva> findByPropiedadIdAndEstadoIn(Long propiedadId, Collection<EstadoReserva> estados);
 
     /** Total de reservas de una propiedad (cualquier estado) — embudo de analítica. */

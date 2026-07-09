@@ -148,6 +148,18 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Testcontainers: pruebas de integracion (T1) contra Postgres real (Docker).
+		     Etiquetadas @Tag("integration"); excluidas del `mvn test` offline por defecto. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -162,6 +174,20 @@
 	</dependencyManagement>
 	<build>
 		<plugins>
+			<!-- Excluye @Tag("integration") (T1, requiere Docker) del `mvn test` offline (T3),
+			     y apaga el Config Server en tests para que la integracion use el Postgres de
+			     Testcontainers y no la config remota (si el config-server local esta corriendo). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>integration</excludedGroups>
+					<systemPropertyVariables>
+						<spring.cloud.config.enabled>false</spring.cloud.config.enabled>
+						<spring.cloud.config.discovery.enabled>false</spring.cloud.config.discovery.enabled>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -197,4 +223,24 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- Pruebas de integracion (T1) con Testcontainers. Requiere Docker corriendo.
+		     Uso: mvn test -Pintegration   (corre SOLO los tests @Tag("integration")) -->
+		<profile>
+			<id>integration</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<groups>integration</groups>
+							<excludedGroups combine.self="override"></excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

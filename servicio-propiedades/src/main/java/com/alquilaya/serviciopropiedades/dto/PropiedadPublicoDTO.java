@@ -55,6 +55,12 @@ public class PropiedadPublicoDTO {
     private Double latitud;
     private Double longitud;
     private Integer distanciaMetros;
+    /**
+     * Distancia en km desde el punto de búsqueda "cerca de mí" hasta la propiedad,
+     * calculada (Haversine) solo por el endpoint {@code GET /buscar/cerca}. Null en el
+     * resto de listados. Permite a la UI mostrar "a 1.2 km".
+     */
+    private Double distanciaKm;
     /** Zona de cobertura y universidad resueltas al publicar (para filtrar/mostrar). */
     private Long zonaId;
     private Long universidadId;

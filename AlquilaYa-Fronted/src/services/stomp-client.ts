@@ -1,7 +1,6 @@
 'use client';
 
 import { Client, type IFrame, type IMessage, type StompSubscription } from '@stomp/stompjs';
-import Cookies from 'js-cookie';
 
 /**
  * Resuelve la URL del WebSocket. Igual que `api.ts` para la API REST:
@@ -36,8 +35,12 @@ interface PendingSub {
  * Singleton cliente STOMP. Una sola conexión WebSocket por pestaña.
  *
  * - Reconnect automático con backoff (5s).
- * - Lee el token JWT de la cookie `auth-token` al conectar (se manda como header
- *   `Authorization: Bearer <token>` en el frame CONNECT).
+ * - S5: el JWT ya NO se lee acá (vive en un cookie httpOnly, JS no puede tocarlo). El
+ *   handshake WS (una petición HTTP normal antes del upgrade) manda ese cookie solo — el
+ *   backend lo lee ahí (WebSocketCookieHandshakeInterceptor) y autentica el frame CONNECT
+ *   sin necesitar un header Authorization armado por el cliente. Sólo hay que llamar a
+ *   `connect()` cuando el caller YA sabe que hay sesión (ver `useStomp`, que verifica
+ *   `estaAutenticado` del store antes de llamar).
  * - `subscribe` se puede llamar antes de la conexión: queda pendiente y se
  *   activa cuando el cliente está conectado.
  * - `disconnect` limpia todo (logout).
@@ -68,12 +71,9 @@ class StompClientSingleton {
   connect(): void {
     if (this.client && this.client.active) return;
 
-    const token = Cookies.get('auth-token');
-    if (!token) return; // no logueado, no conectar
-
     this.client = new Client({
       brokerURL: resolveWsUrl(),
-      connectHeaders: { Authorization: `Bearer ${token}` },
+      // S5: sin connectHeaders — la autenticación viaja en el cookie httpOnly del handshake.
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,

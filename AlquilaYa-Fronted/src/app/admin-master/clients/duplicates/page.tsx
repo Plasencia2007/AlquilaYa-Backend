@@ -25,6 +25,8 @@ const ESTADO_COLOR: Record<string, string> = {
   ACTIVE: 'bg-emerald-100 text-emerald-700',
   PENDING: 'bg-amber-100 text-amber-700',
   BANNED: 'bg-slate-200 text-slate-500',
+  SUSPENDED: 'bg-orange-100 text-orange-700',
+  REJECTED: 'bg-red-100 text-red-700',
 };
 
 function formatFecha(iso?: string) {

@@ -38,6 +38,8 @@ public class UsuarioService {
     private final ConfiguracionAuthService configuracionAuthService;
     private final CloudinaryDocumentService cloudinaryDocumentService;
     private final SesionService sesionService;
+    private final RefreshTokenService refreshTokenService;
+    private final com.alquilaya.serviciousuarios.repositories.DocumentoVerificacionRepository documentoVerificacionRepository;
 
     @Transactional
     public Usuario registrarAdmin(AdminRegisterRequest request) {
@@ -146,7 +148,8 @@ public class UsuarioService {
     }
 
     public java.util.List<Usuario> listarTodos() {
-        return usuarioRepository.findAll();
+        // Excluye cuentas dadas de baja/anonimizadas (GDPR, G8-B).
+        return usuarioRepository.findByEliminadoFalse();
     }
 
     public Usuario obtenerPorId(Long id) {
@@ -155,11 +158,12 @@ public class UsuarioService {
     }
 
     public java.util.List<Usuario> listarPorRol(Rol rol) {
-        return usuarioRepository.findByRol(rol);
+        // Excluye cuentas dadas de baja/anonimizadas (GDPR, G8-B).
+        return usuarioRepository.findByRolAndEliminadoFalse(rol);
     }
 
     public java.util.List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO> listarArrendadoresAdmin() {
-        return usuarioRepository.findByRol(Rol.ARRENDADOR).stream()
+        return usuarioRepository.findByRolAndEliminadoFalse(Rol.ARRENDADOR).stream()
                 .map(u -> {
                     com.alquilaya.serviciousuarios.entities.Arrendador a = u.getArrendador();
                     return new com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO(
@@ -229,6 +233,85 @@ public class UsuarioService {
         usuarioRepository.deleteById(id);
     }
 
+    /**
+     * Baja de cuenta por ANONIMIZACIÓN (GDPR, G8-B). Se prefiere sobre el borrado físico:
+     * reservas/pagos/mensajes viven en otros servicios (FKs lógicas vía Feign/Kafka, no en BD),
+     * así que un DELETE dejaría huérfanos allí. En su lugar se borra el PII y se marca la cuenta
+     * como eliminada, de modo que quede inutilizable pero sin romper referencias cruzadas.
+     *
+     * <p>Cubre: documentos KYC (fila + asset en Cloudinary, best-effort), PII de la cuenta,
+     * PII de contacto del perfil Arrendador/Estudiante, y revocación de todas las sesiones.
+     * Idempotente: si ya está eliminada, no hace nada.</p>
+     *
+     * <p><b>Alcance:</b> sólo anonimiza datos de ESTE servicio. Los datos en propiedades/pagos/
+     * mensajería (p. ej. historial de reservas, mensajes) NO se tocan desde aquí; su borrado/
+     * anonimización sería un follow-up vía evento Kafka de "usuario eliminado".</p>
+     */
+    @Transactional
+    public void anonimizarCuenta(Long id) {
+        Usuario u = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID " + id));
+
+        if (u.isEliminado()) {
+            log.info("Cuenta {} ya estaba anonimizada; no-op.", id);
+            return;
+        }
+
+        // 1) Documentos KYC: borra la fila y (best-effort) el asset en Cloudinary.
+        java.util.List<com.alquilaya.serviciousuarios.entities.DocumentoVerificacion> docs =
+                documentoVerificacionRepository.findByUsuario(u);
+        for (com.alquilaya.serviciousuarios.entities.DocumentoVerificacion d : docs) {
+            try {
+                cloudinaryDocumentService.eliminarDocumento(d.getArchivoUrl());
+            } catch (Exception e) {
+                log.warn("[GDPR] No se pudo eliminar documento en Cloudinary (usuario {}): {}", id, e.getMessage());
+            }
+        }
+        documentoVerificacionRepository.deleteAll(docs);
+
+        // 2) PII de contacto del perfil (mismo servicio).
+        arrendadorRepository.findByUsuario(u).ifPresent(a -> {
+            a.setTelefono(null);
+            a.setRuc(null);
+            a.setNombreComercial(null);
+            a.setDireccionPropiedades(null);
+            a.setVerificado(false);
+            arrendadorRepository.save(a);
+        });
+        estudianteRepository.findByUsuario(u).ifPresent(e -> {
+            e.setBio(null);
+            e.setInstagram(null);
+            e.setCodigoEstudiante(null);
+            e.setVerificado(false);
+            e.setBuscaCompaneros(false); // no debe seguir apareciendo en el board de roommates
+            estudianteRepository.save(e);
+        });
+
+        // 3) PII de la cuenta. dni es NOT NULL en BD → placeholder '00000000' (excluido del
+        //    índice único ux_usuarios_dni); no se puede setear a NULL sin alterar la columna.
+        u.setNombre("Usuario");
+        u.setApellido("eliminado");
+        u.setCorreo("deleted-" + id + "@removed.local"); // el correo real queda liberado
+        u.setTelefono(null);
+        u.setTelefonoVerificado(false);
+        u.setEmailVerificado(false);
+        u.setDni("00000000");
+        u.setFotoUrl(null);
+        u.setFechaNacimiento(null);
+        // Hash inutilizable: aunque no se bloqueara el login, la contraseña deja de ser válida.
+        u.setPassword(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        u.setEstado(EstadoUsuario.BANNED); // estado terminal (bloquea acceso); el gate real es `eliminado`.
+        u.setEliminado(true);
+        u.setFechaEliminacion(java.time.LocalDateTime.now());
+        usuarioRepository.save(u);
+
+        // 4) Revoca todas las sesiones activas (reutiliza #10) y refresh tokens (G7).
+        sesionService.revocarTodas(id);
+        refreshTokenService.revocarTodas(id);
+
+        log.warn("[GDPR] Cuenta {} anonimizada/dada de baja.", id);
+    }
+
     @Transactional
     public boolean confirmarTelefono(String telefono, String codigo) {
         if (otpService.verificarOtp(telefono, codigo)) {
@@ -247,6 +330,11 @@ public class UsuarioService {
         return usuarioRepository.findByCorreo(correo);
     }
 
+    /** Recarga el usuario por teléfono (p. ej. tras verificar el OTP, para emitir su token). U1. */
+    public Optional<Usuario> buscarPorTelefono(String telefono) {
+        return usuarioRepository.findByTelefono(telefono);
+    }
+
     public boolean verificarPassword(String passwordPlana, String passwordHashed) {
         return passwordEncoder.matches(passwordPlana, passwordHashed);
     }
@@ -260,8 +348,9 @@ public class UsuarioService {
         }
         usuario.setPassword(passwordEncoder.encode(nuevaPassword));
         usuarioRepository.save(usuario);
-        // Revocar todas las sesiones tras cambiar la contraseña (el usuario re-inicia sesión).
+        // Revocar todas las sesiones y refresh tokens (G7) tras cambiar la contraseña.
         sesionService.revocarTodas(id);
+        refreshTokenService.revocarTodas(id);
     }
 
     @Transactional

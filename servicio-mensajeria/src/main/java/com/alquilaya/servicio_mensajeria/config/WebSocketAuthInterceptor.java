@@ -27,6 +27,7 @@ import java.util.List;
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
+    private final JwtBlacklistChecker jwtBlacklistChecker;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -50,11 +51,22 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     }
 
     private void autenticar(StompHeaderAccessor accessor) {
+        String jwt;
         String authHeader = firstHeader(accessor, "Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new AccessDeniedException("WebSocket CONNECT sin token");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        } else {
+            // S5: sin header explícito (JS ya no puede leer el access token — vive en un
+            // cookie httpOnly), cae al JWT que WebSocketCookieHandshakeInterceptor guardó
+            // en los session attributes al leer el cookie durante el handshake HTTP.
+            Object fromCookie = accessor.getSessionAttributes() != null
+                    ? accessor.getSessionAttributes().get(WebSocketCookieHandshakeInterceptor.ATTR_JWT)
+                    : null;
+            if (!(fromCookie instanceof String s) || s.isBlank()) {
+                throw new AccessDeniedException("WebSocket CONNECT sin token");
+            }
+            jwt = s;
         }
-        String jwt = authHeader.substring(7);
 
         final String email;
         try {
@@ -66,6 +78,13 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
         if (email == null || !jwtService.isTokenValid(jwt, email)) {
             throw new AccessDeniedException("Token expirado o inválido");
+        }
+
+        // La revocación de sesión (logout) debe cortar también el WebSocket. S8:
+        // antes el WS sólo miraba firma/expiración y aceptaba un token revocado hasta 24h.
+        if (jwtBlacklistChecker.isBlacklisted(jwt)) {
+            log.warn("[WS] CONNECT con token revocado (logout) rechazado para {}", email);
+            throw new AccessDeniedException("Sesión cerrada. Vuelve a iniciar sesión.");
         }
 
         String rol = jwtService.extractClaim(jwt, claims -> claims.get("rol", String.class));

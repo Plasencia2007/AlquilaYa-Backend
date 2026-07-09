@@ -8,6 +8,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,7 +34,8 @@ public class KafkaConsumerConfig {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
+            KafkaTemplate<String, String> kafkaTemplate) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
@@ -38,6 +43,10 @@ public class KafkaConsumerConfig {
         // spring.kafka.listener.observation-enabled no lo alcanza; se activa aqui a mano
         // para que el consumo de eventos genere spans y propague el traceId.
         factory.getContainerProperties().setObservationEnabled(true);
+        // DLQ (I2): como el factory es custom, el bean DefaultErrorHandler global no se auto-aplica;
+        // lo seteamos aqui. Mensajes fallidos van a "<topic>.DLT" tras 4 intentos (antes se descartaban).
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, new FixedBackOff(2000L, 3L)));
         return factory;
     }
 }

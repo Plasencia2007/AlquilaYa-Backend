@@ -5,6 +5,7 @@ import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadAdminDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadBusquedaResultado;
 import com.alquilaya.serviciopropiedades.dto.PropiedadCompletoDTO;
+import com.alquilaya.serviciopropiedades.dto.PropiedadPaginadaDTO;
 import com.alquilaya.serviciopropiedades.dto.PropiedadPublicoDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.PropiedadImagen;
@@ -74,6 +75,96 @@ public class PropiedadService {
                 filtroServicios, filtroZona, universidadId, zonaId, capacidadMin, dormitoriosMin);
     }
 
+    // ===== Búsqueda geoespacial "cerca de mí" (G6) =====
+
+    /** Radio de búsqueda máximo permitido (km). Evita barridos "de toda la ciudad". */
+    private static final double RADIO_KM_MAX = 50.0;
+    /** Radio terrestre (km) usado por el Haversine, consistente con la query nativa. */
+    private static final double RADIO_TIERRA_KM = 6371.0;
+    /**
+     * Km por grado de latitud (valor mínimo/conservador). Al dividir el radio entre este
+     * valor obtenemos un delta de latitud GENEROSO, garantizando que el bounding box
+     * contenga por completo el círculo de búsqueda (el Haversine exacto refina después).
+     */
+    private static final double KM_POR_GRADO_LAT = 110.574;
+    /** Km por grado de longitud en el ecuador; se escala por cos(latitud). */
+    private static final double KM_POR_GRADO_LNG_ECUADOR = 111.320;
+
+    /**
+     * Búsqueda geoespacial "cerca de mí": propiedades aprobadas dentro de {@code radioKm}
+     * de ({@code lat},{@code lng}), ordenadas por distancia ascendente y con {@code distanciaKm}
+     * ya calculada en cada DTO. NO se cachea (el espacio lat/lng/radio es prácticamente infinito;
+     * cachearlo no aporta y ensuciaría "propiedades:listado").
+     *
+     * <p>Valida rangos (lat∈[-90,90], lng∈[-180,180], 0&lt;radioKm≤50) y lanza
+     * {@link IllegalArgumentException} (→ 400) ante entradas inválidas. Por defecto solo
+     * lista propiedades disponibles, igual que el listado público.
+     */
+    public List<PropiedadPublicoDTO> buscarCerca(
+            double lat, double lng, double radioKm,
+            BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
+            Boolean disponible, Long universidadId, Long zonaId,
+            Integer capacidadMin, Integer dormitoriosMin) {
+
+        if (!Double.isFinite(lat) || lat < -90.0 || lat > 90.0) {
+            throw new IllegalArgumentException("lat debe estar en el rango [-90, 90]");
+        }
+        if (!Double.isFinite(lng) || lng < -180.0 || lng > 180.0) {
+            throw new IllegalArgumentException("lng debe estar en el rango [-180, 180]");
+        }
+        if (!Double.isFinite(radioKm) || radioKm <= 0.0 || radioKm > RADIO_KM_MAX) {
+            throw new IllegalArgumentException("radioKm debe estar en el rango (0, " + RADIO_KM_MAX + "]");
+        }
+        if (precioMin != null && precioMin.signum() < 0) {
+            throw new IllegalArgumentException("precioMin no puede ser negativo");
+        }
+        if (precioMax != null && precioMax.signum() < 0) {
+            throw new IllegalArgumentException("precioMax no puede ser negativo");
+        }
+        if (precioMin != null && precioMax != null && precioMin.compareTo(precioMax) > 0) {
+            throw new IllegalArgumentException("precioMin no puede ser mayor que precioMax");
+        }
+
+        // Bounding box (pre-filtro barato indexable). Deltas generosos para no excluir
+        // resultados en las esquinas; el Haversine exacto de la query hace el corte fino.
+        double deltaLat = radioKm / KM_POR_GRADO_LAT;
+        double cosLat = Math.max(Math.cos(Math.toRadians(lat)), 1e-6); // evita /0 cerca de los polos
+        double deltaLng = radioKm / (KM_POR_GRADO_LNG_ECUADOR * cosLat);
+        double latMin = Math.max(-90.0, lat - deltaLat);
+        double latMax = Math.min(90.0, lat + deltaLat);
+        double lngMin = Math.max(-180.0, lng - deltaLng);
+        double lngMax = Math.min(180.0, lng + deltaLng);
+
+        boolean soloDisponibles = (disponible == null) || disponible;
+
+        List<Propiedad> encontrados = propiedadRepository.buscarCerca(
+                lat, lng, radioKm, latMin, latMax, lngMin, lngMax, soloDisponibles,
+                tipo, periodo, precioMin, precioMax, universidadId, zonaId,
+                capacidadMin, dormitoriosMin);
+
+        // Enriquecemos igual que el listado público (una sola llamada Feign) y luego
+        // adjuntamos la distanciaKm por id. El orden por distancia lo garantiza la query.
+        List<PropiedadPublicoDTO> dtos = toPublicoBatch(encontrados);
+        for (PropiedadPublicoDTO dto : dtos) {
+            if (dto.getLatitud() != null && dto.getLongitud() != null) {
+                double km = haversineKm(lat, lng, dto.getLatitud(), dto.getLongitud());
+                dto.setDistanciaKm(Math.round(km * 100.0) / 100.0); // 2 decimales
+            }
+        }
+        return dtos;
+    }
+
+    /** Distancia Haversine en km entre dos puntos (misma fórmula/constante que la query nativa). */
+    private static double haversineKm(double lat1, double lng1, double lat2, double lng2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                  * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return RADIO_TIERRA_KM * c;
+    }
+
     /**
      * Búsqueda pública cacheada en Redis (5 min). El @Cacheable vive aquí (y no en
      * el controller) porque devuelve un contenedor {@link PropiedadBusquedaResultado}:
@@ -93,6 +184,35 @@ public class PropiedadService {
         // Batch enrich: una sola llamada Feign al servicio-usuarios por página
         // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
         return new PropiedadBusquedaResultado(toPublicoBatch(resultados));
+    }
+
+    /**
+     * P5: búsqueda paginada de verdad. Aditiva — NO reemplaza {@link #buscarPublicoCacheado}
+     * (que sigue siendo lo que consume el frontend hoy vía `/buscar`, con su cache Redis por
+     * combinación de filtros). Esta variante es para cuando el volumen de propiedades lo
+     * justifique; deliberadamente SIN @Cacheable (cachear por page+size+filtros multiplica
+     * las keys de cache sin necesidad real al volumen actual — se agrega si hace falta).
+     */
+    public PropiedadPaginadaDTO buscarPublicoPaginado(
+            BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
+            Boolean disponible, Integer distanciaMax, List<String> servicios, String zona,
+            Long universidadId, Long zonaId, Integer capacidadMin, Integer dormitoriosMin,
+            int pagina, int tamano) {
+        int tamanoSeguro = Math.min(Math.max(tamano, 1), 100); // evita pedir páginas gigantes
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(Math.max(pagina, 0), tamanoSeguro);
+        org.springframework.data.domain.Page<Propiedad> page = propiedadRepository.buscarPaginado(
+                precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona,
+                universidadId, zonaId, capacidadMin, dormitoriosMin, pageable);
+
+        return PropiedadPaginadaDTO.builder()
+                .propiedades(toPublicoBatch(page.getContent()))
+                .pagina(page.getNumber())
+                .tamano(page.getSize())
+                .totalElementos(page.getTotalElements())
+                .totalPaginas(page.getTotalPages())
+                .esUltimaPagina(page.isLast())
+                .build();
     }
 
     public void calcularYSetearDistancia(Propiedad p) {

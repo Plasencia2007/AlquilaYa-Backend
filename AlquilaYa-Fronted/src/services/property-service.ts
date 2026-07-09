@@ -58,6 +58,8 @@ export interface PropiedadPublicoDTO {
   badges?: BadgePropiedad[];
   /** Aviso aprobado por admin → sello "Verificado" (#47). */
   aprobadoPorAdmin?: boolean;
+  /** Solo presente en `GET /propiedades/buscar/cerca`: distancia en km al punto consultado. */
+  distanciaKm?: number;
 }
 
 /** Rango de fechas ocupado por una reserva activa (calendario de disponibilidad). */
@@ -115,6 +117,7 @@ export function fromDTO(dto: PropiedadPublicoDTO): Propiedad {
     tiempoRespuestaArrendador: dto.tiempoRespuestaArrendador,
     badges: dto.badges,
     verificado: dto.aprobadoPorAdmin ?? false,
+    distanciaKm: dto.distanciaKm != null ? Number(dto.distanciaKm) : undefined,
   };
 }
 
@@ -139,6 +142,13 @@ export interface BusquedaParams {
 export interface PaginadoParams extends BusquedaParams {
   page?: number;
   size?: number;
+}
+
+/** Params de `servicioPropiedades.buscarCerca` ("Cerca de mí"): coords reales + radio (km, default 5). */
+export interface BusquedaCercaParams extends BusquedaParams {
+  lat: number;
+  lng: number;
+  radioKm?: number;
 }
 
 export interface PaginaResultados {
@@ -312,16 +322,69 @@ export const servicioPropiedades = {
   },
 
   /**
-   * Paginación client-side sobre el resultado de `buscar`. Si en el futuro
-   * el backend expone `Page<Propiedad>`, sustituir por una llamada paginada
-   * real preservando la firma.
+   * "Cerca de mí": busca contra `GET /propiedades/buscar/cerca` con las coordenadas
+   * reales del usuario (geolocalización). El backend filtra por radio y devuelve los
+   * resultados YA ordenados por distancia ascendente, con `distanciaKm` por item.
+   *
+   * Solo reenvía los filtros que ese endpoint soporta server-side (precio, tipo,
+   * universidad/zona, capacidad/dormitorios). `servicios`, `distanciaMaxKm` (al campus)
+   * y `calificacionMin` no tienen soporte server-side (igual que en `buscar`), así que se
+   * aplican en el cliente sin volver a ordenar (para no perder el orden por distancia real
+   * que ya viene del backend).
+   */
+  buscarCerca: async ({
+    lat,
+    lng,
+    radioKm = 5,
+    ...filtros
+  }: BusquedaCercaParams): Promise<Propiedad[]> => {
+    if (USE_MOCKS) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return aplicarFiltrosClient(MOCK_PROPIEDADES, {
+        ...filtros,
+        orden: 'cercania',
+        userLat: lat,
+        userLng: lng,
+      });
+    }
+
+    const params: Record<string, string | number> = { lat, lng, radioKm };
+    if (typeof filtros.precioMin === 'number') params.precioMin = filtros.precioMin;
+    if (typeof filtros.precioMax === 'number') params.precioMax = filtros.precioMax;
+    if (filtros.tipo) params.tipo = filtros.tipo;
+    if (typeof filtros.universidadId === 'number') params.universidadId = filtros.universidadId;
+    if (typeof filtros.zonaId === 'number') params.zonaId = filtros.zonaId;
+    if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) params.capacidadMin = filtros.capacidadMin;
+    if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) params.dormitoriosMin = filtros.dormitoriosMin;
+
+    const response = await api.get<PropiedadPublicoDTO[]>('/propiedades/buscar/cerca', { params });
+    const propiedades = response.data.map(fromDTO);
+    // orden: 'cercania' con userLat/userLng reordena por Haversine cliente-servidor sobre
+    // las MISMAS coordenadas que ya usó el backend, así que preserva el orden por distancia.
+    return aplicarFiltrosClient(propiedades, {
+      servicios: filtros.servicios,
+      distanciaMaxKm: filtros.distanciaMaxKm,
+      calificacionMin: filtros.calificacionMin,
+      orden: 'cercania',
+      userLat: lat,
+      userLng: lng,
+    });
+  },
+
+  /**
+   * Paginación client-side sobre el resultado de `buscar` (o `buscarCerca` cuando hay
+   * coordenadas de usuario). Si en el futuro el backend expone `Page<Propiedad>`,
+   * sustituir por una llamada paginada real preservando la firma.
    */
   obtenerPaginadas: async ({
     page = 0,
     size = 12,
     ...filtros
   }: PaginadoParams = {}): Promise<PaginaResultados> => {
-    const completo = await servicioPropiedades.buscar(filtros);
+    const completo =
+      typeof filtros.userLat === 'number' && typeof filtros.userLng === 'number'
+        ? await servicioPropiedades.buscarCerca({ ...filtros, lat: filtros.userLat, lng: filtros.userLng })
+        : await servicioPropiedades.buscar(filtros);
     const inicio = page * size;
     const items = completo.slice(inicio, inicio + size);
     return {

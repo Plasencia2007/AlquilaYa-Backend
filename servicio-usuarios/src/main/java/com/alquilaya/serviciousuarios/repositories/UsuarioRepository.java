@@ -14,6 +14,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     Optional<Usuario> findByCorreo(String correo);
     Optional<Usuario> findByTelefono(String telefono);
     java.util.List<Usuario> findByRol(com.alquilaya.serviciousuarios.enums.Rol rol);
+
+    // ===== Listados que excluyen cuentas dadas de baja (GDPR, G8-B) =====
+    List<Usuario> findByEliminadoFalse();
+    List<Usuario> findByRolAndEliminadoFalse(com.alquilaya.serviciousuarios.enums.Rol rol);
+
     boolean existsByCorreo(String correo);
     boolean existsByTelefono(String telefono);
     boolean existsByDni(String dni);

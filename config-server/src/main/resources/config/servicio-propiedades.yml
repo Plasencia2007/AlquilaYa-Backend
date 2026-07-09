@@ -177,3 +177,14 @@ app:
     recordatorio-fraccion: ${RESERVA_RECORDATORIO_FRACCION:0.5}
     # Cron del job de recordatorios. Default: cada 30 minutos.
     recordatorio-cron: ${RESERVA_RECORDATORIO_CRON:0 */30 * * * *}
+  # G2 — Renta mensual recurrente: cronograma de cuotas + recordatorios (aditivo,
+  # no toca el flujo de pago único). El cobro real de cada cuota es de servicio-pagos.
+  renta:
+    cuotas:
+      # Interruptor del scheduler de cuotas de renta. false lo desactiva sin recompilar.
+      enabled: ${RENTA_CUOTAS_ENABLED:true}
+      # Cron del job (genera cuotas, marca vencidas, emite recordatorios).
+      # Default: diario a la 01:00.
+      cron: ${RENTA_CUOTAS_CRON:0 0 1 * * *}
+      # Días de anticipación con que se emite el recordatorio "cuota por vencer".
+      recordatorio-dias-antes: ${RENTA_CUOTAS_RECORDATORIO_DIAS:5}

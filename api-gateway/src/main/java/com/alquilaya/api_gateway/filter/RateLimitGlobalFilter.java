@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
@@ -75,9 +76,20 @@ public class RateLimitGlobalFilter implements HandlerInterceptor {
     /** Throttle del WARN log cuando Redis está caído (1 vez por minuto). */
     private final AtomicLong lastRedisDownWarnMs = new AtomicLong(0L);
 
+    /**
+     * Nº de proxies de confianza DELANTE del gateway que anexan a X-Forwarded-For (S8).
+     * dev (sin proxy) = 0 → se usa la IP del socket (`getRemoteAddr`), NO falsificable.
+     * prod (ngrok→nginx→gateway) = 1 → nginx anexa su entrada; saltándola por la DERECHA
+     * se obtiene la IP real del cliente sin poder falsearla desde fuera.
+     * Configurable por env `RATE_LIMIT_TRUSTED_HOPS` (se setea en docker-compose.prod.yml).
+     */
+    private final int trustedProxyHops;
+
     @Autowired
-    public RateLimitGlobalFilter(StringRedisTemplate redisTemplate) {
+    public RateLimitGlobalFilter(StringRedisTemplate redisTemplate,
+                                 @Value("${rate-limit.trusted-hops:0}") int trustedProxyHops) {
         this.redisTemplate = redisTemplate;
+        this.trustedProxyHops = Math.max(0, trustedProxyHops);
     }
 
     @Override
@@ -204,19 +216,31 @@ public class RateLimitGlobalFilter implements HandlerInterceptor {
     }
 
     /**
-     * Extrae la IP real del cliente.
-     * Prioriza el header {@code X-Forwarded-For} (primer valor) para funcionar
-     * correctamente detrás de proxies/load balancers/ngrok.
+     * Extrae la IP real del cliente para el rate limit, resistente a falsificación de
+     * {@code X-Forwarded-For} (S8). Antes se tomaba el PRIMER valor de XFF, que el cliente
+     * controla → podía rotar IPs falsas y evadir el límite (fuerza bruta OTP/login).
+     *
+     * <p>Ahora se cuenta desde la DERECHA: se saltan {@code trustedProxyHops} entradas
+     * (las que anexan los proxies de confianza) y se toma la siguiente = IP real del cliente.
+     * Un atacante puede anteponer entradas falsas, pero quedan a la IZQUIERDA de las que
+     * ponen los proxies reales, así que nunca son seleccionadas. Si la cadena es más corta de
+     * lo esperado (dev sin proxy, o XFF falsificado directo), cae a {@code getRemoteAddr()},
+     * que es la IP del socket TCP y no se puede falsear.
      */
     private String resolveClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
+        if (trustedProxyHops > 0) {
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) {
+                String[] parts = xff.split(",");
+                int idx = parts.length - 1 - trustedProxyHops;
+                if (idx >= 0) {
+                    String ip = parts[idx].trim();
+                    if (!ip.isBlank()) {
+                        return ip;
+                    }
+                }
+                // Cadena más corta de lo esperado → no confiamos en XFF; caemos al socket.
+            }
         }
         return request.getRemoteAddr();
     }

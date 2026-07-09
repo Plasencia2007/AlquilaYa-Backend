@@ -710,6 +710,65 @@ public class PropiedadController {
         ).getPropiedades();
     }
 
+    /**
+     * P5: variante paginada de `/buscar`, aditiva (no reemplaza el endpoint de arriba, que
+     * el frontend sigue usando tal cual con su cache Redis). `page` es 0-based.
+     */
+    @GetMapping("/buscar/paginado")
+    public com.alquilaya.serviciopropiedades.dto.PropiedadPaginadaDTO buscarPaginado(
+            @RequestParam(required = false) BigDecimal precioMin,
+            @RequestParam(required = false) BigDecimal precioMax,
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String periodo,
+            @RequestParam(required = false) Boolean disponible,
+            @RequestParam(required = false) Integer distanciaMax,
+            @RequestParam(required = false) List<String> servicios,
+            @RequestParam(required = false) String zona,
+            @RequestParam(required = false) Long universidadId,
+            @RequestParam(required = false) Long zonaId,
+            @RequestParam(required = false) Integer capacidadMin,
+            @RequestParam(required = false) Integer dormitoriosMin,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Boolean soloDisponibles = (disponible != null) ? disponible : Boolean.TRUE;
+        return propiedadService.buscarPublicoPaginado(
+                precioMin, precioMax, tipo, periodo, soloDisponibles, distanciaMax, servicios, zona,
+                universidadId, zonaId, capacidadMin, dormitoriosMin, page, size
+        );
+    }
+
+    /**
+     * Búsqueda geoespacial "cerca de mí" (G6). Devuelve propiedades APROBADAS dentro de
+     * {@code radioKm} del punto ({@code lat},{@code lng}), ordenadas por distancia ascendente,
+     * con {@code distanciaKm} calculada (Haversine) en cada elemento para que la UI muestre
+     * "a 1.2 km". Mismo shape que {@code /buscar} ({@link PropiedadPublicoDTO}).
+     *
+     * <p>NO cacheado (a diferencia de {@code /buscar}): el espacio de coordenadas/radio es
+     * prácticamente infinito. Por defecto solo lista disponibles; acepta los mismos filtros
+     * escalares opcionales que el listado público. Valida rangos y devuelve 400 si son inválidos
+     * (lat∈[-90,90], lng∈[-180,180], 0&lt;radioKm≤50).
+     */
+    @GetMapping("/buscar/cerca")
+    public List<PropiedadPublicoDTO> buscarCerca(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "5") double radioKm,
+            @RequestParam(required = false) BigDecimal precioMin,
+            @RequestParam(required = false) BigDecimal precioMax,
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String periodo,
+            @RequestParam(required = false) Boolean disponible,
+            @RequestParam(required = false) Long universidadId,
+            @RequestParam(required = false) Long zonaId,
+            @RequestParam(required = false) Integer capacidadMin,
+            @RequestParam(required = false) Integer dormitoriosMin
+    ) {
+        return propiedadService.buscarCerca(
+                lat, lng, radioKm, precioMin, precioMax, tipo, periodo, disponible,
+                universidadId, zonaId, capacidadMin, dormitoriosMin);
+    }
+
     @GetMapping("/{id}/publico")
     public ResponseEntity<PropiedadPublicoDTO> verPublico(@PathVariable Long id) {
         return propiedadRepository.findById(id)

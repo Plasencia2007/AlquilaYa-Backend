@@ -1,0 +1,41 @@
+# AlquilaYa - Promtail -> Loki (I4)
+#
+# Envia los logs de TODOS los contenedores docker a Loki usando `docker_sd_configs`
+# (lee via la Docker Engine API por el socket montado). Se prefiere este metodo sobre
+# leer /var/lib/docker/containers porque en Docker Desktop (Windows/Mac) esa ruta vive
+# dentro de la VM y no es un bind-mount fiable; el socket si lo es.
+#
+# Descubre todos los contenedores del host y los etiqueta con nombre / servicio compose.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # nombre del contenedor (viene como "/nombre")
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      # stream stdout/stderr
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      # nombre del servicio en docker-compose (si aplica)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'
+      # proyecto compose (para separar stacks)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+      # etiqueta fija de job para agrupar en Loki
+      - target_label: 'job'
+        replacement: 'docker'

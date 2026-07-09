@@ -68,6 +68,8 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({ rol, tit
       case 'ACTIVE': return <Badge variant="success">Activo</Badge>;
       case 'PENDING': return <Badge variant="warning">Pendiente</Badge>;
       case 'BANNED': return <Badge variant="error">Baneado</Badge>;
+      case 'SUSPENDED': return <Badge variant="warning">Suspendido</Badge>;
+      case 'REJECTED': return <Badge variant="error">Rechazado</Badge>;
       default: return <Badge variant="outline">{estado}</Badge>;
     }
   };

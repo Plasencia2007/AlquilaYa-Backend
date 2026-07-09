@@ -28,6 +28,8 @@ public class SecurityConfig {
                         // Documentacion Swagger / OpenAPI: acceso libre
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .requestMatchers("/api/v1/propiedades/buscar").permitAll()
+                        .requestMatchers("/api/v1/propiedades/buscar/cerca").permitAll()
+                        .requestMatchers("/api/v1/propiedades/buscar/paginado").permitAll()
                         .requestMatchers("/api/v1/propiedades/*/publico").permitAll()
                         .requestMatchers("/api/v1/propiedades/*/similares").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/propiedades/*/temporadas").permitAll()

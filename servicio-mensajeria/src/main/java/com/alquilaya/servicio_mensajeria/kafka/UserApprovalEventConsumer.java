@@ -76,21 +76,29 @@ public class UserApprovalEventConsumer {
         datos.put("usuarioId", usuarioId);
         if (payload.get("motivo") != null) datos.put("motivo", payload.get("motivo"));
 
+        // El texto/link se adapta al rol del usuario aprobado (U3): estudiante vs arrendador.
+        boolean esArrendador = "ARRENDADOR".equalsIgnoreCase(String.valueOf(payload.get("rol")));
+        String perfilUrl = esArrendador ? "/landlord/profile" : "/student/profile";
+
         switch (eventType) {
             case "USER_APROBADO" -> {
                 notificacionService.crear(usuarioId, TipoNotificacion.DOCUMENTO_APROBADO,
                         "¡Identidad verificada!",
-                        "Ya puedes reservar cuartos sin restricciones.",
-                        "/student/profile", datos, true);
+                        esArrendador
+                                ? "Ya puedes publicar tus cuartos con la insignia de verificado."
+                                : "Ya puedes reservar cuartos sin restricciones.",
+                        esArrendador ? "/landlord/dashboard" : "/student/profile", datos, true);
                 notificacionService.crear(usuarioId, TipoNotificacion.BIENVENIDA,
-                        "Bienvenido a AlquilaYa, " + (nombre != null ? nombre : "estudiante"),
-                        "Empieza explorando los cuartos cerca de la UPeU.",
-                        "/", null, true);
+                        "Bienvenido a AlquilaYa, " + (nombre != null ? nombre : (esArrendador ? "arrendador" : "estudiante")),
+                        esArrendador
+                                ? "Empieza publicando tus cuartos cerca de la UPeU."
+                                : "Empieza explorando los cuartos cerca de la UPeU.",
+                        esArrendador ? "/landlord/dashboard" : "/", null, true);
             }
             case "USER_RECHAZADO" -> notificacionService.crear(usuarioId, TipoNotificacion.DOCUMENTO_RECHAZADO,
                     "Documentos rechazados",
                     opt(payload.get("motivo"), "Necesitamos que vuelvas a subir tus documentos."),
-                    "/student/profile", datos, true);
+                    perfilUrl, datos, true);
             default -> log.debug("[NOTIF] user-approval-events eventType desconocido: {}", eventType);
         }
     }

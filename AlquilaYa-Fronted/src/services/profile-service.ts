@@ -1,13 +1,11 @@
-import Cookies from 'js-cookie';
-
 import { api } from '@/lib/api';
-import { servicioAuth } from '@/services/auth-service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { ActualizarPerfilRequest, EstadoUsuario, Perfil } from '@/types/profile';
 
+// S5: el userId ya no se decodifica de un token (es httpOnly, JS no puede leerlo) — se lee
+// del store, que `inicializar()`/`restaurarSesion()` ya hidrató desde el backend.
 function obtenerMiUserId(): number | null {
-  const token = Cookies.get('auth-token');
-  if (!token) return null;
-  const u = servicioAuth.obtenerUsuarioActualDesdeToken(token);
+  const u = useAuthStore.getState().usuario;
   if (!u?.id) return null;
   const id = Number(u.id);
   return Number.isFinite(id) ? id : null;

@@ -27,47 +27,25 @@ interface NavCategory {
   items: NavItem[];
 }
 
-// Navegación reorganizada: agrupa por función y alcanza TODAS las páginas reales
-// (sin links muertos ni badges mock). Cada href corresponde a una page.tsx existente.
+// Navegación: solo páginas REALES y funcionales. Se quitaron los ~12 shells "en construcción"
+// (metrics/heatmap|network|system, properties/history, reports/pending|active-bans,
+// catalog/zones/prices, marketing/*, finance/payouts|invoices, system/audit) para que el
+// menú no lleve a páginas vacías. Los archivos siguen existiendo; solo salen del menú.
 const NAVIGATION: NavCategory[] = [
   {
     items: [
       { label: 'Panel de Control', icon: 'dashboard', href: '/admin-master' },
-      {
-        label: 'Métricas',
-        icon: 'monitoring',
-        subItems: [
-          { label: 'Resumen', href: '/admin-master/metrics' },
-          { label: 'Mapa de calor', href: '/admin-master/metrics/heatmap' },
-          { label: 'Red de actividad', href: '/admin-master/metrics/network' },
-          { label: 'Sistema', href: '/admin-master/metrics/system' },
-        ],
-      },
+      { label: 'Métricas', icon: 'monitoring', href: '/admin-master/metrics' },
     ],
   },
   {
     title: 'MODERACIÓN',
     items: [
-      {
-        label: 'Auditoría inmuebles',
-        icon: 'home_work',
-        subItems: [
-          { label: 'Cuartos por revisar', href: '/admin-master/properties/to-review' },
-          { label: 'Historial de decisiones', href: '/admin-master/properties/history' },
-        ],
-      },
+      { label: 'Auditoría inmuebles', icon: 'home_work', href: '/admin-master/properties/to-review' },
       { label: 'Validación proveedores', icon: 'person_search', href: '/admin-master/validations/providers' },
       { label: 'Reseñas', icon: 'reviews', href: '/admin-master/reviews' },
       { label: 'Mensajería', icon: 'forum', href: '/admin-master/moderation' },
-      {
-        label: 'Reportes y denuncias',
-        icon: 'report',
-        subItems: [
-          { label: 'Denuncias de avisos', href: '/admin-master/reports/listings' },
-          { label: 'Sin gestionar', href: '/admin-master/reports/pending' },
-          { label: 'Baneos activos', href: '/admin-master/reports/active-bans' },
-        ],
-      },
+      { label: 'Reportes y denuncias', icon: 'report', href: '/admin-master/reports/listings' },
     ],
   },
   {
@@ -88,38 +66,15 @@ const NAVIGATION: NavCategory[] = [
   {
     title: 'CATÁLOGO Y REGIONES',
     items: [
-      {
-        label: 'Zonas universitarias',
-        icon: 'location_on',
-        subItems: [
-          { label: 'Crear / editar zonas', href: '/admin-master/catalog/zones/edit' },
-          { label: 'Precios de referencia', href: '/admin-master/catalog/zones/prices' },
-        ],
-      },
+      { label: 'Zonas universitarias', icon: 'location_on', href: '/admin-master/catalog/zones/edit' },
       { label: 'Etiquetas de servicios', icon: 'sell', href: '/admin-master/catalog/tags' },
       { label: 'Carreras', icon: 'school', href: '/admin-master/catalog/carreras' },
     ],
   },
   {
-    title: 'MARKETING',
-    items: [
-      { label: 'Notificaciones', icon: 'campaign', href: '/admin-master/marketing/notifications/students' },
-      { label: 'Anuncios premium', icon: 'grade', href: '/admin-master/marketing/premium' },
-    ],
-  },
-  {
     title: 'ADMINISTRACIÓN',
     items: [
-      {
-        label: 'Economía y pagos',
-        icon: 'payments',
-        permiso: 'GESTIONAR_SISTEMA',
-        subItems: [
-          { label: 'Balance general', href: '/admin-master/finance/balance' },
-          { label: 'Pagos a proveedores', href: '/admin-master/finance/payouts' },
-          { label: 'Facturación', href: '/admin-master/finance/invoices' },
-        ],
-      },
+      { label: 'Economía y pagos', icon: 'payments', permiso: 'GESTIONAR_SISTEMA', href: '/admin-master/finance/balance' },
       {
         label: 'Configuración',
         icon: 'settings',
@@ -127,7 +82,6 @@ const NAVIGATION: NavCategory[] = [
         subItems: [
           { label: 'Reglas de la plataforma', href: '/admin-master/system/settings' },
           { label: 'Roles y permisos', href: '/admin-master/system/roles' },
-          { label: 'Logs de auditoría', href: '/admin-master/system/audit' },
         ],
       },
       { label: 'Alertas del sistema', icon: 'warning', href: '/admin-master/alerts' },

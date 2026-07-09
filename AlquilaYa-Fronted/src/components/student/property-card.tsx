@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, MapPin } from 'lucide-react';
+import { Eye, MapPin, Navigation } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -191,6 +191,15 @@ function PropertyCardImpl({
             {showDistance && distancia !== null && (
               <p className="truncate text-[13px] leading-[17px] text-muted-foreground">
                 a {formatearDistancia(distancia)} de {campusNombre}
+              </p>
+            )}
+
+            {/* Solo presente cuando el resultado viene de "Cerca de mí"
+                (GET /propiedades/buscar/cerca), con la distancia real a tu ubicación. */}
+            {propiedad.distanciaKm != null && (
+              <p className="flex items-center gap-1 truncate text-[13px] leading-[17px] text-primary">
+                <Navigation className="size-3 shrink-0" aria-hidden />
+                a {formatearDistancia(propiedad.distanciaKm)} de ti
               </p>
             )}
 

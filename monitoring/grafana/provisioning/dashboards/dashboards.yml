@@ -1,0 +1,15 @@
+# AlquilaYa - Grafana dashboard provider (I3)
+# Carga los .json de /var/lib/grafana/dashboards (montado desde monitoring/grafana/dashboards).
+apiVersion: 1
+
+providers:
+  - name: alquilaya
+    orgId: 1
+    folder: AlquilaYa
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

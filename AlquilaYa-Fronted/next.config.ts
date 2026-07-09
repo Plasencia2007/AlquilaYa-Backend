@@ -23,6 +23,19 @@ const nextConfig: NextConfig = {
       { source: '/landlord/profile/security', destination: '/landlord/profile', permanent: true },
     ];
   },
+  async headers() {
+    return [
+      {
+        // El service worker (PWA) no debe cachearse: así el navegador siempre
+        // toma la última versión y no se queda pegado a un SW viejo.
+        source: '/sw.js',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        ],
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

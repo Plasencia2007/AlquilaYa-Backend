@@ -10,6 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -49,6 +50,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConflict(
             IllegalStateException ex, HttpServletRequest req) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), req);
+    }
+
+    /**
+     * S5 (bug real preexistente, no introducido por S5 — descubierto al probar el caso
+     * "petición 100% anónima" a un endpoint con hasRole/@PreAuthorize). Sin este handler,
+     * un acceso denegado por seguridad caía al catch-all de {@code Exception} y devolvía
+     * 500 en vez de 401/403 — un "error interno" falso para lo que en realidad es "no
+     * autenticado", y que además rompe el auto-refresh del frontend (que sólo reintenta
+     * ante un 401 real). {@code AuthorizationDeniedException} (usada por @PreAuthorize en
+     * Spring Security 6) extiende esta misma clase, así que también queda cubierta.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest req) {
+        return build(HttpStatus.UNAUTHORIZED, "No autenticado o sin permisos para este recurso.", req);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

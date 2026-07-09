@@ -1,11 +1,13 @@
 package com.alquilaya.serviciousuarios.services;
 
+import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.EstadoUsuario;
 import com.alquilaya.serviciousuarios.enums.Rol;
 import com.alquilaya.serviciousuarios.enums.TipoLogin;
 import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
+import com.alquilaya.serviciousuarios.repositories.ArrendadorRepository;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import com.alquilaya.serviciousuarios.util.LogMask;
@@ -45,6 +47,7 @@ public class GoogleAuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final EstudianteRepository estudianteRepository;
+    private final ArrendadorRepository arrendadorRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${google.oauth.client-id:}")
@@ -109,6 +112,12 @@ public class GoogleAuthService {
                 cambiado = true;
             }
             if (cambiado) usuarioRepository.save(u);
+            // Backfill: si por data drift un ARRENDADOR (p. ej. rol cambiado luego del alta,
+            // o alta previa a este fix) no tiene perfil Arrendador, se crea aquí para que
+            // obtenerPerfilId() y el resto del flujo (propiedades, KYC, pagos) no queden rotos.
+            if (u.getRol() == Rol.ARRENDADOR && arrendadorRepository.findByUsuario(u).isEmpty()) {
+                crearPerfilArrendadorMinimo(u);
+            }
             log.info("[GoogleAuth] Login existente para {}", LogMask.email(correoNorm));
             return u;
         }
@@ -149,13 +158,31 @@ public class GoogleAuthService {
                     .verificado(false)
                     .build();
             estudianteRepository.save(e);
+        } else if (rol == Rol.ARRENDADOR) {
+            // Google solo entrega email/nombre: no hay telefono/RUC/dirección todavía.
+            // Se crea un perfil Arrendador mínimo (nulls, sin verificar) para que
+            // obtenerPerfilId() resuelva de inmediato; el usuario completa RUC,
+            // dirección y mapa después desde su panel antes de poder publicar.
+            crearPerfilArrendadorMinimo(creado);
         }
-        // Para ARRENDADOR: no creamos perfil aún. El usuario debe completar
-        // datos de negocio (RUC, dirección, mapa) desde su panel antes de
-        // poder publicar.
 
         log.info("[GoogleAuth] Usuario creado vía Google: {} rol={}", LogMask.email(correoNorm), rol);
         return creado;
+    }
+
+    /**
+     * Crea el perfil Arrendador mínimo para una cuenta creada/logueada vía Google: sin
+     * telefono/RUC/dirección (Google no los provee) y `verificado=false` hasta que complete
+     * su KYC. Evita que `obtenerPerfilId` (AuthController) devuelva null y rompa creación de
+     * propiedades, KYC y payouts (U3: "arrendadores de Google sin perfil").
+     */
+    private void crearPerfilArrendadorMinimo(Usuario usuario) {
+        Arrendador arrendador = Arrendador.builder()
+                .usuario(usuario)
+                .verificado(false)
+                .build();
+        arrendadorRepository.save(arrendador);
+        log.info("[GoogleAuth] Perfil Arrendador mínimo creado para usuario {}", usuario.getId());
     }
 
     private String generarPasswordRandom() {

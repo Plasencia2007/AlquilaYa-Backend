@@ -22,12 +22,16 @@ import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.exceptions.OtpInvalidoException;
 import com.alquilaya.serviciousuarios.exceptions.TelefonoNoVerificadoException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -48,57 +52,86 @@ public class AuthController {
     private final GoogleAuthService googleAuthService;
     private final JwtBlacklistService jwtBlacklistService;
     private final SesionService sesionService;
+    private final com.alquilaya.serviciousuarios.services.RefreshTokenService refreshTokenService;
+
+    @org.springframework.beans.factory.annotation.Value("${jwt.refresh-expiration-ms:2592000000}")
+    private long refreshExpirationMs;
+
+    private static final String COOKIE_REFRESH = "refresh-token";
+    // Alcance del cookie: sólo se manda en /api/v1/usuarios/auth/** (login/refresh/logout),
+    // no en cada petición a la API — reduce la superficie de exposición del refresh token.
+    private static final String COOKIE_PATH_REFRESH = "/api/v1/usuarios/auth";
+
+    // S5: el access token también es httpOnly. Va con Path=/ (todo el dominio) — lo necesita
+    // el gateway en cada llamada de la API (/api/v1/**, para traducirlo al header Authorization
+    // vía CookieToAuthorizationFilter) Y el handshake del WebSocket directo a servicio-mensajeria
+    // (/ws-mensajeria, que NO cae bajo /api/v1 — con ese path más angosto el navegador no
+    // habría mandado el cookie ahí). Sigue siendo httpOnly: ampliar el path no expone el valor
+    // a JS en ninguna ruta, sólo amplía a qué peticiones el navegador lo adjunta solo.
+    private static final String COOKIE_ACCESS = "auth-token";
+    private static final String COOKIE_PATH_ACCESS = "/";
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
         Usuario usuarioCreado = usuarioService.registrarUsuario(request);
+        com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
         // Dispara el email de verificación solo si el método elegido lo exige (#3).
-        if (configuracionAuthService.getMetodo().requiereEmail()) {
+        if (metodo.requiereEmail()) {
             emailVerificationService.enviar(usuarioCreado);
         }
-        Long perfilId = obtenerPerfilId(usuarioCreado);
-        String token = jwtService.generateToken(usuarioCreado, perfilId);
-        sesionService.registrar(usuarioCreado.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
-
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .id(usuarioCreado.getId())
-                .nombre(usuarioCreado.getNombre())
-                .correo(usuarioCreado.getCorreo())
-                .rol(usuarioCreado.getRol().name())
-                .perfilId(perfilId)
-                .build());
+        // U1: /register NO entrega un JWT usable si aún falta verificar (WHATSAPP_OTP/EMAIL/AMBOS).
+        // Antes devolvía un token válido de una → la verificación era opcional. El token real se
+        // emite al completar la verificación (verify-otp/verify-email) o de una si el método es NINGUNO.
+        if (estaCompletamenteVerificado(usuarioCreado, metodo)) {
+            return ResponseEntity.ok(emitirSesion(usuarioCreado, http, resp));
+        }
+        return ResponseEntity.ok(respuestaSinToken(usuarioCreado));
     }
 
     // Solo un ADMIN autenticado puede crear otros administradores. El primer ADMIN se crea
     // por semilla inicial (data.sql / DataInitializer), nunca por este endpoint público.
     @PostMapping("/register-admin")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<AuthResponse> registerAdmin(@Valid @RequestBody AdminRegisterRequest request) {
+    public ResponseEntity<AuthResponse> registerAdmin(@Valid @RequestBody AdminRegisterRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
         Usuario admin = usuarioService.registrarAdmin(request);
         String token = jwtService.generateToken(admin, null);
+        setAccessCookie(resp, token, http);
 
         return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
+                .autenticado(true)
                 .id(admin.getId())
                 .nombre(admin.getNombre())
                 .correo(admin.getCorreo())
                 .rol(admin.getRol().name())
                 .perfilId(null)
+                .foto(admin.getFotoUrl())
+                .emailVerificado(admin.isEmailVerificado())
+                .tipoLogin(admin.getTipoLogin() != null ? admin.getTipoLogin().name() : "LOCAL")
                 .build());
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<String> verifyOtp(@Valid @RequestBody VerificarOtpRequest request) {
-        if (usuarioService.confirmarTelefono(request.getTelefono(), request.getCodigo())) {
-            return ResponseEntity.ok("Teléfono verificado exitosamente");
-        } else {
+    public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody VerificarOtpRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
+        if (!usuarioService.confirmarTelefono(request.getTelefono(), request.getCodigo())) {
             throw new OtpInvalidoException("El código OTP es incorrecto o ha expirado. Solicita uno nuevo desde la pantalla de verificación.");
         }
+        // U1: al verificar, emitimos el token real (si ya no falta ninguna verificación; AMBOS aún
+        // podría requerir el email). Así el token útil nace recién cuando la cuenta está verificada.
+        Usuario u = usuarioService.buscarPorTelefono(request.getTelefono())
+                .orElseThrow(() -> new com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException("No se encontró el usuario tras verificar el OTP"));
+        com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
+        if (estaCompletamenteVerificado(u, metodo)) {
+            return ResponseEntity.ok(emitirSesion(u, http, resp));
+        }
+        return ResponseEntity.ok(respuestaSinToken(u));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
         String ip = clientIp(http);
 
         // Bloqueo previo (lanza 423 si está bloqueada)
@@ -110,6 +143,10 @@ public class AuthController {
             loginAttemptService.registrarFallo(request.getCorreo(), ip);
             throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
         }
+
+        // La cuenta debe estar habilitada (no baneada/suspendida/rechazada). U4.
+        // Las credenciales eran correctas → no cuenta como fallo de login.
+        verificarCuentaHabilitada(usuario);
 
         // Gate de verificación según el método elegido por el admin (#3).
         // No cuenta como fallo de login: las credenciales eran correctas.
@@ -123,18 +160,30 @@ public class AuthController {
 
         loginAttemptService.registrarExito(usuario.getCorreo(), ip);
 
-        Long perfilId = obtenerPerfilId(usuario);
-        String token = jwtService.generateToken(usuario, perfilId);
-        sesionService.registrar(usuario.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
+        return ResponseEntity.ok(emitirSesion(usuario, http, resp));
+    }
 
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .id(usuario.getId())
-                .nombre(usuario.getNombre())
-                .correo(usuario.getCorreo())
-                .rol(usuario.getRol().name())
-                .perfilId(perfilId)
-                .build());
+    /**
+     * Bloquea el login de cuentas no habilitadas (baneada/suspendida/rechazada). U4.
+     * Se llama tras validar la contraseña, por lo que no cuenta como fallo de credenciales.
+     */
+    private void verificarCuentaHabilitada(Usuario usuario) {
+        // G8-B: una cuenta dada de baja/anonimizada (GDPR) no puede iniciar sesión.
+        // Se comprueba ANTES del estado para dar un mensaje específico (no "baneada").
+        if (usuario.isEliminado()) {
+            throw new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException(
+                    "Esta cuenta fue eliminada. Si deseas volver, crea una cuenta nueva.");
+        }
+        com.alquilaya.serviciousuarios.enums.EstadoUsuario estado = usuario.getEstado();
+        if (estado != null && estado.bloqueaAcceso()) {
+            String motivo = switch (estado) {
+                case BANNED -> "Tu cuenta ha sido baneada. Si crees que es un error, contacta a soporte.";
+                case SUSPENDED -> "Tu cuenta está suspendida temporalmente. Contacta a soporte para reactivarla.";
+                case REJECTED -> "Tu registro fue rechazado. Contacta a soporte para más información.";
+                default -> "Tu cuenta no está habilitada para iniciar sesión.";
+            };
+            throw new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException(motivo);
+        }
     }
 
     /**
@@ -151,7 +200,8 @@ public class AuthController {
     }
 
     @PostMapping("/login-admin")
-    public ResponseEntity<AuthResponse> loginAdmin(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+    public ResponseEntity<AuthResponse> loginAdmin(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
         String ip = clientIp(http);
 
         // Mismo lockout que el login normal (5 fallos/15min): evita fuerza bruta de credenciales admin.
@@ -167,16 +217,49 @@ public class AuthController {
             throw new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException("No tienes permisos de administrador para acceder a este recurso");
         }
 
+        // Un admin baneado/suspendido tampoco entra. U4.
+        verificarCuentaHabilitada(admin);
+
         loginAttemptService.registrarExito(admin.getCorreo(), ip);
-        String token = jwtService.generateToken(admin, null);
-        
+
+        // G7: unificado con emitirSesion() (antes no registraba la sesión ni emitía refresh token).
+        return ResponseEntity.ok(emitirSesion(admin, http, resp));
+    }
+
+    /**
+     * G7 + S5: canjea el refresh token vigente (leído del cookie httpOnly, JS no puede tocarlo)
+     * por un access token nuevo, SIN pedir credenciales. Se ROTA en cada uso (el usado queda
+     * inválido; reintentarlo = 401), lo que detecta reuso de un token robado. No requiere el
+     * access token anterior (puede estar ya expirado — ese es el caso de uso: renovar sesión
+     * sin "expulsar a media sesión").
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(
+            @CookieValue(name = COOKIE_REFRESH, required = false) String refreshTokenCookie,
+            HttpServletRequest http, HttpServletResponse resp) {
+        var resultado = refreshTokenService.validarYRotar(refreshTokenCookie)
+                .orElseThrow(() -> new com.alquilaya.serviciousuarios.exceptions.AccesoDenegadoException(
+                        "Refresh token inválido o expirado. Inicia sesión de nuevo."));
+        Usuario usuario = usuarioService.obtenerPorId(resultado.userId());
+        // Igual que en login: una cuenta baneada/suspendida/eliminada no puede renovar su sesión.
+        verificarCuentaHabilitada(usuario);
+
+        Long perfilId = obtenerPerfilId(usuario);
+        String token = jwtService.generateToken(usuario, perfilId);
+        sesionService.registrar(usuario.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
+        setAccessCookie(resp, token, http);
+        setRefreshCookie(resp, resultado.nuevoRefreshToken(), http);
+
         return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .id(admin.getId())
-                .nombre(admin.getNombre())
-                .correo(admin.getCorreo())
-                .rol(admin.getRol().name())
-                .perfilId(null)
+                .autenticado(true)
+                .id(usuario.getId())
+                .nombre(usuario.getNombre())
+                .correo(usuario.getCorreo())
+                .rol(usuario.getRol().name())
+                .perfilId(perfilId)
+                .foto(usuario.getFotoUrl())
+                .emailVerificado(usuario.isEmailVerificado())
+                .tipoLogin(usuario.getTipoLogin() != null ? usuario.getTipoLogin().name() : "LOCAL")
                 .build());
     }
 
@@ -190,23 +273,15 @@ public class AuthController {
      */
     @PostMapping("/google-login")
     public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request,
-                                                    HttpServletRequest http) {
+                                                    HttpServletRequest http, HttpServletResponse resp) {
         Usuario usuario = googleAuthService.autenticarConGoogle(request.getIdToken(), request.getRolPreferido());
+
+        // Aunque Google verifique el email, una cuenta baneada/suspendida no entra. U4.
+        verificarCuentaHabilitada(usuario);
 
         loginAttemptService.registrarExito(usuario.getCorreo(), clientIp(http));
 
-        Long perfilId = obtenerPerfilId(usuario);
-        String token = jwtService.generateToken(usuario, perfilId);
-        sesionService.registrar(usuario.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
-
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .id(usuario.getId())
-                .nombre(usuario.getNombre())
-                .correo(usuario.getCorreo())
-                .rol(usuario.getRol().name())
-                .perfilId(perfilId)
-                .build());
+        return ResponseEntity.ok(emitirSesion(usuario, http, resp));
     }
 
     /**
@@ -245,11 +320,18 @@ public class AuthController {
         ));
     }
 
-    /** Verifica el correo con el código de 6 dígitos enviado por email (#3). */
+    /** Verifica el correo con el código de 6 dígitos enviado por email (#3). Emite el token si ya está todo verificado (U1). */
     @PostMapping("/verify-email")
-    public ResponseEntity<Map<String, String>> verifyEmail(@Valid @RequestBody VerificarEmailRequest request) {
+    public ResponseEntity<AuthResponse> verifyEmail(@Valid @RequestBody VerificarEmailRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
         emailVerificationService.verificarCodigo(request.getCorreo(), request.getCodigo());
-        return ResponseEntity.ok(Map.of("mensaje", "Correo verificado correctamente."));
+        Usuario u = usuarioService.buscarPorCorreo(request.getCorreo())
+                .orElseThrow(() -> new com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException("No se encontró el usuario tras verificar el correo"));
+        com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
+        if (estaCompletamenteVerificado(u, metodo)) {
+            return ResponseEntity.ok(emitirSesion(u, http, resp));
+        }
+        return ResponseEntity.ok(respuestaSinToken(u));
     }
 
     /**
@@ -274,9 +356,19 @@ public class AuthController {
      *
      * <p>Idempotente: si el token es inválido, ya expiró o ya estaba revocado,
      * igual se devuelve 200 OK (no revela info al cliente).</p>
+     *
+     * <p>G7 + S5: si viene el cookie {@code refresh-token} (httpOnly), también se revoca y se
+     * borra el cookie — si no, quedaría vivo hasta su expiración natural y serviría para
+     * reobtener access tokens tras el logout.</p>
      */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(HttpServletRequest req) {
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest req, HttpServletResponse resp,
+            @CookieValue(name = COOKIE_REFRESH, required = false) String refreshTokenCookie) {
+        if (refreshTokenCookie != null && !refreshTokenCookie.isBlank()) {
+            refreshTokenService.revocar(refreshTokenCookie);
+        }
+        borrarRefreshCookie(resp);
+        borrarAccessCookie(resp);
         String header = req.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
@@ -351,5 +443,121 @@ public class AuthController {
                     .orElse(null);
         }
         return null;
+    }
+
+    /**
+     * U1: True si el usuario cumple TODAS las verificaciones exigidas por el método actual.
+     * Sólo entonces se le entrega un token usable (register/verify-otp/verify-email).
+     */
+    private boolean estaCompletamenteVerificado(Usuario u, com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo) {
+        boolean okTelefono = !metodo.requiereTelefono() || u.isTelefonoVerificado();
+        boolean okEmail = !metodo.requiereEmail() || u.isEmailVerificado();
+        return okTelefono && okEmail;
+    }
+
+    /**
+     * Genera el token + refresh token, registra la sesión y arma el AuthResponse. U1, G7.
+     * S5: el refresh token NO va en el JSON (un XSS que lea la respuesta lo robaría igual);
+     * se manda SOLO como cookie httpOnly — JavaScript no puede leerlo ni con XSS activo.
+     */
+    private AuthResponse emitirSesion(Usuario u, HttpServletRequest http, HttpServletResponse resp) {
+        Long perfilId = obtenerPerfilId(u);
+        String token = jwtService.generateToken(u, perfilId);
+        sesionService.registrar(u.getId(), jwtService.extractJti(token), http, jwtService.getExpiration(token));
+        String refreshToken = refreshTokenService.generar(u.getId());
+        setAccessCookie(resp, token, http);
+        setRefreshCookie(resp, refreshToken, http);
+        return AuthResponse.builder()
+                .autenticado(true)
+                .id(u.getId())
+                .nombre(u.getNombre())
+                .correo(u.getCorreo())
+                .rol(u.getRol().name())
+                .perfilId(perfilId)
+                .foto(u.getFotoUrl())
+                .emailVerificado(u.isEmailVerificado())
+                .tipoLogin(u.getTipoLogin() != null ? u.getTipoLogin().name() : "LOCAL")
+                .build();
+    }
+
+    /**
+     * S5: setea el refresh token como cookie httpOnly (inaccesible a JS/XSS), con {@code Secure}
+     * cuando la conexión es HTTPS (directo o detrás del gateway/nginx vía X-Forwarded-Proto —
+     * en dev por http plano NO se marca Secure, o el navegador la descartaría) y
+     * {@code SameSite=Lax} (basta: mismo "site" cubre localhost:3000↔:8080 en dev y el dominio
+     * real en prod; bloquea el envío en navegación cross-site de terceros).
+     */
+    private void setRefreshCookie(HttpServletResponse resp, String refreshToken, HttpServletRequest req) {
+        if (refreshToken == null) return;
+        ResponseCookie cookie = ResponseCookie.from(COOKIE_REFRESH, refreshToken)
+                .httpOnly(true)
+                .secure(esSeguro(req))
+                .sameSite("Lax")
+                .path(COOKIE_PATH_REFRESH)
+                .maxAge(Duration.ofMillis(refreshExpirationMs))
+                .build();
+        resp.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    /** S5: borra el cookie de refresh token (logout). */
+    private void borrarRefreshCookie(HttpServletResponse resp) {
+        ResponseCookie cookie = ResponseCookie.from(COOKIE_REFRESH, "")
+                .httpOnly(true)
+                .path(COOKIE_PATH_REFRESH)
+                .maxAge(0)
+                .build();
+        resp.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    /**
+     * S5: setea el access token como cookie httpOnly. Path=/api/v1 (toda la API, no sólo
+     * auth) porque {@code CookieToAuthorizationFilter} del gateway lo necesita en cada
+     * llamada para traducirlo al header Authorization que ya esperan todos los servicios
+     * downstream (ninguno cambió su forma de leer el JWT — sigue siendo el mismo header).
+     * maxAge = tiempo real hasta la expiración del JWT (no un valor fijo aparte).
+     */
+    private void setAccessCookie(HttpServletResponse resp, String token, HttpServletRequest req) {
+        if (token == null) return;
+        long maxAgeMs = Math.max(0, jwtService.getExpiration(token).getTime() - System.currentTimeMillis());
+        ResponseCookie cookie = ResponseCookie.from(COOKIE_ACCESS, token)
+                .httpOnly(true)
+                .secure(esSeguro(req))
+                .sameSite("Lax")
+                .path(COOKIE_PATH_ACCESS)
+                .maxAge(Duration.ofMillis(maxAgeMs))
+                .build();
+        resp.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    /** S5: borra el cookie de access token (logout). */
+    private void borrarAccessCookie(HttpServletResponse resp) {
+        ResponseCookie cookie = ResponseCookie.from(COOKIE_ACCESS, "")
+                .httpOnly(true)
+                .path(COOKIE_PATH_ACCESS)
+                .maxAge(0)
+                .build();
+        resp.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private static boolean esSeguro(HttpServletRequest req) {
+        return req.isSecure() || "https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto"));
+    }
+
+    /**
+     * AuthResponse SIN token: la cuenta se creó/verificó parcialmente pero aún falta verificación,
+     * así que el frontend permanece en el paso de OTP/email. El token llega al completar la verificación. U1.
+     */
+    private AuthResponse respuestaSinToken(Usuario u) {
+        return AuthResponse.builder()
+                .autenticado(false)
+                .id(u.getId())
+                .nombre(u.getNombre())
+                .correo(u.getCorreo())
+                .rol(u.getRol().name())
+                .perfilId(obtenerPerfilId(u))
+                .foto(u.getFotoUrl())
+                .emailVerificado(u.isEmailVerificado())
+                .tipoLogin(u.getTipoLogin() != null ? u.getTipoLogin().name() : "LOCAL")
+                .build();
     }
 }

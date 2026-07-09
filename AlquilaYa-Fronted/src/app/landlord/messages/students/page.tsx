@@ -9,9 +9,8 @@ import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { conversationService } from '@/services/conversation-service';
 import { stompClient } from '@/services/stomp-client';
-import { servicioAuth } from '@/services/auth-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
-import Cookies from 'js-cookie';
 import type { ConversacionResumen, Mensaje } from '@/types/chat';
 import type { RolUsuario } from '@/types/auth';
 
@@ -48,13 +47,13 @@ function fechaLista(fecha: string): string {
   return format(d, 'dd/MM/yy');
 }
 
+// S5: el usuario actual ya no se decodifica de un token (es httpOnly, JS no puede leerlo) —
+// se lee del store, que `inicializar()`/`restaurarSesion()` ya hidrató desde el backend.
 function obtenerMiIdentidad(): { perfilId: number | null; rol: RolUsuario | null } {
-  const token = Cookies.get('auth-token');
-  if (!token) return { perfilId: null, rol: null };
-  const u = servicioAuth.obtenerUsuarioActualDesdeToken(token);
+  const u = useAuthStore.getState().usuario;
   const v = u?.perfilId;
   const perfilId = typeof v === 'number' ? v : v ? Number(v) : null;
-  return { perfilId, rol: u?.rol ?? null };
+  return { perfilId, rol: (u?.rol as RolUsuario) ?? null };
 }
 
 /**

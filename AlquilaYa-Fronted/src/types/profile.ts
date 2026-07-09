@@ -1,5 +1,5 @@
 export type RolPerfil = 'ESTUDIANTE' | 'ARRENDADOR' | 'ADMIN';
-export type EstadoUsuario = 'PENDING' | 'ACTIVE' | 'BANNED';
+export type EstadoUsuario = 'PENDING' | 'ACTIVE' | 'BANNED' | 'REJECTED' | 'SUSPENDED';
 
 export interface Perfil {
   id: number;
