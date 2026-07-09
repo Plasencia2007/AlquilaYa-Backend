@@ -110,7 +110,7 @@ export default function ReservationsActivePage() {
   ];
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
       {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>

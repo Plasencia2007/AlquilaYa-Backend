@@ -13,7 +13,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     const variants = {
       surface: 'bg-card border border-border',
       lowest: 'bg-card border border-border',
-      glass: 'bg-white border border-border',
+      glass: 'bg-card/80 backdrop-blur-sm border border-border',
     };
 
     const paddings = {
@@ -28,7 +28,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-md transition-colors duration-200 overflow-hidden',
+          'rounded-xl shadow-card transition-colors duration-200 overflow-hidden',
           variants[variant],
           paddings[padding],
           hoverable && 'hover:border-foreground/20',

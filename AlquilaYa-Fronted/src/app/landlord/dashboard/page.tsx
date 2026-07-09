@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { StatCard } from '@/components/landlord/stat-card';
+import { StatCard, StatCardSkeleton } from '@/components/shared/stat-card';
 import { Card } from '@/components/ui/legacy-card';
 import { Button } from '@/components/ui/legacy-button';
 import { Badge } from '@/components/ui/legacy-badge';
@@ -109,7 +109,7 @@ export default function LandlordDashboardPage() {
     : 0;
 
   return (
-    <div className="space-y-8 animate-fade-in py-4">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400 py-4">
       <VerificationPanel />
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-2">
@@ -167,26 +167,26 @@ export default function LandlordDashboardPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              titulo="Ingresos del mes"
-              valor={formatearSoles(metricas.ingresosMesActual)}
-              tendencia={tendenciaIngresos}
+              label="Ingresos del mes"
+              value={formatearSoles(metricas.ingresosMesActual)}
+              delta={tendenciaIngresos}
               icon="payments"
             />
             <StatCard
-              titulo="Ocupación"
-              valor={`${metricas.tasaOcupacion.toFixed(1)}%`}
-              subtitulo={`${metricas.propiedadesActivas} activos`}
+              label="Ocupación"
+              value={`${metricas.tasaOcupacion.toFixed(1)}%`}
+              deltaLabel={`${metricas.propiedadesActivas} activos`}
               icon="meeting_room"
             />
             <StatCard
-              titulo="Reservas activas"
-              valor={metricas.reservasActivas.toLocaleString('es-PE')}
-              subtitulo={`${metricas.vistasUltimos30Dias.toLocaleString('es-PE')} vistas`}
+              label="Reservas activas"
+              value={metricas.reservasActivas.toLocaleString('es-PE')}
+              deltaLabel={`${metricas.vistasUltimos30Dias.toLocaleString('es-PE')} vistas`}
               icon="event_available"
             />
             <StatCard
-              titulo="Mensajes sin leer"
-              valor={metricas.mensajesSinLeer.toLocaleString('es-PE')}
+              label="Mensajes sin leer"
+              value={metricas.mensajesSinLeer.toLocaleString('es-PE')}
               icon="chat"
             />
           </div>
@@ -421,10 +421,7 @@ function SkeletonStats() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {[0, 1, 2, 3].map((i) => (
-        <div
-          key={i}
-          className="bg-white border border-border p-5 rounded-md h-32 animate-pulse"
-        />
+        <StatCardSkeleton key={i} />
       ))}
     </div>
   );

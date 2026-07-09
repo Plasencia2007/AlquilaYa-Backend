@@ -41,7 +41,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: ToastItem[]; onRemove: (
           key={t.id}
           className={cn(
             'flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-bold pointer-events-auto',
-            'animate-slide-in-right border',
+            'animate-in fade-in slide-in-from-right duration-300 border',
             t.type === 'success'
               ? 'bg-green-500 text-white border-green-600'
               : 'bg-red-500 text-white border-red-600'
@@ -86,7 +86,7 @@ function ConfirmModal({
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
         <div className={cn(
           'w-12 h-12 rounded-2xl flex items-center justify-center mb-4',
           variant === 'danger' ? 'bg-red-50' : 'bg-orange-50'
@@ -130,7 +130,7 @@ function RejectModal({ onConfirm, onCancel }: { onConfirm: (motivo: string) => v
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
         <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
           <XCircle size={22} className="text-red-500" />
         </div>
@@ -268,8 +268,8 @@ function ProveedorDrawer({
 
   return createPortal(
     <>
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-fade-in" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-[380px] bg-[#0f172a] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-slide-in-right overflow-y-auto">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-in fade-in slide-in-from-bottom-2 duration-400" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-[380px] bg-[#0f172a] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-in fade-in slide-in-from-right duration-300 overflow-y-auto">
         {/* Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <h2 className="text-white font-black tracking-tight text-sm">Detalle del proveedor</h2>
@@ -868,7 +868,7 @@ export default function AdminProveedoresPage() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
       {/* Header */}
       <div>
         <span className="text-primary font-black tracking-[0.3em] uppercase text-[9px] mb-2 block">Validaciones</span>

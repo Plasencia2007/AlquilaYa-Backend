@@ -61,7 +61,7 @@ function ProfileHero() {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-extrabold tracking-tight text-foreground">{usuario?.nombre}</h2>
             {verificado && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
                 <ShieldCheck className="size-3" /> Verificado
               </span>
             )}
@@ -79,7 +79,7 @@ function ProfileHero() {
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Favoritos</p>
           </div>
           <div className="px-5 text-center">
-            <Star className="mx-auto size-5 fill-amber-400 text-amber-400" />
+            <Star className="mx-auto size-5 fill-warning text-warning" />
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reputación</p>
           </div>
         </div>

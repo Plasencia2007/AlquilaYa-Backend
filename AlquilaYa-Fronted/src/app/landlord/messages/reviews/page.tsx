@@ -674,7 +674,7 @@ export default function LandlordReviewsPage() {
   }, [resenas]);
 
   return (
-    <div className="space-y-7 animate-fade-in">
+    <div className="space-y-7 animate-in fade-in slide-in-from-bottom-2 duration-400">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

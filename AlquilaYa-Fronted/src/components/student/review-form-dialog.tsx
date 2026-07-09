@@ -63,7 +63,7 @@ function StarPicker({
             className={cn(
               size === 'lg' ? 'size-8' : 'size-6',
               s <= activo
-                ? 'fill-yellow-400 text-yellow-400'
+                ? 'fill-warning text-warning'
                 : 'fill-muted text-muted-foreground/30',
             )}
           />
@@ -186,7 +186,7 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="font-headline text-xl font-bold">
+            <DialogTitle className="text-h2">
               Califica tu estadía
             </DialogTitle>
             <DialogDescription>
@@ -196,7 +196,7 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
 
           {enviada || (!verificandoPrevias && todoResenado) ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <CheckCircle2 className="size-12 text-green-500" />
+              <CheckCircle2 className="size-12 text-success" />
               <p className="text-sm font-semibold text-foreground">
                 {enviada ? '¡Reseña enviada!' : 'Ya dejaste tu reseña para esta estadía'}
               </p>

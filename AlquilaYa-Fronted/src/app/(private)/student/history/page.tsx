@@ -23,6 +23,7 @@ import { useHistory } from '@/hooks/use-history';
 import { servicioPropiedades } from '@/services/property-service';
 import { tiempoRelativo } from '@/lib/relative-time';
 import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { formatPEN } from '@/lib/money';
 import type { Propiedad } from '@/types/propiedad';
 
 export default function StudentHistoryPage() {
@@ -64,7 +65,7 @@ export default function StudentHistoryPage() {
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-8 md:py-12">
       <header className="mb-8 flex items-end justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
+          <h1 className="text-h1">
             Historial
           </h1>
           <p className="text-sm text-muted-foreground md:text-base">
@@ -147,8 +148,8 @@ export default function StudentHistoryPage() {
                       </p>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
-                      <p className="text-base font-black text-primary">
-                        S/ {p.precio.toLocaleString('es-PE')}
+                      <p className="tnum text-base font-black text-primary">
+                        {formatPEN(p.precio)}
                         <span className="ml-1 text-[10px] font-normal text-muted-foreground">/mes</span>
                       </p>
                       <span className="text-[10px] text-muted-foreground">

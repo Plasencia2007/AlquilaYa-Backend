@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
@@ -18,7 +19,6 @@ export function LoginForm() {
   const { iniciarSesion, loginConGoogle } = useAuth();
   const { close, open: openAuthModal } = useAuthModal();
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   // Si el login se bloquea por correo sin verificar, guardamos el correo para ofrecer verificación.
   const [correoSinVerificar, setCorreoSinVerificar] = useState<string | null>(null);
@@ -84,15 +84,15 @@ export function LoginForm() {
 
       {/* Alerta correo sin verificar */}
       {correoSinVerificar && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
-          <p className="font-semibold text-amber-800">Verifica tu correo para entrar</p>
-          <p className="mt-0.5 text-xs text-amber-700">
+        <div className="rounded-xl border border-warning/20 bg-warning-light p-3 text-sm">
+          <p className="font-semibold text-warning">Verifica tu correo para entrar</p>
+          <p className="mt-0.5 text-xs text-warning/80">
             Tu cuenta requiere verificar <strong>{correoSinVerificar}</strong>. Revisa tu bandeja (y spam).
           </p>
           <Button
             type="button"
             onClick={irAVerificar}
-            className="mt-2 h-8 rounded-lg bg-amber-500 px-3 text-xs font-bold text-white hover:bg-amber-600"
+            className="mt-2 h-8 rounded-lg bg-warning px-3 text-xs font-bold text-warning-foreground hover:bg-warning/90"
           >
             Verificar correo
           </Button>
@@ -154,24 +154,12 @@ export function LoginForm() {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                    <Input
-                      {...field}
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      placeholder="Contraseña"
-                      className="h-11 rounded-xl bg-input pl-11 pr-11 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    {...field}
+                    showIcon
+                    autoComplete="current-password"
+                    placeholder="Contraseña"
+                  />
                 </FormControl>
                 <FormMessage className="px-1 text-xs" />
               </FormItem>

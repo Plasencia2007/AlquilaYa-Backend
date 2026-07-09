@@ -1,6 +1,6 @@
 export default function AdminPropertiesPage() {
   return (
-    <div className="animate-fade-in">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
         <div>
           <span className="text-secondary font-bold tracking-[0.2em] uppercase text-[10px] mb-2 block">Giga-Control de Activos</span>

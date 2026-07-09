@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,8 +11,10 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
+import { useCommandPaletteStore } from '@/stores/command-palette-store';
 
 import { Logo } from './logo';
+import { Wordmark } from './wordmark';
 import { MobileNav } from './mobile-nav';
 import { UserMenu } from './user-menu';
 
@@ -54,10 +57,8 @@ export function TopBar() {
           href="/"
           className="flex items-center gap-2.5 transition-transform active:scale-95"
         >
-          <Logo className={cn("h-7 w-7 transition-colors", isTransparent ? "text-white" : "text-[#e87272]")} />
-          <span className={cn("text-xl font-black tracking-tighter", isTransparent ? "text-white" : "text-primary")}>
-            AlquilaYa
-          </span>
+          <Logo className={cn("h-7 w-7 transition-colors", isTransparent ? "text-white" : "text-primary")} />
+          <Wordmark variant={isTransparent ? 'onDark' : 'themed'} />
         </Link>
 
         <div className="ml-4 hidden items-center gap-12 md:flex">
@@ -82,6 +83,24 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
+        <button
+          type="button"
+          onClick={() => useCommandPaletteStore.getState().setOpen(true)}
+          aria-label="Abrir búsqueda rápida"
+          className={cn(
+            "hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:flex",
+            isTransparent
+              ? "border-white/30 text-white/80 hover:bg-white/10"
+              : "border-border text-muted-foreground hover:bg-muted",
+          )}
+        >
+          <Search className="size-3.5" aria-hidden />
+          Buscar
+          <kbd className="ml-1 rounded border border-current/30 px-1 font-mono text-[10px] opacity-70">
+            ⌘K
+          </kbd>
+        </button>
+
         <ThemeToggle
           className={cn(isTransparent && "text-white hover:bg-white/20 hover:text-white")}
         />

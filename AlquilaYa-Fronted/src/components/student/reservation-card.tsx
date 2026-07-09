@@ -22,6 +22,7 @@ import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { metaEstadoReserva } from '@/lib/reservation-status';
 import { formatearFecha } from '@/lib/relative-time';
+import { formatPEN } from '@/lib/money';
 import type { Reserva } from '@/types/reserva';
 import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
 
@@ -169,14 +170,14 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
             </div>
             <div className="col-span-2 sm:col-span-1">
               <p className="font-semibold uppercase tracking-wider text-[10px]">Total</p>
-              <p className="font-black text-primary">
-                S/ {reserva.montoTotal.toLocaleString('es-PE')}
+              <p className="tnum font-black text-primary">
+                {formatPEN(reserva.montoTotal)}
               </p>
             </div>
           </div>
 
           {reserva.estado === 'RECHAZADA' && reserva.motivoRechazo && (
-            <div className="mt-1.5 rounded-xl bg-red-50 p-2.5 text-xs text-red-800 dark:bg-red-950/20 dark:text-red-300">
+            <div className="mt-1.5 rounded-xl bg-destructive/10 p-2.5 text-xs text-destructive">
               <strong className="font-bold">Motivo de rechazo:</strong> {reserva.motivoRechazo}
             </div>
           )}

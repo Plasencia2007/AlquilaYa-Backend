@@ -687,7 +687,7 @@ export default function AddPropertyPage() {
   // Render
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 animate-fade-in">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="mb-8 flex items-start gap-4">

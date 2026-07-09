@@ -8,6 +8,7 @@ import { memo, useEffect, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { distanciaHaversineKm, formatearDistancia, resolverZona } from '@/lib/geo';
+import { formatPEN } from '@/lib/money';
 import { getZonasCached } from '@/lib/zonas-cache';
 import type { ZonaResolucion } from '@/services/universidad-service';
 import type { Propiedad } from '@/types/propiedad';
@@ -89,8 +90,8 @@ function PropertyCardImpl({
   return (
     <article
       className={cn(
-        'group relative flex h-full cursor-pointer select-none flex-col bg-transparent',
-        isCompact && 'rounded-3xl border border-stone-100 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]',
+        '@container/pcard group relative flex h-full cursor-pointer select-none flex-col bg-transparent',
+        isCompact && 'rounded-3xl border border-border bg-card p-3 shadow-card transition-shadow duration-200 ease-out-expo hover:shadow-popover',
         className,
       )}
     >
@@ -151,6 +152,10 @@ function PropertyCardImpl({
             className={cn(
               'absolute bottom-3 right-3 z-[8] flex size-8 items-center justify-center rounded-full bg-white/95 text-foreground shadow-md',
               'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none',
+              // Container query (no viewport): en un contenedor angosto (sidebar de
+              // "similares", carruseles chicos) el botón de vista rápida no cabe bien —
+              // se oculta solo por ancho REAL de la card, sin necesitar otra variant.
+              '@max-[200px]/pcard:hidden',
             )}
           >
             <Eye className="size-3.5" aria-hidden />
@@ -170,6 +175,10 @@ function PropertyCardImpl({
               <h3
                 className={cn(
                   'flex-1 text-[15px] font-[500] leading-[19px] text-foreground',
+                  // Container query: si la card se renderiza muy ancha (spotlight a
+                  // futuro), el título crece solo — no afecta a los grids actuales,
+                  // que nunca llegan a ese ancho por columna.
+                  '@min-[500px]/pcard:text-xl @min-[500px]/pcard:leading-6',
                   isFeature ? 'line-clamp-2 text-xl font-semibold' : 'line-clamp-2',
                 )}
               >
@@ -216,18 +225,18 @@ function PropertyCardImpl({
           {/* Precio — anclado al fondo del card con mt-auto */}
           <div className="mt-auto pt-3 flex items-baseline gap-1.5">
             {hayRebaja && (
-              <span className="text-[14px] text-muted-foreground line-through">
-                S/ {propiedad.precioAnterior!.toLocaleString('es-PE')}
+              <span className="tnum text-[14px] text-muted-foreground line-through">
+                {formatPEN(propiedad.precioAnterior!)}
               </span>
             )}
             <span
               className={cn(
-                'text-[15px] font-bold leading-[19px]',
+                'tnum text-[15px] font-bold leading-[19px]',
                 hayRebaja ? 'text-primary' : 'text-foreground',
                 isFeature && 'text-lg',
               )}
             >
-              S/ {propiedad.precio.toLocaleString('es-PE')}
+              {formatPEN(propiedad.precio)}
             </span>
             <span className="text-[14px] text-muted-foreground">por mes</span>
           </div>

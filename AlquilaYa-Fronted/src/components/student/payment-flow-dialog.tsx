@@ -8,6 +8,7 @@ import { Check, Clock, Copy, ExternalLink, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
+import { formatPEN } from '@/lib/money';
 import { pagoService } from '@/services/pago-service';
 
 type Fase = 'waiting' | 'paid' | 'rejected' | 'timeout';
@@ -199,8 +200,8 @@ export function PaymentFlowDialog({
         {fase === 'paid' && (
           <div className="ayp-pop flex flex-col items-center gap-5">
             <div className="relative mx-auto flex size-24 items-center justify-center">
-              <span className="absolute inline-flex size-24 animate-ping rounded-full bg-green-500/20" />
-              <svg viewBox="0 0 52 52" className="relative size-24 text-green-500">
+              <span className="absolute inline-flex size-24 animate-ping rounded-full bg-success/20" />
+              <svg viewBox="0 0 52 52" className="relative size-24 text-success">
                 <circle
                   className="ayp-circle"
                   cx="26"
@@ -232,8 +233,8 @@ export function PaymentFlowDialog({
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Monto pagado
               </p>
-              <p className="text-lg font-black text-foreground">
-                S/ {(montoPagado ?? monto).toLocaleString('es-PE')}
+              <p className="tnum text-lg font-black text-foreground">
+                {formatPEN(montoPagado ?? monto)}
               </p>
               {paymentId && (
                 <>
@@ -247,7 +248,7 @@ export function PaymentFlowDialog({
                       className={cn(
                         'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition',
                         copiado
-                          ? 'bg-green-500/15 text-green-600'
+                          ? 'bg-success/15 text-success'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       )}
                     >
@@ -304,8 +305,8 @@ export function PaymentFlowDialog({
         {/* ------------------------------ TIMEOUT ------------------------------ */}
         {fase === 'timeout' && (
           <div className="flex flex-col items-center gap-5">
-            <div className="flex size-20 items-center justify-center rounded-full bg-amber-500/15">
-              <Clock className="size-10 text-amber-500" />
+            <div className="flex size-20 items-center justify-center rounded-full bg-warning/15">
+              <Clock className="size-10 text-warning" />
             </div>
             <div className="space-y-1">
               <h2 className="text-xl font-bold text-foreground">Aún no confirmamos tu pago</h2>

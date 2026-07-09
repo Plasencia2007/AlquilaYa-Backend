@@ -219,7 +219,7 @@ export function FotosSidebar({
         </p>
 
         {errores.imagen && (
-          <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 animate-fade-in">
+          <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 animate-in fade-in slide-in-from-bottom-2 duration-400">
             <span className="material-symbols-outlined text-[13px]">error</span>
             {errores.imagen}
           </p>

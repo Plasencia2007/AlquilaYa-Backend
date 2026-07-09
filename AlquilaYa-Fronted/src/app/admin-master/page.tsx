@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import StatsCard from '@/components/admin/StatsCard';
+import { StatCard } from '@/components/shared/stat-card';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { usuarioMasterService, UsuarioMaster } from '@/services/admin-user-service';
 import { adminService } from '@/services/adminService';
@@ -121,7 +121,7 @@ export default function AdminDashboard() {
   const valor = (n: number) => (loading ? '—' : n.toLocaleString('es-PE'));
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
@@ -151,28 +151,28 @@ export default function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard
-          etiqueta="Usuarios totales"
-          valor={valor(totalUsuarios)}
-          etiquetaCambio={`${estudiantes.length} estudiantes`}
+        <StatCard
+          label="Usuarios totales"
+          value={valor(totalUsuarios)}
+          deltaLabel={`${estudiantes.length} estudiantes`}
           icon="group"
         />
-        <StatsCard
-          etiqueta="Arrendadores"
-          valor={valor(arrendadores.length)}
-          etiquetaCambio={`${arrendadoresActivos} activos`}
+        <StatCard
+          label="Arrendadores"
+          value={valor(arrendadores.length)}
+          deltaLabel={`${arrendadoresActivos} activos`}
           icon="store"
         />
-        <StatsCard
-          etiqueta="Propiedades"
-          valor={valor(propiedades.length)}
-          etiquetaCambio="en catálogo"
+        <StatCard
+          label="Propiedades"
+          value={valor(propiedades.length)}
+          deltaLabel="en catálogo"
           icon="apartment"
         />
-        <StatsCard
-          etiqueta="Por revisar"
-          valor={valor(pendientes.length)}
-          etiquetaCambio="requieren acción"
+        <StatCard
+          label="Por revisar"
+          value={valor(pendientes.length)}
+          deltaLabel="requieren acción"
           icon="fact_check"
         />
       </div>

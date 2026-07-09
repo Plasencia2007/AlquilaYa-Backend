@@ -94,7 +94,7 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
       {/* Backdrop */}
       <div
         className={`absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ${
-          open ? 'opacity-100 animate-fade-in' : 'opacity-0 pointer-events-none'
+          open ? 'opacity-100 animate-in fade-in slide-in-from-bottom-2 duration-400' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
       />
@@ -102,7 +102,7 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
       {/* Drawer Container Panel */}
       <div
         className={`relative w-full max-w-lg bg-card h-full shadow-2xl border-l border-border flex flex-col justify-between overflow-y-auto transform transition-transform duration-300 ease-out z-10 ${
-          open ? 'translate-x-0 animate-slide-in-right' : 'translate-x-full'
+          open ? 'translate-x-0 animate-in fade-in slide-in-from-right duration-300' : 'translate-x-full'
         }`}
       >
         {/* Soft background glows */}

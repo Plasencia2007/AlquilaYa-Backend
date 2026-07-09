@@ -22,7 +22,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       outline: 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
       ghost: 'text-muted-foreground hover:bg-muted hover:text-primary',
       dark: 'bg-foreground text-background hover:bg-foreground/90',
-      white: 'bg-white text-primary border border-border hover:bg-muted',
+      white: 'bg-card text-primary border border-border hover:bg-muted',
     };
 
     const sizes = {
@@ -36,7 +36,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-md font-bold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center gap-2 rounded-md font-bold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           variants[variant],
           sizes[size],
           className

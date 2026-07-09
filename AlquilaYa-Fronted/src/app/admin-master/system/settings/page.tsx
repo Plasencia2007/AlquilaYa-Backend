@@ -67,7 +67,7 @@ export default function AdminSettingsPage() {
   const sinCambios = valorActual !== null && Number(horas) === valorActual;
 
   return (
-    <div className="space-y-8 animate-fade-in p-6 max-w-3xl">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400 p-6 max-w-3xl">
       {/* Encabezado */}
       <div className="flex items-center gap-4">
         <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center shrink-0">

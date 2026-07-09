@@ -45,7 +45,7 @@ export default function RolesPermissionsPage() {
   const roles = ['ESTUDIANTE', 'ARRENDADOR', 'ADMIN'];
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
       <header className="mb-12">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5">

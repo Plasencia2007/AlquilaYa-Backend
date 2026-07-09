@@ -9,6 +9,7 @@ import { getCampusAnchor, distanciaAUpeuKm, formatearDistancia, type LatLng } fr
 import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import type { Propiedad } from '@/types/propiedad';
 import { cn } from '@/lib/cn';
+import { formatPEN } from '@/lib/money';
 
 const upeuIcon = new L.Icon({
   iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
@@ -30,7 +31,7 @@ interface Props {
 
 /** Pastilla de precio estilo Airbnb como marcador del mapa. */
 function precioDivIcon(precio: number, activo: boolean): L.DivIcon {
-  const txt = `S/ ${Math.round(precio).toLocaleString('es-PE')}`;
+  const txt = formatPEN(Math.round(precio));
   const w = Math.max(48, txt.length * 8 + 18);
   const bg = activo ? '#1d1b19' : '#ffffff';
   const fg = activo ? '#ffffff' : '#1d1b19';
@@ -203,8 +204,8 @@ export default function PropertiesMap({ propiedades, className, activeId, onHove
                         a {formatearDistancia(distancia)} de UPeU
                       </p>
                     )}
-                    <p style={{ margin: '4px 0 0', fontWeight: 900, fontSize: 14, color: 'var(--primary)' }}>
-                      S/ {p.precio.toLocaleString('es-PE')}
+                    <p className="tnum" style={{ margin: '4px 0 0', fontWeight: 900, fontSize: 14, color: 'var(--primary)' }}>
+                      {formatPEN(p.precio)}
                       <span style={{ fontWeight: 400, fontSize: 10, marginLeft: 3, color: 'var(--muted-foreground)' }}>/mes</span>
                     </p>
                   </div>

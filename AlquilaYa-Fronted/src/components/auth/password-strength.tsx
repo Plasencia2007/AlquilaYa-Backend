@@ -22,7 +22,7 @@ export function PasswordStrength({ password = '' }: PasswordStrengthProps) {
   const missing = requirements.filter((r) => !r.met).map((r) => r.short);
 
   const strengthColor =
-    metCount <= 2 ? 'bg-destructive' : metCount <= 4 ? 'bg-amber-500' : 'bg-green-500';
+    metCount <= 2 ? 'bg-destructive' : metCount <= 4 ? 'bg-warning' : 'bg-success';
 
   return (
     <div className="mt-2 space-y-1.5 animate-in fade-in-50 duration-200">
@@ -38,7 +38,7 @@ export function PasswordStrength({ password = '' }: PasswordStrengthProps) {
       </div>
       <p className="px-1 text-[11px] leading-tight">
         {allMet ? (
-          <span className="inline-flex items-center gap-1 font-medium text-green-600">
+          <span className="inline-flex items-center gap-1 font-medium text-success">
             <Check className="size-3 stroke-[3]" /> Contraseña segura
           </span>
         ) : (

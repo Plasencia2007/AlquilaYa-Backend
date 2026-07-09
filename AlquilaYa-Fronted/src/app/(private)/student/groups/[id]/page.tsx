@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Check, Copy, Crown, Loader2, Trash2, UserPlus } from 'lucide-react';
+import { Check, Copy, Crown, Trash2, UserPlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { CenteredSpinner } from '@/components/shared/centered-spinner';
+import { PageBreadcrumb } from '@/components/shared/page-breadcrumb';
+import { formatPEN } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { RoommateCard } from '@/components/student/roommate-card';
@@ -94,11 +98,7 @@ export default function GrupoDetallePage() {
   };
 
   if (cargando) {
-    return (
-      <div className="flex justify-center py-24 text-muted-foreground">
-        <Loader2 className="size-8 animate-spin" />
-      </div>
-    );
+    return <CenteredSpinner className="py-24" />;
   }
   if (!grupo) return null;
 
@@ -126,11 +126,20 @@ export default function GrupoDetallePage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
+      <PageBreadcrumb
+        className="mb-4"
+        items={[
+          { label: 'Mi panel', href: '/student' },
+          { label: 'Mis grupos', href: '/student/groups' },
+          { label: grupo.nombre || 'Grupo' },
+        ]}
+      />
+
       {/* Encabezado */}
       <div className="rounded-3xl border border-border bg-card p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-black text-foreground">{grupo.nombre}</h1>
+            <h1 className="text-h1 truncate">{grupo.nombre}</h1>
             <Link
               href={`/property/${grupo.propiedadId}`}
               className="text-sm font-semibold text-primary hover:underline"
@@ -151,9 +160,7 @@ export default function GrupoDetallePage() {
               {grupo.cuposOcupados}/{grupo.cuposTotales}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-          </div>
+          <Progress value={pct} label={`${grupo.cuposOcupados} de ${grupo.cuposTotales} cupos ocupados`} />
         </div>
 
         {/* Acciones del visitante */}
@@ -170,7 +177,7 @@ export default function GrupoDetallePage() {
               </Button>
             </>
           )}
-          {soySolicitante && <span className="text-sm font-semibold text-amber-600">Tu solicitud está pendiente de aprobación.</span>}
+          {soySolicitante && <span className="text-sm font-semibold text-warning">Tu solicitud está pendiente de aprobación.</span>}
           {soyMiembro && !soyCreador && (
             <Button variant="outline" onClick={() => run(() => grupoService.salir(grupo.id), 'Saliste del grupo')} disabled={accion}>
               Salir del grupo
@@ -229,9 +236,7 @@ export default function GrupoDetallePage() {
                   <span className="text-muted-foreground">Pagaron</span>
                   <span className="text-primary">{pagadas}/{cuotas.length}</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                </div>
+                <Progress value={pct} label={`${pagadas} de ${cuotas.length} cuotas pagadas`} />
                 <div className="mt-3 space-y-1.5">
                   {cuotas.map((c) => (
                     <div key={c.estudianteId} className="flex items-center justify-between text-sm">
@@ -240,9 +245,9 @@ export default function GrupoDetallePage() {
                         {c.estudianteId === miId ? ' (tú)' : ''}
                       </span>
                       <span className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">S/ {c.monto.toLocaleString('es-PE')}</span>
+                        <span className="tnum font-semibold text-foreground">{formatPEN(c.monto)}</span>
                         <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold',
-                          c.estado === 'PAGADO' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>
+                          c.estado === 'PAGADO' ? 'bg-success-light text-success' : 'bg-warning-light text-warning')}>
                           {c.estado === 'PAGADO' ? 'Pagó' : 'Pendiente'}
                         </span>
                       </span>
@@ -251,11 +256,11 @@ export default function GrupoDetallePage() {
                 </div>
                 {miCuota && miCuota.estado === 'PENDIENTE' && (
                   <Button className="mt-4 w-full font-bold" disabled={accion} onClick={pagarMiParte}>
-                    Pagar mi parte · S/ {miCuota.monto.toLocaleString('es-PE')}
+                    Pagar mi parte · {formatPEN(miCuota.monto)}
                   </Button>
                 )}
                 {cuotas.length > 0 && pagadas === cuotas.length && (
-                  <p className="mt-3 text-center text-sm font-bold text-green-600">
+                  <p className="mt-3 text-center text-sm font-bold text-success">
                     ¡Todos pagaron! La reserva quedará confirmada. 🎉
                   </p>
                 )}
@@ -293,8 +298,8 @@ export default function GrupoDetallePage() {
                     m.estado === 'CREADOR'
                       ? 'bg-primary/10 text-primary'
                       : m.estado === 'SOLICITADO'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-green-100 text-green-700',
+                        ? 'bg-warning-light text-warning'
+                        : 'bg-success-light text-success',
                   )}
                 >
                   {m.estado === 'CREADOR' && <Crown className="size-3" />}

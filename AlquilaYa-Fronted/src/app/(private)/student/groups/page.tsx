@@ -2,10 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, UsersRound } from 'lucide-react';
+import { UsersRound } from 'lucide-react';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { notify } from '@/lib/notify';
 import { grupoService, type GrupoRoommate } from '@/services/grupo-service';
+
+function SkeletonGroupCard() {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <Skeleton className="mt-2 h-3 w-1/2" />
+      <Skeleton className="mt-3 h-4 w-1/3" />
+    </div>
+  );
+}
 
 export default function MisGruposPage() {
   const [grupos, setGrupos] = useState<GrupoRoommate[]>([]);
@@ -22,13 +36,15 @@ export default function MisGruposPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
       <header className="mb-6">
-        <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">Mis grupos</h1>
+        <h1 className="text-h1">Mis grupos</h1>
         <p className="mt-1 text-sm text-muted-foreground">Grupos de roommates que creaste o a los que te uniste.</p>
       </header>
 
       {cargando ? (
-        <div className="flex justify-center py-20 text-muted-foreground">
-          <Loader2 className="size-8 animate-spin" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonGroupCard key={i} />
+          ))}
         </div>
       ) : grupos.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -44,7 +60,7 @@ export default function MisGruposPage() {
             <Link
               key={g.id}
               href={`/student/groups/${g.id}`}
-              className="rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:border-primary/40"
+              className="rounded-2xl border border-border bg-card p-5 shadow-card transition-all duration-200 ease-out-expo hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-popover"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="font-bold text-foreground">{g.nombre}</p>

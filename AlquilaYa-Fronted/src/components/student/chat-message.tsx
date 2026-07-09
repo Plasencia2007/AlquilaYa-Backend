@@ -34,7 +34,7 @@ export function ChatMessage({ mensaje, esMio }: Props) {
           <span>{tiempoChat(mensaje.fechaEnvio)}</span>
           {esMio &&
             (leido ? (
-              <CheckCheck className="size-3 text-blue-300" aria-label="Leído" />
+              <CheckCheck className="size-3 text-info" aria-label="Leído" />
             ) : (
               <Check className="size-3" aria-label="Enviado" />
             ))}

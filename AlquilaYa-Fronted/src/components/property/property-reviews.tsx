@@ -10,6 +10,7 @@ import {
 } from '@/services/resena-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
+import { formatearFecha } from '@/lib/relative-time';
 
 const CATEGORIAS: { key: keyof ResumenCategorias; label: string }[] = [
   { key: 'limpieza', label: 'Limpieza' },
@@ -63,7 +64,7 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
 
   return (
     <section className="space-y-6">
-      <h2 className="font-headline text-xl font-bold">Reseñas</h2>
+      <h2 className="text-h2">Reseñas</h2>
 
       {totalResenas > 0 && (
         <div className="flex gap-6 rounded-2xl border border-border bg-card p-5">
@@ -77,10 +78,10 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
               {distribucion.map(({ stars, count }) => (
                 <div key={stars} className="flex items-center gap-2">
                   <span className="w-3 text-right text-[11px] text-muted-foreground">{stars}</span>
-                  <Star className="size-3 shrink-0 fill-yellow-400 text-yellow-400" aria-hidden />
+                  <Star className="size-3 shrink-0 fill-warning text-warning" aria-hidden />
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                      className="h-full rounded-full bg-warning transition-all duration-500"
                       style={{ width: `${(count / maxCount) * 100}%` }}
                     />
                   </div>
@@ -105,7 +106,7 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                    className="h-full rounded-full bg-warning transition-all duration-500"
                     style={{ width: `${(valor / 5) * 100}%` }}
                   />
                 </div>
@@ -145,11 +146,7 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
                       {r.autorNombre ?? 'Estudiante'}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {new Date(r.fechaCreacion).toLocaleDateString('es-PE', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
+                      {formatearFecha(r.fechaCreacion)}
                     </p>
                   </div>
                 </div>
@@ -183,7 +180,7 @@ function StarRow({ value }: { value: number }) {
           className={cn(
             'size-3.5',
             s <= Math.round(value)
-              ? 'fill-yellow-400 text-yellow-400'
+              ? 'fill-warning text-warning'
               : 'fill-muted text-muted-foreground/30',
           )}
           aria-hidden

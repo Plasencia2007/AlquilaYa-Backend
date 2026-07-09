@@ -10,7 +10,7 @@ export default function LandlordNotificationsPage() {
   const { items, noLeidas, marcarLeida, marcarTodasLeidas, cargada } = useNotifications();
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
       <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">

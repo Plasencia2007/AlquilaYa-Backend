@@ -21,7 +21,8 @@ import { notify } from '@/lib/notify';
 import { conversationService } from '@/services/conversation-service';
 import { registrarContacto } from '@/services/property-service';
 import { pagoService } from '@/services/pago-service';
-import { formatearFecha } from '@/lib/relative-time';
+import { formatearFecha, formatRango } from '@/lib/relative-time';
+import { formatPEN } from '@/lib/money';
 import type { Reserva } from '@/types/reserva';
 
 interface Props {
@@ -103,7 +104,7 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
   };
 
   const imprimirComprobante = () => {
-    const fecha = fechaPago ? new Date(fechaPago).toLocaleString('es-PE') : '—';
+    const fecha = fechaPago ? formatearFecha(fechaPago, true) : '—';
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
       <title>Comprobante de pago — AlquilaYa</title>
       <style>
@@ -121,10 +122,10 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
       <div style="margin-top:20px">
         <div class="row"><span>Reserva</span><b>${reserva.propiedadTitulo ?? `#${reserva.id}`}</b></div>
         <div class="row"><span>Dirección</span><b>${reserva.propiedadUbicacion ?? '—'}</b></div>
-        <div class="row"><span>Periodo</span><b>${formatearFecha(reserva.fechaInicio)} — ${formatearFecha(reserva.fechaFin)}</b></div>
+        <div class="row"><span>Periodo</span><b>${formatRango(reserva.fechaInicio, reserva.fechaFin)}</b></div>
         <div class="row"><span>Código de pago</span><b>${paymentId ?? '—'}</b></div>
         <div class="row"><span>Fecha de pago</span><b>${fecha}</b></div>
-        <div class="row"><span>Monto pagado</span><b class="total">S/ ${(montoPagado ?? reserva.montoTotal).toLocaleString('es-PE')}</b></div>
+        <div class="row"><span>Monto pagado</span><b class="total">${formatPEN(montoPagado ?? reserva.montoTotal)}</b></div>
       </div>
       <p class="muted" style="margin-top:24px">Gracias por usar AlquilaYa. Conserva este comprobante como respaldo de tu pago.</p>
       </body></html>`;
@@ -198,7 +199,7 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
                     className={cn(
                       'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
                       p.hecho
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-success text-success-foreground'
                         : 'border-2 border-primary/30 bg-primary/5 text-primary',
                     )}
                   >
@@ -264,7 +265,7 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
           <section className="rounded-2xl border border-border p-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-bold text-foreground">Comprobante de pago</h3>
-              <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-600">
+              <span className="rounded-full bg-success-light px-2 py-0.5 text-[10px] font-bold text-success">
                 PAGADO
               </span>
             </div>
@@ -273,8 +274,8 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Monto
                 </p>
-                <p className="text-lg font-black text-foreground">
-                  S/ {(montoPagado ?? reserva.montoTotal).toLocaleString('es-PE')}
+                <p className="tnum text-lg font-black text-foreground">
+                  {formatPEN(montoPagado ?? reserva.montoTotal)}
                 </p>
               </div>
               {paymentId && (
@@ -283,7 +284,7 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
                   className={cn(
                     'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition',
                     copiado
-                      ? 'bg-green-500/15 text-green-600'
+                      ? 'bg-success-light text-success'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                   title={paymentId}

@@ -52,7 +52,7 @@ export default function LandlordContractsPage() {
   }, [reservas]);
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black text-foreground tracking-tighter opacity-90">

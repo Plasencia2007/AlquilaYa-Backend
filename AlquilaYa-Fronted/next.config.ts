@@ -5,6 +5,18 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    // Ítem 37 de MEJORAS.md: habilita el soporte de Next para el componente
+    // <ViewTransition> de React (transiciones animadas entre rutas, ej. la
+    // foto de una card "viajando" al hero del detalle). El flag en sí es
+    // inofensivo, pero NO produce ningún efecto todavía: ese componente es
+    // parte de la API experimental de React y esta versión instalada
+    // (react@19.2.4, release estable) no lo exporta — solo lo tienen los
+    // builds canary/experimental de React. Subir de canal de React es un
+    // cambio de mayor riesgo que no se hizo acá; el flag queda activado
+    // para cuando el proyecto migre a esa versión.
+    viewTransition: true,
+  },
   images: {
     remotePatterns: [
       // Hosts propios -> se optimizan normalmente.

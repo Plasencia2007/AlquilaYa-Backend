@@ -56,7 +56,7 @@ export default function LandlordLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-card animate-fade-in relative selection:bg-primary/20">
+    <div className="flex h-screen overflow-hidden bg-card animate-in fade-in slide-in-from-bottom-2 duration-400 relative selection:bg-primary/20">
       <LandlordSidebar mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* Backdrop del drawer en móvil */}

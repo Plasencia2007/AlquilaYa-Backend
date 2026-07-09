@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2, Eye, EyeOff, Lock, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Lock, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,6 +13,7 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form';
+import { PasswordInput } from '@/components/ui/password-input';
 import { PasswordStrength } from '@/components/auth/password-strength';
 import { ActiveSessions } from '@/components/auth/active-sessions';
 import { useAuth } from '@/hooks/use-auth';
@@ -24,47 +24,18 @@ import {
   type CambioPasswordData,
 } from '@/schemas/student-profile-schema';
 
-/* ── Input de contraseña con ojo ── */
-function PasswordInput({ field, placeholder, autoComplete }: {
-  field: React.InputHTMLAttributes<HTMLInputElement> & { ref?: React.Ref<HTMLInputElement> };
-  placeholder?: string;
-  autoComplete?: string;
-}) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative">
-      <input
-        {...field}
-        type={show ? 'text' : 'password'}
-        placeholder={placeholder ?? '••••••••'}
-        autoComplete={autoComplete}
-        className="h-11 w-full rounded-xl border border-input bg-input px-4 pr-11 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-      />
-      <button
-        type="button"
-        onClick={() => setShow((v) => !v)}
-        tabIndex={-1}
-        aria-label={show ? 'Ocultar' : 'Ver'}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-      >
-        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-      </button>
-    </div>
-  );
-}
-
 /* ── Banner Google ── */
 function GoogleAccountBanner() {
   return (
-    <div className="flex items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/40 dark:bg-amber-950/20">
-      <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
-        <ShieldAlert className="size-5 text-amber-600 dark:text-amber-400" />
+    <div className="flex items-start gap-4 rounded-2xl border border-warning/20 bg-warning-light p-5">
+      <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-warning/15">
+        <ShieldAlert className="size-5 text-warning" />
       </span>
       <div>
-        <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+        <p className="text-sm font-bold text-warning">
           Cuenta vinculada con Google
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-400/80">
+        <p className="mt-1 text-xs leading-relaxed text-warning/80">
           Tu cuenta usa Google para iniciar sesión, por lo que la contraseña se gestiona directamente desde{' '}
           <span className="font-semibold">myaccount.google.com</span>.
           Aquí no puedes cambiarla.
@@ -124,7 +95,7 @@ export function SecurityTab() {
                 : 'Actualiza tu contraseña regularmente para mayor seguridad'}
             </p>
           </div>
-          <span className={`ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${esGoogle ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+          <span className={`ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${esGoogle ? 'bg-warning-light text-warning' : 'bg-success-light text-success'}`}>
             <ShieldCheck className="size-3" />
             {esGoogle ? 'Google OAuth' : 'Cuenta local'}
           </span>
@@ -148,7 +119,7 @@ export function SecurityTab() {
                           Contraseña actual
                         </Label>
                         <FormControl>
-                          <PasswordInput field={field} autoComplete="current-password" />
+                          <PasswordInput {...field} autoComplete="current-password" />
                         </FormControl>
                         <FormMessage className="text-xs" />
                       </FormItem>
@@ -165,7 +136,7 @@ export function SecurityTab() {
                             Nueva contraseña
                           </Label>
                           <FormControl>
-                            <PasswordInput field={field} autoComplete="new-password" />
+                            <PasswordInput {...field} autoComplete="new-password" />
                           </FormControl>
                           <PasswordStrength password={field.value} />
                           <FormMessage className="text-xs" />
@@ -182,7 +153,7 @@ export function SecurityTab() {
                             Confirmar contraseña
                           </Label>
                           <FormControl>
-                            <PasswordInput field={field} autoComplete="new-password" />
+                            <PasswordInput {...field} autoComplete="new-password" />
                           </FormControl>
                           <FormMessage className="text-xs" />
                         </FormItem>

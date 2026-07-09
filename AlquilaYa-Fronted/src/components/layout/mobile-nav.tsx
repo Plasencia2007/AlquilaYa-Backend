@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 
 import { Logo } from './logo';
+import { Wordmark } from './wordmark';
 
 const navLinks = [
   { href: '/', label: 'Inicio' },
@@ -60,12 +61,9 @@ export function MobileNav() {
         className="w-full max-w-full overflow-y-auto bg-background p-0 sm:max-w-md"
       >
         <SheetHeader className="border-b border-border px-6 py-5 text-left">
-          <SheetTitle className="flex items-center gap-2.5 text-xl font-black tracking-tighter">
-            <Logo className="h-7 w-7 text-[#e87272]" />
-            <div>
-              <span className="text-primary">Alquila</span>
-              <span className="text-foreground">Ya</span>
-            </div>
+          <SheetTitle className="flex items-center gap-2.5">
+            <Logo className="h-7 w-7 text-primary" />
+            <Wordmark />
           </SheetTitle>
         </SheetHeader>
 

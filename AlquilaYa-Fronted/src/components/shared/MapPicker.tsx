@@ -114,7 +114,7 @@ export default function MapPicker({
   zonas,
 }: MapPickerProps & { zonas?: ZonaGeo[] }) {
   return (
-    <div className="w-full h-[200px] rounded-xl overflow-hidden border border-[#bda5a8]/20 shadow-inner mt-2 animate-scale-in">
+    <div className="w-full h-[200px] rounded-xl overflow-hidden border border-[#bda5a8]/20 shadow-inner mt-2 animate-in fade-in zoom-in-95 duration-200">
       <MapContainer
         center={[lat, lng]}
         zoom={15}

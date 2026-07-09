@@ -135,7 +135,7 @@ export function UbicacionSection({
             className={cn(
               'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border',
               distanciaUpeu <= UPEU_RADIO_MAX_KM
-                ? 'bg-[var(--color-success-light)] text-[var(--color-success)] border-[var(--color-success)]/20'
+                ? 'bg-success-light text-success border-success/20'
                 : 'bg-destructive/10 text-destructive border-destructive/20',
             )}
           >
@@ -148,7 +148,7 @@ export function UbicacionSection({
         {/* Zona de cobertura resuelta en vivo (coincide con la validación del backend). */}
         {distanciaUpeu !== null && zonas.length > 0 && (
           zonaActual ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-[var(--color-success-light)] text-[var(--color-success)] border-[var(--color-success)]/20">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-success-light text-success border-success/20">
               <span className="material-symbols-outlined text-[13px]">where_to_vote</span>
               En {zonaActual.nombre}
               {zonaActual.universidadNombre ? ` · ${zonaActual.universidadNombre}` : ''}

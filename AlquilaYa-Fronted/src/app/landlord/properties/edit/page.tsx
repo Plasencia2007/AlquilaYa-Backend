@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default function WIPPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center text-primary mb-6">
         <span className="material-symbols-outlined text-4xl">construction</span>
       </div>

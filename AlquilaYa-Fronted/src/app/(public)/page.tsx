@@ -21,6 +21,8 @@ import { servicioPropiedades } from '@/services/property-service';
 import type { Propiedad } from '@/types/propiedad';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { FullScreenLoader } from '@/components/shared/full-screen-loader';
 import {
   Select,
   SelectContent,
@@ -29,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { PropertyCard } from '@/components/student/property-card';
+import { SlideUp, Stagger } from '@/components/motion';
 import { TIPOS_PROPIEDAD, type TipoPropiedadFiltro } from '@/schemas/search-schema';
 
 const TIPO_LABELS: Record<TipoPropiedadFiltro, string> = {
@@ -90,11 +93,7 @@ export default function Home() {
   };
 
   if (!cargando && estaAutenticado && requiereRedireccion) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
-        <div className="size-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (
@@ -110,23 +109,24 @@ export default function Home() {
             src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2070&auto=format&fit=crop"
             className="object-cover brightness-75"
           />
-          {/* Gradiente denso hacia abajo + capa oscura para garantizar contraste WCAG AA */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/55 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          {/* Gradiente denso hacia abajo + capa oscura para garantizar contraste WCAG AA
+              (>=4.5:1 incluso sobre el punto más claro de la foto, con margen). */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
         </div>
 
-        <div className="relative z-10 max-w-3xl py-24 text-white">
+        <SlideUp className="relative z-10 max-w-3xl py-24 text-white">
           <div className="mb-6 flex items-center gap-3">
-            <span className="h-px w-10 bg-red-400" aria-hidden />
-            <span className="inline-block rounded-full bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-200 backdrop-blur-sm">
+            <span className="h-px w-10 bg-brand-400" aria-hidden />
+            <span className="inline-block rounded-full bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-200 backdrop-blur-sm">
               Residencias universitarias · Lima
             </span>
           </div>
 
-          <h1 className="font-headline text-5xl font-extrabold leading-[0.95] tracking-[-0.04em] text-white drop-shadow-lg sm:text-6xl md:text-[5.5rem]">
+          <h1 className="text-display text-white drop-shadow-lg">
             El cuarto perfecto,
             <br />
-            <span className="text-red-300">cerca de la UPeU.</span>
+            <span className="text-brand-400">cerca de la UPeU.</span>
           </h1>
 
           <p className="mt-8 max-w-xl text-base font-medium leading-relaxed text-white/90 drop-shadow sm:text-lg">
@@ -138,26 +138,26 @@ export default function Home() {
             onSubmit={handleBuscar}
             className="mt-10 flex max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl bg-white p-1.5 shadow-2xl shadow-black/30 md:flex-row md:rounded-full"
           >
-            <div className="flex flex-1 items-center gap-3 border-b border-stone-200 px-6 py-4 md:border-b-0 md:border-r">
-              <MapPin className="size-5 shrink-0 text-red-700" aria-hidden />
+            <div className="flex flex-1 items-center gap-3 border-b border-cream-300 px-6 py-4 md:border-b-0 md:border-r">
+              <MapPin className="size-5 shrink-0 text-brand-700" aria-hidden />
               <input
                 type="text"
                 value={zonaInput}
                 onChange={(e) => setZonaInput(e.target.value)}
                 placeholder="¿En qué zona buscas?"
                 aria-label="Zona"
-                className="w-full border-none bg-transparent text-sm font-medium text-stone-800 placeholder:text-stone-400 focus:outline-none"
+                className="w-full border-none bg-transparent text-sm font-medium text-cream-900 placeholder:text-cream-500 focus:outline-none"
               />
             </div>
             <div className="flex flex-1 items-center gap-3 px-6 py-4">
-              <HomeIcon className="size-5 shrink-0 text-red-700" aria-hidden />
+              <HomeIcon className="size-5 shrink-0 text-brand-700" aria-hidden />
               <Select
                 value={tipoInput}
                 onValueChange={(v) => setTipoInput(v as TipoPropiedadFiltro)}
               >
                 <SelectTrigger
                   aria-label="Tipo de cuarto"
-                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-stone-800 shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left [&>span:empty]:text-stone-400 [&>span:empty]:font-normal"
+                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-medium text-cream-900 shadow-none focus:ring-0 focus:ring-offset-0 [&>span]:text-left [&>span:empty]:text-cream-500 [&>span:empty]:font-normal"
                 >
                   <SelectValue placeholder="Tipo de cuarto" />
                 </SelectTrigger>
@@ -173,12 +173,12 @@ export default function Home() {
             <Button
               type="submit"
               size="lg"
-              className="h-14 w-full rounded-xl bg-red-700 px-12 text-sm font-bold text-white shadow-xl hover:bg-red-800 md:w-auto md:rounded-full"
+              className="h-14 w-full rounded-xl px-12 text-sm font-bold shadow-xl md:w-auto md:rounded-full"
             >
               <Search className="size-4" aria-hidden /> Buscar
             </Button>
           </form>
-        </div>
+        </SlideUp>
       </section>
 
       {/* ── Habitaciones destacadas ── */}
@@ -206,17 +206,17 @@ export default function Home() {
         </header>
 
         {cargandoDestacados ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="card-grid">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="space-y-3">
-                <div className="aspect-[4/3] animate-pulse rounded-2xl bg-muted" />
-                <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                <Skeleton className="aspect-[4/3] rounded-2xl" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
               </div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Stagger className="card-grid">
             {destacados.map((p) => (
               <PropertyCard
                 key={p.id}
@@ -226,7 +226,7 @@ export default function Home() {
                 showDistance
               />
             ))}
-          </div>
+          </Stagger>
         )}
       </section>
 

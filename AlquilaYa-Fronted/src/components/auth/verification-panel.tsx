@@ -33,13 +33,13 @@ function esPdf(url: string): boolean {
 
 function SkeletonCard() {
   return (
-    <div className="animate-pulse bg-white/40 rounded-2xl border border-white/20 p-5 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-xl bg-white/50 shrink-0" />
+    <div className="animate-pulse bg-card rounded-2xl border border-border p-5 flex items-start gap-4">
+      <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
       <div className="flex-1 space-y-2 py-1">
-        <div className="h-3 bg-white/50 rounded w-2/5" />
-        <div className="h-2 bg-white/30 rounded w-3/5" />
+        <div className="h-3 bg-muted rounded w-2/5" />
+        <div className="h-2 bg-muted rounded w-3/5" />
       </div>
-      <div className="w-24 h-8 bg-white/50 rounded-full shrink-0" />
+      <div className="w-24 h-8 bg-muted rounded-full shrink-0" />
     </div>
   );
 }
@@ -48,15 +48,15 @@ interface StatusBadgeProps { estado: EstadoDocumento | null }
 function StatusBadge({ estado }: StatusBadgeProps) {
   if (!estado) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#bda5a8]/40 bg-white/30 text-[10px] font-black uppercase tracking-widest text-[#bda5a8]">
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-muted-foreground/30 bg-card text-[10px] font-black uppercase tracking-widest text-muted-foreground">
         Sin subir
       </span>
     );
   }
   const variants: Record<EstadoDocumento, string> = {
-    PENDIENTE: 'bg-amber-100 text-amber-700 border-amber-200',
-    APROBADO:  'bg-green-100 text-green-700 border-green-200',
-    RECHAZADO: 'bg-red-100 text-red-700 border-red-200',
+    PENDIENTE: 'bg-warning-light text-warning border-warning/20',
+    APROBADO:  'bg-success-light text-success border-success/20',
+    RECHAZADO: 'bg-destructive/10 text-destructive border-destructive/20',
   };
   const icons: Record<EstadoDocumento, React.ReactNode> = {
     PENDIENTE: <Clock size={12} />,
@@ -117,24 +117,24 @@ function DocumentCard({ config, doc, isUploading, onUpload, onPreview }: Documen
   const tieneArchivo = !!doc?.archivoUrl;
 
   return (
-    <div className="bg-white/60 rounded-2xl border border-white/30 p-5 shadow-sm space-y-3">
+    <div className="bg-card rounded-2xl border border-border p-5 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-[#8f0304]/10 rounded-xl flex items-center justify-center text-[#8f0304] shrink-0 mt-0.5">
+          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0 mt-0.5">
             <FileText size={20} />
           </div>
           <div>
-            <p className="text-sm font-bold text-[#281721] leading-tight">{config.titulo}</p>
-            <p className="text-[11px] text-[#bda5a8] mt-0.5">{config.descripcion}</p>
+            <p className="text-sm font-bold text-foreground leading-tight">{config.titulo}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{config.descripcion}</p>
           </div>
         </div>
         <StatusBadge estado={estado} />
       </div>
 
       {estado === 'RECHAZADO' && doc?.comentarioRechazo && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-2">
-          <XCircle className="text-red-500 shrink-0 mt-0.5" size={14} />
-          <p className="text-[11px] text-red-700 leading-relaxed">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 flex gap-2">
+          <XCircle className="text-destructive shrink-0 mt-0.5" size={14} />
+          <p className="text-[11px] text-destructive leading-relaxed">
             <span className="font-bold">Motivo de rechazo: </span>
             {doc.comentarioRechazo}
           </p>
@@ -150,7 +150,7 @@ function DocumentCard({ config, doc, isUploading, onUpload, onPreview }: Documen
               if (esPdf(url)) { window.open(url, '_blank'); }
               else { onPreview(url); }
             }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#8f0304]/30 text-[#8f0304] text-xs font-bold hover:bg-[#8f0304]/5 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-primary/30 text-primary text-xs font-bold hover:bg-primary/5 transition-colors"
           >
             Ver documento
           </button>
@@ -160,8 +160,8 @@ function DocumentCard({ config, doc, isUploading, onUpload, onPreview }: Documen
           <label className={cn(
             'flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer',
             isUploading
-              ? 'bg-gray-100 text-gray-400 cursor-wait'
-              : 'bg-[#8f0304] text-white hover:bg-[#7a0203] shadow-sm shadow-[#8f0304]/20'
+              ? 'bg-muted text-muted-foreground cursor-wait'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20'
           )}>
             <Upload size={13} />
             <span>{isUploading ? 'Subiendo…' : estado === 'RECHAZADO' ? 'Re-subir' : 'Subir documento'}</span>
@@ -195,21 +195,21 @@ function ProgressBar({ aprobados, total }: ProgressBarProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold text-[#281721]/70">
+        <p className="text-xs font-bold text-foreground/70">
           {allDone ? '¡Todo verificado!' : `${aprobados} de ${total} documentos aprobados`}
         </p>
         <span className={cn(
           'text-[10px] font-black uppercase tracking-wider',
-          allDone ? 'text-green-600' : 'text-[#8f0304]'
+          allDone ? 'text-success' : 'text-primary'
         )}>
           {pct}%
         </span>
       </div>
-      <div className="h-2 bg-white/40 rounded-full overflow-hidden border border-white/20">
+      <div className="h-2 bg-card rounded-full overflow-hidden border border-border">
         <div
           className={cn(
             'h-full rounded-full transition-all duration-500',
-            allDone ? 'bg-green-500' : 'bg-[#8f0304]'
+            allDone ? 'bg-success' : 'bg-primary'
           )}
           style={{ width: `${pct}%` }}
         />
@@ -321,30 +321,30 @@ export default function VerificationPanel() {
         <PreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
       )}
 
-      <div className="bg-[#e8e3df] rounded-[2rem] border border-white/30 shadow-sm overflow-hidden relative">
+      <div className="bg-muted rounded-[2rem] border border-border shadow-sm overflow-hidden relative">
         {/* Marca de agua */}
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
-          <ShieldCheck size={180} className="text-[#8f0304]" />
+          <ShieldCheck size={180} className="text-primary" />
         </div>
 
         {/* ── Header siempre visible ── */}
         <button
           type="button"
           onClick={toggleColapsar}
-          className="relative z-10 w-full flex items-center gap-4 p-6 text-left hover:bg-black/[0.02] transition-colors"
+          className="relative z-10 w-full flex items-center gap-4 p-6 text-left hover:bg-foreground/[0.03] transition-colors"
         >
           <div className={cn(
-            'w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-md shrink-0 transition-colors',
-            todosAprobados ? 'bg-green-500 shadow-green-200' : 'bg-[#8f0304] shadow-[#8f0304]/20'
+            'w-11 h-11 rounded-xl flex items-center justify-center text-primary-foreground shadow-md shrink-0 transition-colors',
+            todosAprobados ? 'bg-success' : 'bg-primary shadow-primary/20'
           )}>
             <ShieldCheck size={22} />
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-[#281721] tracking-tight">
+            <p className="text-sm font-black text-foreground tracking-tight">
               Verifica tu Identidad
             </p>
-            <p className="text-[11px] text-[#bda5a8] mt-0.5 truncate">
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
               {cargando
                 ? 'Cargando documentos…'
                 : todosAprobados
@@ -356,11 +356,11 @@ export default function VerificationPanel() {
           {/* Barra de progreso compacta */}
           {!cargando && total > 0 && (
             <div className="hidden sm:block w-28 shrink-0">
-              <div className="h-1.5 bg-white/40 rounded-full overflow-hidden border border-white/20">
+              <div className="h-1.5 bg-card rounded-full overflow-hidden border border-border">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-500',
-                    todosAprobados ? 'bg-green-500' : 'bg-[#8f0304]'
+                    todosAprobados ? 'bg-success' : 'bg-primary'
                   )}
                   style={{ width: `${pct}%` }}
                 />
@@ -370,10 +370,10 @@ export default function VerificationPanel() {
 
           {/* Chevron */}
           <div className={cn(
-            'w-7 h-7 rounded-full bg-white/50 flex items-center justify-center shrink-0 transition-transform duration-300',
+            'w-7 h-7 rounded-full bg-card flex items-center justify-center shrink-0 transition-transform duration-300',
             colapsado ? 'rotate-0' : 'rotate-180'
           )}>
-            <span className="material-symbols-outlined text-[16px] text-[#8f0304]">
+            <span className="material-symbols-outlined text-[16px] text-primary">
               expand_more
             </span>
           </div>
@@ -392,9 +392,9 @@ export default function VerificationPanel() {
 
             {/* Tarjeta de verificación instantánea */}
             {!cargando && !todosAprobados && (
-              <div className="bg-gradient-to-r from-primary/10 via-violet-500/5 to-pink-500/5 border border-primary/25 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="bg-gradient-to-r from-primary/10 via-flash/5 to-flash/5 border border-primary/25 rounded-2xl p-5 shadow-sm space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-tr from-primary to-violet-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-primary/25">
+                  <div className="w-10 h-10 bg-gradient-to-tr from-primary to-flash text-primary-foreground rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-primary/25">
                     <span className="material-symbols-outlined text-[20px]">bolt</span>
                   </div>
                   <div className="space-y-1 flex-1">
@@ -421,7 +421,7 @@ export default function VerificationPanel() {
                         setDniInput(val);
                       }}
                       disabled={dniVerificando}
-                      className="w-full h-11 bg-white/60 border border-input rounded-xl pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-semibold placeholder:text-muted-foreground/45"
+                      className="w-full h-11 bg-card border border-input rounded-xl pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-semibold placeholder:text-muted-foreground/45"
                     />
                   </div>
 
@@ -429,7 +429,7 @@ export default function VerificationPanel() {
                     type="button"
                     onClick={handleVerificarDniInstantaneo}
                     disabled={dniVerificando || dniInput.length !== 8}
-                    className="h-11 px-5 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-muted disabled:to-muted text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-11 px-5 bg-gradient-to-r from-primary to-flash hover:from-primary/95 hover:to-flash/95 disabled:from-muted disabled:to-muted text-primary-foreground text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {dniVerificando ? (
                       <>
@@ -469,9 +469,9 @@ export default function VerificationPanel() {
             </div>
 
             {/* Disclaimer */}
-            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/50 flex gap-3">
-              <Info className="text-amber-600 shrink-0 mt-0.5" size={18} />
-              <p className="text-[11px] text-amber-800 leading-relaxed">
+            <div className="p-4 bg-warning-light/50 rounded-2xl border border-warning/20 flex gap-3">
+              <Info className="text-warning shrink-0 mt-0.5" size={18} />
+              <p className="text-[11px] text-warning leading-relaxed">
                 Tus documentos son procesados de forma segura y solo se utilizan para verificar tu identidad en la plataforma.
                 El proceso de revisión puede tardar hasta <strong>24 horas hábiles</strong>.
               </p>

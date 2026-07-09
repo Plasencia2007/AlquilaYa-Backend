@@ -4,7 +4,6 @@ import { use, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   BadgeCheck,
   BedDouble,
   Building2,
@@ -27,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/shared/error-state';
+import { PageBreadcrumb } from '@/components/shared/page-breadcrumb';
 import { ReputationBadge } from '@/components/reputation-badge';
 import { RoommateGroupsSection } from '@/components/student/roommate-groups-section';
 import { PropertyGallery } from '@/components/property/property-gallery';
@@ -53,6 +53,7 @@ import {
 import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import { useHistory } from '@/hooks/use-history';
 import { cn } from '@/lib/cn';
+import { formatPEN } from '@/lib/money';
 import { REGLAS_CATALOGO } from '@/types/propiedad';
 import type { Propiedad } from '@/types/propiedad';
 
@@ -203,12 +204,14 @@ export default function PropertyDetailPage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-24 pt-24 sm:px-12 md:pt-28">
-      <Link
-        href="/search"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> Volver a la búsqueda
-      </Link>
+      <PageBreadcrumb
+        className="mb-4"
+        items={[
+          { label: 'Inicio', href: '/' },
+          { label: 'Explorar', href: '/search' },
+          { label: propiedad.titulo },
+        ]}
+      />
 
       <PropertyGallery imagenes={propiedad.imagenes} alt={propiedad.titulo} />
 
@@ -223,14 +226,14 @@ export default function PropertyDetailPage({ params }: Props) {
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
                       propiedad.disponible
-                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                        ? 'bg-success-light text-success'
+                        : 'bg-destructive/10 text-destructive',
                     )}
                   >
                     <span
                       className={cn(
                         'size-1.5 rounded-full',
-                        propiedad.disponible ? 'bg-green-500' : 'bg-red-500',
+                        propiedad.disponible ? 'bg-success' : 'bg-destructive',
                       )}
                     />
                     {propiedad.disponible ? 'Disponible' : 'No disponible'}
@@ -248,7 +251,7 @@ export default function PropertyDetailPage({ params }: Props) {
                     </span>
                   )}
                 </div>
-                <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
+                <h1 className="text-h1">
                   {propiedad.titulo}
                 </h1>
                 <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -269,7 +272,7 @@ export default function PropertyDetailPage({ params }: Props) {
                   className="flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {copiado ? (
-                    <Check className="size-4 text-green-500" aria-hidden />
+                    <Check className="size-4 text-success" aria-hidden />
                   ) : (
                     <Share2 className="size-4" aria-hidden />
                   )}
@@ -293,7 +296,7 @@ export default function PropertyDetailPage({ params }: Props) {
 
             <div className="flex flex-wrap items-center gap-4 text-sm">
               <span className="flex items-center gap-1.5 font-bold text-foreground">
-                <Star className="size-4 fill-yellow-500 text-yellow-500" aria-hidden />
+                <Star className="size-4 fill-warning text-warning" aria-hidden />
                 {propiedad.calificacion.toFixed(1)}
                 <span className="font-normal text-muted-foreground">
                   ({propiedad.reseñas} reseñas)
@@ -331,7 +334,7 @@ export default function PropertyDetailPage({ params }: Props) {
           {/* Habitaciones (solo inmuebles gestionados por habitación) */}
           {propiedad.gestionPorHabitacion && (
             <section id="habitaciones" className="space-y-3 scroll-mt-24">
-              <h2 className="font-headline text-xl font-bold">Habitaciones disponibles</h2>
+              <h2 className="text-h2">Habitaciones disponibles</h2>
               <p className="text-sm text-muted-foreground">
                 Este inmueble se alquila por habitaciones. Elige y reserva el cuarto que prefieras.
               </p>
@@ -341,14 +344,14 @@ export default function PropertyDetailPage({ params }: Props) {
 
           {/* Descripción */}
           <section className="space-y-3">
-            <h2 className="font-headline text-xl font-bold">Sobre este cuarto</h2>
+            <h2 className="text-h2">Sobre este cuarto</h2>
             <p className="text-sm leading-relaxed text-muted-foreground">{propiedad.descripcion}</p>
           </section>
 
           {/* Video de la propiedad */}
           {propiedad.videoUrl && (
             <section className="space-y-3">
-              <h2 className="font-headline text-xl font-bold">Video</h2>
+              <h2 className="text-h2">Video</h2>
               <PropertyVideo url={propiedad.videoUrl} titulo={propiedad.titulo} />
             </section>
           )}
@@ -356,7 +359,7 @@ export default function PropertyDetailPage({ params }: Props) {
           {/* Disponibilidad (a nivel inmueble; en modo por-habitación el estado va por cuarto) */}
           {!propiedad.gestionPorHabitacion && (
             <section className="space-y-3">
-              <h2 className="font-headline text-xl font-bold">Disponibilidad</h2>
+              <h2 className="text-h2">Disponibilidad</h2>
               <AvailabilityPanel propiedadId={propiedad.id} />
             </section>
           )}
@@ -370,10 +373,10 @@ export default function PropertyDetailPage({ params }: Props) {
             const aparte = estado ? estado.filter((s) => s.estado === 'APARTE').map((s) => s.servicio) : [];
             return (
               <section className="space-y-4">
-                <h2 className="font-headline text-xl font-bold">Servicios</h2>
+                <h2 className="text-h2">Servicios</h2>
                 {incluidos.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-success)]">
+                    <p className="text-xs font-bold uppercase tracking-wider text-success">
                       Incluido en el precio
                     </p>
                     <ServiceBadges servicios={incluidos} max={incluidos.length} variant="plain" />
@@ -381,7 +384,7 @@ export default function PropertyDetailPage({ params }: Props) {
                 )}
                 {aparte.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600">Se paga aparte</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-warning">Se paga aparte</p>
                     <ServiceBadges servicios={aparte} max={aparte.length} variant="plain" />
                   </div>
                 )}
@@ -395,7 +398,7 @@ export default function PropertyDetailPage({ params }: Props) {
           {/* Reglas */}
           {propiedad.reglas && propiedad.reglas.length > 0 && (
             <section className="space-y-4">
-              <h2 className="font-headline text-xl font-bold">Reglas de la casa</h2>
+              <h2 className="text-h2">Reglas de la casa</h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {propiedad.reglas.map((regla, i) => {
                   const cat = REGLAS_CATALOGO.find(
@@ -419,7 +422,7 @@ export default function PropertyDetailPage({ params }: Props) {
 
           {/* Arrendador */}
           <section className="space-y-4">
-            <h2 className="font-headline text-xl font-bold">Sobre el arrendador</h2>
+            <h2 className="text-h2">Sobre el arrendador</h2>
             <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5">
               <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                 {propiedad.arrendadorAvatar ? (
@@ -478,7 +481,7 @@ export default function PropertyDetailPage({ params }: Props) {
           {/* Mapa */}
           {propiedad.coordenadas && (
             <section className="space-y-3">
-              <h2 className="font-headline text-xl font-bold">Ubicación</h2>
+              <h2 className="text-h2">Ubicación</h2>
 
               {/* Tiempo estimado + cómo llegar (ruta real en Google Maps) */}
               {distancia !== null && campusDestino && propiedad.coordenadas && (
@@ -527,16 +530,16 @@ export default function PropertyDetailPage({ params }: Props) {
             </p>
             {propiedad.badges?.includes('REBAJA') && propiedad.precioAnterior != null && (
               <p className="mt-1 flex items-center gap-2">
-                <span className="text-base font-semibold text-muted-foreground line-through">
-                  S/ {propiedad.precioAnterior.toLocaleString('es-PE')}
+                <span className="tnum text-base font-semibold text-muted-foreground line-through">
+                  {formatPEN(propiedad.precioAnterior)}
                 </span>
-                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success-foreground">
                   Rebaja
                 </span>
               </p>
             )}
-            <p className="mt-1 text-3xl font-black text-primary">
-              S/ {propiedad.precio.toLocaleString('es-PE')}
+            <p className="tnum mt-1 text-3xl font-black text-primary">
+              {formatPEN(propiedad.precio)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">/mes</span>
             </p>
 
@@ -550,8 +553,8 @@ export default function PropertyDetailPage({ params }: Props) {
                       {new Date(t.fechaInicio).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}–
                       {new Date(t.fechaFin).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
                     </span>
-                    <span className="shrink-0 font-bold text-foreground">
-                      S/{t.precio.toLocaleString('es-PE')}
+                    <span className="tnum shrink-0 font-bold text-foreground">
+                      {formatPEN(t.precio)}
                     </span>
                   </div>
                 ))}
@@ -647,7 +650,7 @@ export default function PropertyDetailPage({ params }: Props) {
       {/* Propiedades similares */}
       {similares.length > 0 && (
         <section className="mt-12 space-y-4">
-          <h2 className="font-headline text-xl font-bold">También te puede interesar</h2>
+          <h2 className="text-h2">También te puede interesar</h2>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {similares.map((s) => (
               <PropertyCard key={s.id} propiedad={s} variant="compact" />

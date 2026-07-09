@@ -54,7 +54,7 @@ export default function AdminMasterLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background relative selection:bg-primary/20 animate-fade-in flex overflow-hidden">
+    <div className="min-h-screen bg-background relative selection:bg-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-400 flex overflow-hidden">
       <AdminSidebar />
       <main className="flex-1 pl-[248px] h-screen overflow-y-auto custom-scrollbar bg-background">
         <div className="p-10 lg:p-14 max-w-[1600px] mx-auto min-h-full flex flex-col text-foreground">

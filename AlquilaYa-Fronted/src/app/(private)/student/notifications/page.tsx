@@ -48,7 +48,7 @@ export default function StudentNotificationsPage() {
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-8 md:py-12">
       <header className="mb-6 flex items-end justify-between gap-4">
         <div className="space-y-2">
-          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
+          <h1 className="text-h1">
             Notificaciones
           </h1>
           <p className="text-sm text-muted-foreground md:text-base">

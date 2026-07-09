@@ -710,13 +710,13 @@ export default function AdminPropiedadesRevisionPage() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 sm:p-8 max-w-6xl mx-auto animate-fade-in space-y-8">
+    <div className="p-6 sm:p-8 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-400 space-y-8">
 
       {/* Toast */}
       {toast && (
         <div
           className={cn(
-            'fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-black uppercase tracking-widest animate-fade-in backdrop-blur-md border',
+            'fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-bottom-2 duration-400 backdrop-blur-md border',
             toast.type === 'success'
               ? 'bg-green-500/90 text-white border-green-400/20 shadow-green-500/10'
               : 'bg-[#c14b4c]/90 text-white border-[#c14b4c]/20 shadow-red-500/10',

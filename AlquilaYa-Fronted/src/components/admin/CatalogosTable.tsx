@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { resolveIcon } from '@/lib/icons';
 import { notify } from '@/lib/notify';
 
 const TIPO_LABELS: Record<TipoItemCatalogo, string> = {
@@ -100,77 +101,6 @@ const PRESET_ICONS = [
   { id: 'mail', name: 'Correo/Inbox', type: 'material' },
 ];
 
-const FA_TO_MATERIAL: Record<string, string> = {
-  'fa-calendar-alt':  'calendar_month',
-  'fa-calendar-check':'event_available',
-  'fa-calendar':      'calendar_today',
-  'fa-calendar-day':   'today',
-  'fa-repeat':         'event_repeat',
-  'fa-clock':          'schedule',
-  // Servicios comunes
-  'fa-wifi':             'wifi',
-  'fa-tint':             'water_drop',
-  'fa-bolt':             'bolt',
-  'fa-lightbulb':        'lightbulb',
-  'fa-tshirt':           'checkroom',
-  'fa-shirt':            'checkroom',
-  'fa-utensils':         'restaurant',
-  'fa-key':              'key',
-  'fa-shower':           'shower',
-  'fa-bath':             'bathtub',
-  'fa-tv':               'tv',
-  'fa-snowflake':        'ac_unit',
-  'fa-temperature-high': 'thermostat',
-  'fa-parking':          'local_parking',
-  'fa-bus':              'directions_bus',
-  'fa-lock':             'lock',
-  'fa-couch':            'weekend',
-  'fa-bed':              'bed',
-  'fa-dumbbell':         'fitness_center',
-  'fa-water':            'water',
-  'fa-gas-pump':         'local_gas_station',
-  'fa-fire':             'local_fire_department',
-  'fa-broom':            'cleaning_services',
-  'fa-shield-alt':       'security',
-  'fa-dog':              'pets',
-  // Reglas comunes
-  'fa-paw':             'pets',
-  'fa-smoking-ban':     'smoke_free',
-  'fa-smoking':         'smoking_rooms',
-  'fa-graduation-cap':  'school',
-  'fa-music':           'music_note',
-  'fa-glass-martini':   'local_bar',
-  'fa-cocktail':        'local_bar',
-  'fa-beer':            'sports_bar',
-  'fa-volume-up':       'volume_up',
-  'fa-user-friends':    'group',
-  'fa-users':           'group',
-  'fa-child':           'child_care',
-  'fa-ban':             'block',
-  'fa-check':           'check_circle',
-  'fa-times':           'cancel',
-  // Tipos de propiedad
-  'fa-home':       'home',
-  'fa-building':   'apartment',
-  'fa-hotel':      'hotel',
-  'fa-door-open':  'door_front',
-  'fa-house':      'house',
-  // Otros motivos
-  'fa-plane-slash': 'flight_land',
-  'fa-heartbeat':   'favorite',
-  'fa-calendar-times': 'event_busy',
-  'fa-exclamation-circle': 'warning',
-  'fa-user-times':  'person_remove',
-  'fa-wrench':      'build',
-  'fa-comments-slash': 'speaker_notes_off',
-};
-
-function resolveIcon(icon: string | undefined): string {
-  if (!icon) return 'label';
-  const key = icon.toLowerCase().trim();
-  if (key.startsWith('fa-')) return FA_TO_MATERIAL[key] ?? 'label';
-  return icon;
-}
 
 type DialogState =
   | { mode: 'closed' }

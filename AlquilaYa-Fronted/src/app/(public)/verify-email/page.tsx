@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CheckCircle2, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SuccessScreen } from '@/components/shared/success-screen';
 import { servicioAuth } from '@/services/auth-service';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
@@ -62,24 +63,15 @@ function VerifyEmailContent() {
 
   if (exito) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
-        <div className="rounded-full bg-primary/10 p-4 text-primary mb-4">
-          <CheckCircle2 className="size-12" />
-        </div>
-        <h1 className="font-headline text-2xl font-bold text-foreground">¡Correo verificado!</h1>
-        <p className="text-muted-foreground mt-2 max-w-sm">
-          Tu correo quedó confirmado. Ya puedes iniciar sesión.
-        </p>
-        <Button
-          onClick={() => {
-            router.push('/');
-            setTimeout(() => openAuthModal('login'), 100);
-          }}
-          className="mt-6 rounded-full shadow-lg shadow-primary/20"
-        >
-          Iniciar sesión
-        </Button>
-      </div>
+      <SuccessScreen
+        title="¡Correo verificado!"
+        description="Tu correo quedó confirmado. Ya puedes iniciar sesión."
+        actionLabel="Iniciar sesión"
+        onAction={() => {
+          router.push('/');
+          setTimeout(() => openAuthModal('login'), 100);
+        }}
+      />
     );
   }
 

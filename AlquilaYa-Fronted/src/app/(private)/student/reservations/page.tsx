@@ -1,12 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ClipboardList } from 'lucide-react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SkeletonCard } from '@/components/shared/skeleton-card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
+import { EmptyReservationsIllustration } from '@/components/shared/illustrations';
 import { ReservationCard } from '@/components/student/reservation-card';
 import { useReservations } from '@/hooks/use-reservations';
 import type { EstadoReserva, Reserva } from '@/types/reserva';
@@ -35,7 +35,7 @@ export default function StudentReservationsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-8 md:py-12">
       <header className="mb-8 space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
+        <h1 className="text-h1">
           Mis reservas
         </h1>
         <p className="text-sm text-muted-foreground md:text-base">
@@ -76,7 +76,7 @@ export default function StudentReservationsPage() {
 
       {!cargando && !error && filtradas.length === 0 && (
         <EmptyState
-          icon={ClipboardList}
+          illustration={EmptyReservationsIllustration}
           title={filtro === 'TODAS' ? 'No tienes reservas todavía' : 'Sin reservas en este estado'}
           description={
             filtro === 'TODAS'

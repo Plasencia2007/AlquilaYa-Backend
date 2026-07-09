@@ -3,18 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff } from 'lucide-react';
 
 import 'react-phone-number-input/style.css';
 import PhoneInput from 'react-phone-number-input';
 import { PasswordStrength } from './password-strength';
 
-
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { useAuthModal } from '@/stores/auth-modal-store';
-import { cn } from '@/lib/cn';
 import { registerSchema, type RegisterFormData } from '@/schemas/auth-schema';
 
 import { LandlordDetailsStep } from './landlord-details-step';
@@ -26,8 +24,6 @@ import { StudentDetailsStep } from './student-details-step';
 
 export function RegisterForm() {
   const { step, targetRole, personal, setPersonal, setStep, open } = useAuthModal();
-
-  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -165,23 +161,11 @@ export function RegisterForm() {
                   <span className="font-normal text-muted-foreground/70">(mín. 8 car., mayúscula, número y símbolo)</span>
                 </FormLabel>
                 <FormControl>
-                  <div className="relative">
-                    <Input
-                      {...field}
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      placeholder="••••••••"
-                      className={cn('h-11 rounded-xl bg-input pr-11 text-sm')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary"
-                    >
-                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    {...field}
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                  />
                 </FormControl>
                 <PasswordStrength password={field.value} />
                 <FormMessage className="px-1 text-[10px]" />

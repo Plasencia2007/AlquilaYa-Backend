@@ -78,7 +78,7 @@ export default function AdminValidationsPage() {
   if (cargando) return <div className="p-10 flex justify-center text-[#8f0304] animate-pulse font-bold tracking-widest">CARGANDO VALIDACIONES...</div>;
 
   return (
-    <div className="space-y-8 animate-fade-in p-6 max-w-7xl mx-auto">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400 p-6 max-w-7xl mx-auto">
       <header>
         <h1 className="text-4xl font-black text-[#281721] tracking-tighter uppercase mb-2">Validación de Identidad</h1>
         <p className="text-[#bda5a8] text-sm font-medium">Revisa y confirma la legitimidad de los usuarios de AlquilaYa.</p>

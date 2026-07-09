@@ -172,7 +172,7 @@ export function DetallesSection({
               <span
                 className={cn(
                   'material-symbols-outlined text-[20px] shrink-0',
-                  form.estaDisponible ? 'text-[var(--color-success)]' : 'text-muted-foreground',
+                  form.estaDisponible ? 'text-success' : 'text-muted-foreground',
                 )}
               >
                 {form.estaDisponible ? 'check_circle' : 'pause_circle'}

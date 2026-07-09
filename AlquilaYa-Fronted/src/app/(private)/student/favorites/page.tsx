@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Heart, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { PropertyCard } from '@/components/student/property-card';
 import { SkeletonCardGrid } from '@/components/shared/skeleton-card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
+import { EmptyFavoritesIllustration } from '@/components/shared/illustrations';
 import { favoriteService, type FavoritoItem } from '@/services/favorite-service';
 import { notify } from '@/lib/notify';
 import { tiempoRelativo } from '@/lib/relative-time';
@@ -80,7 +81,7 @@ export default function StudentFavoritesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
       <header className="mb-8 space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
+        <h1 className="text-h1">
           Mis favoritos
         </h1>
         <p className="text-sm text-muted-foreground md:text-base">
@@ -101,7 +102,7 @@ export default function StudentFavoritesPage() {
 
       {estado === 'ok' && items.length === 0 && (
         <EmptyState
-          icon={Heart}
+          illustration={EmptyFavoritesIllustration}
           title="Aún no tienes favoritos"
           description="Explora cuartos y guárdalos con el corazón para verlos aquí."
           action={{ type: 'link', label: 'Explorar cuartos', href: '/search' }}
@@ -110,7 +111,7 @@ export default function StudentFavoritesPage() {
 
       {estado === 'ok' && items.length > 0 && (
         <>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid">
             {visibles.map(({ propiedad, guardadoEn }) => {
               const inactiva = noDisponible(propiedad);
               return (

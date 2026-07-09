@@ -103,7 +103,7 @@ export default function ServicesPage() {
 
   if (!propiedades.length) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-4 text-center animate-fade-in">
+      <div className="max-w-3xl mx-auto py-12 px-4 text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
         <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
           <span className="material-symbols-outlined text-4xl">checklist</span>
         </div>
@@ -119,7 +119,7 @@ export default function ServicesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 animate-fade-in">
+    <div className="max-w-4xl mx-auto py-8 px-4 animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="mb-8">
         <Badge variant="surface" className="mb-2">
           Servicios

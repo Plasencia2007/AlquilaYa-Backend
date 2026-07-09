@@ -2,7 +2,7 @@
 
 export default function AdminPlaceholderPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
         <span className="material-symbols-outlined text-primary text-3xl">construction</span>
       </div>

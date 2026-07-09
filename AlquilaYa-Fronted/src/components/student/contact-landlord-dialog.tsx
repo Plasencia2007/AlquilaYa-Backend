@@ -83,7 +83,7 @@ export function ContactLandlordDialog({ propiedad, trigger }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-headline text-xl font-bold">
+            <DialogTitle className="text-h2 flex items-center gap-2">
               <MessageCircle className="size-5 text-primary" />
               Contactar arrendador
             </DialogTitle>

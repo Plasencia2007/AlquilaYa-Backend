@@ -1,6 +1,7 @@
 import { BadgeCheck, GraduationCap, MapPin, User } from 'lucide-react';
 
 import { ReputationBadge } from '@/components/reputation-badge';
+import { formatPEN } from '@/lib/money';
 import { labelOpcion, type PerfilConvivencia } from '@/services/roommate-service';
 
 /**
@@ -17,10 +18,10 @@ export function RoommateCard({
 }) {
   const compatColor =
     compat?.nivel === 'Alta'
-      ? 'bg-green-100 text-green-700'
+      ? 'bg-success-light text-success'
       : compat?.nivel === 'Media'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-slate-100 text-slate-600';
+        ? 'bg-warning-light text-warning'
+        : 'bg-muted text-muted-foreground';
   const habitos = [
     labelOpcion('fuma', perfil.fuma),
     labelOpcion('horario', perfil.horario),
@@ -80,8 +81,8 @@ export function RoommateCard({
 
       <div className="flex items-center justify-between border-t border-border pt-2 text-xs text-muted-foreground">
         {perfil.presupuestoMax != null ? (
-          <span className="flex items-center gap-1">
-            <MapPin className="size-3" /> hasta S/ {perfil.presupuestoMax.toLocaleString('es-PE')}
+          <span className="tnum flex items-center gap-1">
+            <MapPin className="size-3" /> hasta {formatPEN(perfil.presupuestoMax)}
             {perfil.zonasPreferidas?.length ? ` · ${perfil.zonasPreferidas[0]}` : ''}
           </span>
         ) : (

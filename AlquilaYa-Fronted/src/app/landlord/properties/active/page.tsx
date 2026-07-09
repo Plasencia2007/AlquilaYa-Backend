@@ -5,10 +5,21 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
-import { Modal } from '@/components/ui/modal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { EditPropertyModal } from '@/components/landlord/edit-property-modal';
+import { PropertyImageFallback } from '@/components/shared/property-image-fallback';
 import { propiedadService } from '@/services/landlord-property-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { formatPEN } from '@/lib/money';
 import { notify } from '@/lib/notify';
 import Link from 'next/link';
 
@@ -143,7 +154,7 @@ export default function ActivePropertiesPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 animate-fade-in">
+    <div className="max-w-7xl mx-auto py-8 px-4 animate-in fade-in slide-in-from-bottom-2 duration-400">
       {/* Cabecera de Sección */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
         <div>
@@ -185,18 +196,7 @@ export default function ActivePropertiesPage() {
             >
               {/* ── Image area ─────────────────────────────────── */}
               <div className="relative aspect-[3/2] overflow-hidden rounded-t-3xl">
-                {prop.imagenUrl ? (
-                  <img
-                    src={prop.imagenUrl}
-                    alt={prop.titulo}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-primary/10 flex flex-col items-center justify-center gap-2">
-                    <span className="material-symbols-outlined text-[64px] text-primary/40">bed</span>
-                    <span className="text-xs text-primary/50 font-semibold tracking-wide uppercase">Sin imagen</span>
-                  </div>
-                )}
+                <PropertyImageFallback src={prop.imagenUrl} alt={prop.titulo} />
 
                 {/* Deep gradient overlay — bottom two-thirds */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
@@ -212,7 +212,7 @@ export default function ActivePropertiesPage() {
                 {/* Price pill — bottom right */}
                 <div className="absolute bottom-3 right-3 z-10">
                   <span className="inline-flex items-baseline gap-0.5 font-black text-white text-[15px] px-3.5 py-1.5 rounded-2xl shadow-xl bg-primary">
-                    S/ {prop.precio.toLocaleString()}
+                    {formatPEN(prop.precio)}
                     <span className="text-[10px] font-medium text-white/70 ml-0.5">/mes</span>
                   </span>
                 </div>
@@ -329,38 +329,37 @@ export default function ActivePropertiesPage() {
         onSaved={fetchProperties}
       />
 
-      <Modal
+      <AlertDialog
         open={!!confirmDelete}
-        onClose={() => (deleting ? null : setConfirmDelete(null))}
-        title="Eliminar propiedad"
-        description={
-          confirmDelete
-            ? `¿Seguro que deseas eliminar "${confirmDelete.titulo}"? Esta acción no se puede deshacer.`
-            : undefined
-        }
-        size="sm"
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setConfirmDelete(null)}
-              disabled={deleting}
-            >
+        onOpenChange={(v) => {
+          if (!v && !deleting) setConfirmDelete(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar propiedad</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete &&
+                `¿Seguro que deseas eliminar "${confirmDelete.titulo}"? Esta acción no se puede deshacer.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting} onClick={() => setConfirmDelete(null)}>
               Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="dark"
-              onClick={handleConfirmDelete}
+            </AlertDialogCancel>
+            <AlertDialogAction
               disabled={deleting}
-              className="bg-destructive text-on-error hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmDelete();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleting ? 'Eliminando...' : 'Eliminar'}
-            </Button>
-          </>
-        }
-      />
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

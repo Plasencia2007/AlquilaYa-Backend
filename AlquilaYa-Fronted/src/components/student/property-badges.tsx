@@ -10,10 +10,10 @@ const CONFIG: Record<
   BadgePropiedad,
   { label: string; className: string; Icon: typeof Sparkles }
 > = {
-  ULTIMA_PLAZA: { label: 'Última plaza', className: 'bg-red-600 text-white', Icon: Zap },
-  REBAJA: { label: 'Rebaja', className: 'bg-emerald-600 text-white', Icon: Tag },
+  ULTIMA_PLAZA: { label: 'Última plaza', className: 'bg-destructive text-destructive-foreground', Icon: Zap },
+  REBAJA: { label: 'Rebaja', className: 'bg-success text-success-foreground', Icon: Tag },
   NUEVO: { label: 'Nuevo', className: 'bg-primary text-primary-foreground', Icon: Sparkles },
-  POPULAR: { label: 'Popular', className: 'bg-amber-500 text-white', Icon: Flame },
+  POPULAR: { label: 'Popular', className: 'bg-warning text-warning-foreground', Icon: Flame },
 };
 
 /** Orden de prioridad: lo más "urgente"/accionable primero. */

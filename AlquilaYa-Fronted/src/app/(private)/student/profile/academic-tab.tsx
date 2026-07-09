@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -156,14 +157,15 @@ export function AcademicTab() {
                 </Label>
                 <FormControl>
                   {carreras.length > 0 ? (
-                    <select {...field} disabled={loading} className={SELECT_CLASS}>
-                      <option value="">Selecciona tu carrera</option>
-                      {carreras.map((c) => (
-                        <option key={c.id} value={c.nombre}>
-                          {c.nombre}
-                        </option>
-                      ))}
-                    </select>
+                    <Combobox
+                      options={carreras.map((c) => ({ value: c.nombre, label: c.nombre }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={loading}
+                      placeholder="Selecciona tu carrera"
+                      searchPlaceholder="Buscar carrera…"
+                      emptyText="No encontramos esa carrera."
+                    />
                   ) : (
                     <Input
                       {...field}

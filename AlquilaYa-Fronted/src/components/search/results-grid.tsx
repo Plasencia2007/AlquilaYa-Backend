@@ -6,7 +6,9 @@ import { PropertyCard } from '@/components/student/property-card';
 import { SkeletonCard } from '@/components/shared/skeleton-card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
+import { EmptySearchIllustration } from '@/components/shared/illustrations';
 import { Button } from '@/components/ui/button';
+import { Stagger } from '@/components/motion';
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll';
 import { cn } from '@/lib/cn';
 import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
@@ -90,6 +92,7 @@ export function ResultsGrid({
   if (items.length === 0) {
     return (
       <EmptyState
+        illustration={EmptySearchIllustration}
         title="Ningún cuarto coincide con tus filtros"
         description="Prueba ampliando el rango de precio o quitando algunos servicios."
         action={{ type: 'button', label: 'Limpiar filtros', onClick: onLimpiarFiltros }}
@@ -99,7 +102,7 @@ export function ResultsGrid({
 
   return (
     <div className={className}>
-      <div className={gridClassName}>
+      <Stagger className={gridClassName} staggerDelay={0.05}>
         {visible.map((p) => (
           <div
             key={p.id}
@@ -112,7 +115,7 @@ export function ResultsGrid({
         ))}
         {cargandoMas &&
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`load-${i}`} />)}
-      </div>
+      </Stagger>
 
       {hiddenCount > 0 && !showHidden && (
         <div className="mt-6 flex justify-center">

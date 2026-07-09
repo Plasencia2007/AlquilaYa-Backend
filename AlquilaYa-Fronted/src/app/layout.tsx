@@ -7,6 +7,7 @@ import './globals.css';
 import { Navbar } from '@/components/layout/navbar';
 import Footer from '@/components/shared/Footer';
 import { AuthDialog } from '@/components/auth/auth-dialog';
+import { CommandPalette } from '@/components/shared/command-palette';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { GoogleAuthProvider } from '@/components/auth/google-auth-provider';
@@ -25,10 +26,31 @@ const fontHeadline = Manrope({
   weight: ['400', '500', '700', '800'],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+const DEFAULT_TITLE = 'AlquilaYa — Encuentra tu cuarto ideal';
+const DEFAULT_DESCRIPTION =
+  'Plataforma de alquiler de cuartos para estudiantes UPeU. Encuentra tu próximo hogar de forma rápida y segura.';
+
 export const metadata: Metadata = {
-  title: 'AlquilaYa — Encuentra tu cuarto ideal',
-  description:
-    'Plataforma de alquiler de cuartos para estudiantes UPeU. Encuentra tu próximo hogar de forma rápida y segura.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    template: '%s · AlquilaYa',
+    default: DEFAULT_TITLE,
+  },
+  description: DEFAULT_DESCRIPTION,
+  openGraph: {
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: SITE_URL,
+    siteName: 'AlquilaYa',
+    locale: 'es_PE',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+  },
 };
 
 // Script blocking que setea data-theme ANTES del primer paint, evitando FOUC
@@ -65,6 +87,12 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning className={`${fontSans.variable} ${fontHeadline.variable}`}>
       <head>
+        {/* Material Symbols sigue cargando como stylesheet externo (no vía next/font: sus ejes
+            variables FILL/wght no son compatibles con la API simple de next/font/google) — el
+            preconnect acelera el handshake TLS mientras dura. Migración real: ítem 19/20 de
+            MEJORAS.md (mover el catálogo a íconos lucide). */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
@@ -79,6 +107,7 @@ export default async function RootLayout({
               <CampusHydrator />
               <ServiceWorkerRegister />
               <AuthDialog />
+              <CommandPalette />
               <Navbar />
               <main className="flex-1">{children}</main>
               <Footer />

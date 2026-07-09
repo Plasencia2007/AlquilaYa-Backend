@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { DashboardShell } from '@/components/student/dashboard-shell';
 import { ClientChrome } from '@/components/student/client-chrome';
+import { FullScreenLoader } from '@/components/shared/full-screen-loader';
 
 /**
  * Layout privado del estudiante:
@@ -45,11 +46,7 @@ export default function StudentDashboardLayout({
   }, []);
 
   if (!validado) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
-        <div className="size-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (

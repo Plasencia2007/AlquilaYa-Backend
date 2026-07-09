@@ -70,7 +70,7 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
       </label>
       {children}
       {error && (
-        <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1 animate-fade-in">
+        <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-bottom-2 duration-400">
           <span className="material-symbols-outlined text-[13px]">error</span>
           {error}
         </p>
@@ -189,7 +189,7 @@ export function CustomSelect<T extends string>({
       </button>
 
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-1.5 bg-card border border-border rounded-xl shadow-lg overflow-hidden animate-fade-in">
+        <div className="absolute z-30 left-0 right-0 mt-1.5 bg-card border border-border rounded-xl shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-400">
           <ul className="max-h-64 overflow-y-auto py-1">
             {options.map((opt) => {
               const active = opt.value === value;

@@ -12,6 +12,7 @@ import { Star, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { formatPEN } from '@/lib/money';
 import type { Propiedad, PropiedadCompleta } from '@/types/propiedad';
 import { ServiceBadges } from '@/components/student/service-badges';
 import { PropertyBadges } from '@/components/student/property-badges';
@@ -96,10 +97,6 @@ function formatDisponibleDesde(iso?: string): string | null {
   } catch {
     return null;
   }
-}
-
-function formatPrice(precio: number): string {
-  return `S/ ${precio.toLocaleString('es-PE')}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -234,12 +231,12 @@ export function PropertyQuickViewDrawer({ propiedad, open, onClose }: Props) {
                 <div className="flex items-baseline gap-2">
                   {propiedad.badges?.includes('REBAJA') &&
                     propiedad.precioAnterior != null && (
-                      <span className="text-base font-semibold text-muted-foreground line-through">
-                        {formatPrice(propiedad.precioAnterior)}
+                      <span className="tnum text-base font-semibold text-muted-foreground line-through">
+                        {formatPEN(propiedad.precioAnterior)}
                       </span>
                     )}
-                  <span className="text-3xl font-extrabold text-primary">
-                    {formatPrice(propiedad.precio)}
+                  <span className="tnum text-3xl font-extrabold text-primary">
+                    {formatPEN(propiedad.precio)}
                   </span>
                   <span className="text-sm font-medium text-muted-foreground">
                     /mes
@@ -255,7 +252,7 @@ export function PropertyQuickViewDrawer({ propiedad, open, onClose }: Props) {
               {/* 3. Calificación + reseñas + distancia */}
               <section className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                 <div className="flex items-center gap-1.5">
-                  <Star className="size-4 fill-amber-400 text-amber-400" />
+                  <Star className="size-4 fill-warning text-warning" />
                   {propiedad.reseñas > 0 ? (
                     <span className="font-semibold text-foreground">
                       {propiedad.calificacion.toFixed(1)}

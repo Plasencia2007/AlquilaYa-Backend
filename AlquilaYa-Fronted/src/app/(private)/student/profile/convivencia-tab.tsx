@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Users, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { notify } from '@/lib/notify';
 import {
   OPCIONES,
@@ -163,9 +164,7 @@ export function ConvivenciaTab() {
           <span className="text-muted-foreground">Perfil completo</span>
           <span className="text-primary">{completitud}%</span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completitud}%` }} />
-        </div>
+        <Progress value={completitud} label={`Perfil de convivencia ${completitud}% completo`} />
         <p className="mt-1.5 text-xs text-muted-foreground">
           Un perfil completo genera más confianza y mejores coincidencias con roommates.
         </p>

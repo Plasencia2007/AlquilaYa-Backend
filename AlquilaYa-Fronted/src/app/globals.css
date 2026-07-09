@@ -40,10 +40,74 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Paleta fija de marca (no cambia con el tema) — para elementos que viven
+     siempre sobre foto oscura o sobre una tarjeta siempre-clara, como el hero. */
+  --color-brand-50: var(--red-50);
+  --color-brand-100: var(--red-100);
+  --color-brand-200: var(--red-200);
+  --color-brand-400: var(--red-400);
+  --color-brand-500: var(--red-500);
+  --color-brand-600: var(--red-600);
+  --color-brand-700: var(--red-700);
+  --color-brand-800: var(--red-800);
+  --color-brand-900: var(--red-900);
+  --color-brand-950: var(--red-950);
+
+  --color-cream-50: var(--light-50);
+  --color-cream-100: var(--light-100);
+  --color-cream-200: var(--light-200);
+  --color-cream-300: var(--light-300);
+  --color-cream-400: var(--light-400);
+  --color-cream-500: var(--light-500);
+  --color-cream-600: var(--light-600);
+  --color-cream-700: var(--light-700);
+  --color-cream-900: var(--light-900);
+
+  /* Acento "instantáneo/digital" — reservado para features de verificación
+     automática (RENIEC, SUNAT) que se distinguen a propósito del resto de la UI. */
+  --color-flash: var(--flash);
+  --color-flash-foreground: var(--flash-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-light: var(--warning-light);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-light: var(--info-light);
+
+  /* Convención de radio: chips/badges/pills → rounded-full · inputs y
+     botones → rounded-md/rounded-lg (radios de esta escala) · cards →
+     rounded-xl (16px). Nota: con --radius=0.75rem, rounded-xl (este token)
+     y el rounded-2xl nativo de Tailwind dan el mismo valor (16px) — son
+     visualmente intercambiables HOY, pero solo rounded-xl sigue la escala
+     si --radius cambia. Usa rounded-xl en código nuevo. */
+
+  /* Convención de espaciado (escala 4/8pt nativa de Tailwind, sin tokens
+     nuevos): padding de card → p-6 (24px) · padding vertical de sección
+     de página → py-16 (64px, py-12 en vistas más densas como dashboards) ·
+     gap de grid de cards → gap-6 (24px), gap-4 en listas compactas.
+     El código heredado usa p-5/p-4 y gap-4 con más frecuencia — es la
+     variación real que existe hoy; usa los valores de arriba en código
+     nuevo para converger hacia una sola escala. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Escala de elevación — 3 niveles, más sutiles en dark (donde el borde
+     hace el trabajo de separación que la sombra ya no puede). */
+  --shadow-card: var(--shadow-card-value);
+  --shadow-popover: var(--shadow-popover-value);
+  --shadow-overlay: var(--shadow-overlay-value);
+
+  /* Curvas de easing propias — un producto con pulido visual no se queda con
+     los easings default de Tailwind. out-expo: hovers/entradas (arranca
+     rápido, frena suave). spring: modales/acordeones (leve rebote al final). */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   --font-sans: var(--font-sans), 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-headline: var(--font-headline), 'Manrope', sans-serif;
@@ -111,6 +175,11 @@
   --ring: #9d0303;                /* red-700 */
   --radius: 0.75rem;
 
+  /* Elevación — sombra tinte cálido (ink de marca), no negro puro */
+  --shadow-card-value:    0 1px 3px rgba(29,27,25,.08), 0 1px 2px rgba(29,27,25,.04);
+  --shadow-popover-value: 0 4px 16px rgba(29,27,25,.10), 0 2px 6px rgba(29,27,25,.05);
+  --shadow-overlay-value: 0 16px 40px rgba(29,27,25,.16), 0 6px 12px rgba(29,27,25,.08);
+
   /* Sidebar tokens (admin/landlord/student dashboards) */
   --sidebar: #ffffff;
   --sidebar-foreground: #1d1b19;
@@ -119,13 +188,20 @@
   --sidebar-border: #d6cdc4;
   --sidebar-ring: #9d0303;
 
+  /* Acento instantáneo/digital (verificación RENIEC/SUNAT) */
+  --flash:            #7c3aed;
+  --flash-foreground: #ffffff;
+
   /* Colores de estado / semáforo */
-  --color-success:         #16a34a;
-  --color-success-light:   #dcfce7;
-  --color-warning:         #d97706;
-  --color-warning-light:   #fef3c7;
-  --color-info:            #0284c7;
-  --color-info-light:      #e0f2fe;
+  --success:            #16a34a;
+  --success-foreground: #ffffff;
+  --success-light:      #dcfce7;
+  --warning:            #d97706;
+  --warning-foreground: #ffffff;
+  --warning-light:      #fef3c7;
+  --info:               #0284c7;
+  --info-foreground:    #ffffff;
+  --info-light:         #e0f2fe;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -153,6 +229,12 @@
   --input: #3d3040;               /* dark-700 — contraste sobre card */
   --ring: #c14b4c;                /* red-500 */
 
+  /* Elevación en dark — más sutil; el borde (ya presente en cards) hace
+     la separación visual que la sombra por sí sola no logra sobre fondo oscuro. */
+  --shadow-card-value:    0 1px 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.25);
+  --shadow-popover-value: 0 4px 16px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25);
+  --shadow-overlay-value: 0 16px 40px rgba(0,0,0,.5), 0 6px 12px rgba(0,0,0,.3);
+
   --sidebar: #1e1520;
   --sidebar-foreground: #e5dfdc;
   --sidebar-accent: #2e2330;
@@ -160,13 +242,19 @@
   --sidebar-border: #3d3040;
   --sidebar-ring: #c14b4c;
 
-  /* Colores de estado en dark mode */
-  --color-success:         #4ade80;
-  --color-success-light:   #14532d;
-  --color-warning:         #fbbf24;
-  --color-warning-light:   #78350f;
-  --color-info:            #38bdf8;
-  --color-info-light:      #0c4a6e;
+  --flash:            #a78bfa;
+  --flash-foreground: #1e1b3a;
+
+  /* Colores de estado en dark mode — foreground oscuro porque el bg se aclara */
+  --success:            #4ade80;
+  --success-foreground: #052e16;
+  --success-light:      #14532d;
+  --warning:            #fbbf24;
+  --warning-foreground: #431407;
+  --warning-light:      #78350f;
+  --info:               #38bdf8;
+  --info-foreground:    #082f49;
+  --info-light:         #0c4a6e;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -185,6 +273,31 @@
     border-color: var(--border);
   }
 
+  /* Anillo de foco de respaldo para botones/links nativos sin la utilidad
+     focus-visible:ring-* explícita (ej. <button> sueltos fuera de ui/button).
+     Los componentes shadcn ya hacen focus-visible:outline-none con su propio
+     ring por box-shadow, que gana por especificidad de clase y anula esto. */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* El autofill de Chrome/Safari fuerza un fondo amarillo que ignora el
+     tema — lo reemplazamos por la superficie de input real vía box-shadow
+     (el único truco que webkit respeta) para que no rompa el look en dark. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-input) inset;
+    -webkit-text-fill-color: var(--color-foreground);
+    caret-color: var(--color-foreground);
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -200,9 +313,61 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Escala tipográfica — 6 niveles. Codifica el patrón que ya predominaba en
+   el código (mayoría de usos reales), para que deje de reinventarse por
+   página. Úsalos en vez de combinar clases de text-, font- y tracking- sueltas:
+     .text-display  → hero / momentos de máximo impacto (uso puntual)
+     .text-h1       → título de página
+     .text-h2       → título de sección dentro de una página
+     .text-h3       → título de subsección / card
+     .text-h4       → eyebrow / etiqueta en mayúsculas
+     .text-body     → texto de cuerpo (alias de lo que ya es el estándar de facto)
+     .text-caption  → texto secundario / metadatos
+   ───────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .text-display {
+    font-family: var(--font-headline);
+    @apply text-5xl font-extrabold leading-[0.95] tracking-[-0.04em] sm:text-6xl md:text-[5.5rem];
+  }
+  .text-h1 {
+    font-family: var(--font-headline);
+    @apply text-3xl font-extrabold tracking-tight text-foreground md:text-4xl;
+  }
+  .text-h2 {
+    font-family: var(--font-headline);
+    @apply text-xl font-bold text-foreground;
+  }
+  .text-h3 {
+    @apply text-lg font-bold text-foreground;
+  }
+  .text-h4 {
+    @apply text-xs font-bold uppercase tracking-wider text-foreground;
+  }
+  .text-body {
+    @apply text-sm text-foreground;
+  }
+  .text-caption {
+    @apply text-xs text-muted-foreground;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Utilidades custom (las que ya estaban en uso por componentes existentes).
    ───────────────────────────────────────────────────────────────────────── */
 @layer utilities {
+  /* Grid estándar para listados de cards de propiedad (destacados, favoritos,
+     su skeleton). Los grids con ancho reducido a propósito (split con mapa
+     en /search) NO deben usar esta clase — se quedan en su propio máximo. */
+  .card-grid {
+    @apply grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4;
+  }
+
+  /* Cifras con ancho fijo por dígito — precios, stats y contadores no
+     "bailan" cuando cambian de valor (Inter es proporcional por defecto). */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
   .editorial-shadow {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
   }
@@ -225,34 +390,6 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
   }
-
-  /* Animaciones legacy (se mantienen por compatibilidad con componentes
-     existentes que aún las usan; gradualmente se migrarán a tailwindcss-animate). */
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-12px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slideLeft {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
-  }
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  @keyframes slideInRight {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-  .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-  .animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
-  .animate-slide-left { animation: slideLeft 0.3s ease-out forwards; }
-  .animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
-  .animate-slide-in-right { animation: slideInRight 0.3s ease-out forwards; }
 
   /* react-phone-number-input — estilos del campo telefónico */
   .alquilaya-phone-input {

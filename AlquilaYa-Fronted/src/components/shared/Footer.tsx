@@ -54,7 +54,7 @@ export default function Footer() {
             <li><Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Política de privacidad</Link></li>
             <li><Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Términos de servicio</Link></li>
           </ul>
-          <div className="mt-4 flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+          <div className="mt-4 flex items-center gap-2 text-xs text-success bg-success-light p-2 rounded-lg border border-success/20">
             <ShieldCheck className="size-4 shrink-0" />
             <span>Pagos y datos 100% protegidos</span>
           </div>

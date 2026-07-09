@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { ErrorIllustration } from './illustrations';
 import { Button } from '@/components/ui/button';
 
 interface ErrorStateProps {
@@ -21,9 +21,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-      <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-        <AlertTriangle className="size-8" aria-hidden />
-      </div>
+      <ErrorIllustration className="mb-2 size-32" />
       <h1 className="font-headline text-2xl font-bold tracking-tight">{title}</h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
       {onRetry && (

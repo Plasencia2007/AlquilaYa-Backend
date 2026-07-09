@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { habitacionService } from '@/services/habitacion-service';
 import { ReservationFormDialog } from '@/components/student/reservation-form-dialog';
 import { Button } from '@/components/ui/button';
+import { formatPEN } from '@/lib/money';
 import type { EstadoHabitacion, Habitacion, Propiedad } from '@/types/propiedad';
 
 const ESTADO_META: Record<EstadoHabitacion, { label: string; cls: string }> = {
-  LIBRE: { label: 'Libre', cls: 'text-[var(--color-success)] bg-[var(--color-success-light)]' },
-  RESERVADA: { label: 'Reservada', cls: 'text-amber-600 bg-amber-500/10' },
+  LIBRE: { label: 'Libre', cls: 'text-success bg-success-light' },
+  RESERVADA: { label: 'Reservada', cls: 'text-warning bg-warning-light' },
   OCUPADA: { label: 'Ocupada', cls: 'text-destructive bg-destructive/10' },
   MANTENIMIENTO: { label: 'Mantenimiento', cls: 'text-muted-foreground bg-muted' },
 };
@@ -53,8 +54,8 @@ export function RoomList({ propiedad }: { propiedad: Propiedad }) {
               {h.descripcion && (
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{h.descripcion}</p>
               )}
-              <p className="mt-1 text-sm font-black text-primary">
-                S/ {h.precio.toLocaleString('es-PE')}
+              <p className="tnum mt-1 text-sm font-black text-primary">
+                {formatPEN(h.precio)}
                 <span className="text-[11px] font-medium text-muted-foreground"> /mes</span>
               </p>
               {h.estado === 'OCUPADA' && h.ocupante && (

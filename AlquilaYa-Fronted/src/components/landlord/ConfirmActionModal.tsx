@@ -100,7 +100,7 @@ export function ConfirmActionModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in slide-in-from-bottom-2 duration-400"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
@@ -109,7 +109,7 @@ export function ConfirmActionModal({
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => !isLoading && onCancel()}
       />
-      <div className="relative w-full max-w-md bg-card rounded-3xl shadow-2xl border border-border p-6 sm:p-8 animate-scale-in">
+      <div className="relative w-full max-w-md bg-card rounded-3xl shadow-2xl border border-border p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-start gap-4">
           <div
             className={cn(

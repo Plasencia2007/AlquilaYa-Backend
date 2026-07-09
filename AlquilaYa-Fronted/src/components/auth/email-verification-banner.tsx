@@ -22,18 +22,18 @@ export function EmailVerificationBanner() {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 sm:items-center">
-      <MailWarning className="size-5 shrink-0 text-amber-600" />
+    <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-light p-3 sm:items-center">
+      <MailWarning className="size-5 shrink-0 text-warning" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-amber-800">Verifica tu correo</p>
-        <p className="text-xs text-amber-700">
+        <p className="text-sm font-semibold text-warning">Verifica tu correo</p>
+        <p className="text-xs text-warning/80">
           Confirma <strong>{usuario.correo}</strong> con el código que te enviamos por correo.
         </p>
       </div>
       <button
         type="button"
         onClick={irAVerificar}
-        className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600"
+        className="shrink-0 rounded-lg bg-warning px-3 py-1.5 text-xs font-bold text-warning-foreground hover:bg-warning/90"
       >
         Verificar
       </button>
@@ -41,7 +41,7 @@ export function EmailVerificationBanner() {
         type="button"
         onClick={() => setOculto(true)}
         aria-label="Ocultar"
-        className="shrink-0 text-amber-500 hover:text-amber-700"
+        className="shrink-0 text-warning hover:text-warning/80"
       >
         <X className="size-4" />
       </button>

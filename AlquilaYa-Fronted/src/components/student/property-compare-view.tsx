@@ -9,6 +9,8 @@ import { BadgeCheck, ExternalLink, Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { distanciaAUpeuKm, formatearDistancia } from '@/lib/geo';
+import { formatPEN } from '@/lib/money';
+import { formatearFecha } from '@/lib/relative-time';
 import { useCompareStore } from '@/stores/compare-store';
 import type { PropiedadCompleta } from '@/types/propiedad';
 
@@ -156,8 +158,8 @@ function CompareTable({ propiedades, serviciosComunes, onQuitar }: TablaProps) {
     {
       label: 'Precio',
       render: (p) => (
-        <span className="text-base font-bold text-foreground">
-          S/ {Number(p.precio ?? 0).toLocaleString('es-PE')}
+        <span className="tnum text-base font-bold text-foreground">
+          {formatPEN(Number(p.precio ?? 0))}
         </span>
       ),
     },
@@ -234,7 +236,7 @@ function CompareTable({ propiedades, serviciosComunes, onQuitar }: TablaProps) {
       label: 'Disponible desde',
       render: (p) =>
         p.disponibleDesde ? (
-          <span>{new Date(p.disponibleDesde).toLocaleDateString('es-PE')}</span>
+          <span>{formatearFecha(p.disponibleDesde)}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),

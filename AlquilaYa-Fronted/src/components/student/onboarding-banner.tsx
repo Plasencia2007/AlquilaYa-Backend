@@ -57,26 +57,26 @@ export function OnboardingBanner({ pasos }: Props) {
               <Link
                 href={p.href}
                 className={cn(
-                  'group flex items-center gap-4 rounded-2xl border bg-white p-4 transition-all hover:-translate-y-px hover:shadow-sm',
+                  'group flex items-center gap-4 rounded-2xl border bg-card p-4 transition-all hover:-translate-y-px hover:shadow-card',
                   p.completado
-                    ? 'border-emerald-200 bg-emerald-50/60'
+                    ? 'border-success/20 bg-success-light/60'
                     : 'border-border hover:border-primary/40',
                 )}
               >
                 <span className={cn(
                   'flex size-10 shrink-0 items-center justify-center rounded-full',
                   p.completado
-                    ? 'bg-emerald-500 text-white'
+                    ? 'bg-success text-success-foreground'
                     : 'bg-muted text-muted-foreground',
                 )}>
                   {p.completado ? <Check className="size-4" /> : <Icon className="size-4" />}
                 </span>
 
                 <div className="flex-1">
-                  <p className={cn('text-sm font-semibold', p.completado ? 'text-emerald-800' : 'text-foreground')}>
+                  <p className={cn('text-sm font-semibold', p.completado ? 'text-success' : 'text-foreground')}>
                     {p.titulo}
                   </p>
-                  <p className={cn('text-xs', p.completado ? 'text-emerald-700' : 'text-muted-foreground')}>
+                  <p className={cn('text-xs', p.completado ? 'text-success/80' : 'text-muted-foreground')}>
                     {p.descripcion}
                   </p>
                 </div>

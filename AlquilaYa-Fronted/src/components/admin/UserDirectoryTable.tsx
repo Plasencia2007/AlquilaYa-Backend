@@ -1,11 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { usuarioMasterService, UsuarioMaster } from '@/services/admin-user-service';
-import { Badge } from '@/components/ui/legacy-badge';
-import { Button } from '@/components/ui/legacy-button';
-import { Card } from '@/components/ui/legacy-card';
-import { Input } from '@/components/ui/legacy-input';
+import { useEffect, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { CheckCircle2, MoreHorizontal, ShieldOff, Trash2 } from 'lucide-react';
+
+import { usuarioMasterService, type UsuarioMaster } from '@/services/admin-user-service';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { DataTable } from '@/components/ui/data-table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { notify } from '@/lib/notify';
 
 interface UserDirectoryTableProps {
   rol: 'ESTUDIANTE' | 'ARRENDADOR' | 'ADMIN';
@@ -13,19 +23,25 @@ interface UserDirectoryTableProps {
   description: string;
 }
 
-export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({ rol, title, description }) => {
+const ESTADO_BADGE: Record<UsuarioMaster['estado'], { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+  ACTIVE: { label: 'Activo', variant: 'default', className: 'bg-success text-success-foreground hover:bg-success/90' },
+  PENDING: { label: 'Pendiente', variant: 'default', className: 'bg-warning text-warning-foreground hover:bg-warning/90' },
+  BANNED: { label: 'Baneado', variant: 'destructive' },
+  SUSPENDED: { label: 'Suspendido', variant: 'default', className: 'bg-warning text-warning-foreground hover:bg-warning/90' },
+  REJECTED: { label: 'Rechazado', variant: 'destructive' },
+};
+
+export function UserDirectoryTable({ rol, title, description }: UserDirectoryTableProps) {
   const [users, setUsers] = useState<UsuarioMaster[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
 
   const loadUsers = async () => {
     try {
       setLoading(true);
       const data = await usuarioMasterService.obtenerPorRol(rol);
-      console.log(`📊 [DEBUG ADMIN] Usuarios cargados para ${rol}:`, data);
       setUsers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error cargando usuarios:', error);
+    } catch (err) {
+      notify.error(err, 'No pudimos cargar los usuarios');
       setUsers([]);
     } finally {
       setLoading(false);
@@ -34,164 +50,155 @@ export const UserDirectoryTable: React.FC<UserDirectoryTableProps> = ({ rol, tit
 
   useEffect(() => {
     loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rol]);
 
+  const handleActivar = async (id: number) => {
+    if (!window.confirm('¿Deseas restaurar el acceso de este usuario?')) return;
+    try {
+      await usuarioMasterService.activarUsuario(id);
+      notify.success('Usuario activado');
+      await loadUsers();
+    } catch (err) {
+      notify.error(err, 'No se pudo activar al usuario');
+    }
+  };
+
   const handleBan = async (id: number) => {
-    if (window.confirm('¿Estás seguro de que deseas banear a este usuario?')) {
-      try {
-        await usuarioMasterService.banearUsuario(id);
-        await loadUsers();
-      } catch (error) {
-        alert('Error al banear usuario');
-      }
+    if (!window.confirm('¿Estás seguro de que deseas banear a este usuario?')) return;
+    try {
+      await usuarioMasterService.banearUsuario(id);
+      notify.success('Usuario baneado');
+      await loadUsers();
+    } catch (err) {
+      notify.error(err, 'No se pudo banear al usuario');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('¿ELIMINAR PERMANENTEMENTE? Esta acción no se puede deshacer.')) {
-      try {
-        await usuarioMasterService.eliminarUsuario(id);
-        await loadUsers();
-      } catch (error) {
-        alert('Error al eliminar usuario');
-      }
+    if (!window.confirm('¿ELIMINAR PERMANENTEMENTE? Esta acción no se puede deshacer.')) return;
+    try {
+      await usuarioMasterService.eliminarUsuario(id);
+      notify.success('Usuario eliminado');
+      await loadUsers();
+    } catch (err) {
+      notify.error(err, 'No se pudo eliminar al usuario');
     }
   };
 
-  const filteredUsers = (users || []).filter(u => 
-    u.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.correo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getStatusBadge = (estado: string) => {
-    switch (estado) {
-      case 'ACTIVE': return <Badge variant="success">Activo</Badge>;
-      case 'PENDING': return <Badge variant="warning">Pendiente</Badge>;
-      case 'BANNED': return <Badge variant="error">Baneado</Badge>;
-      case 'SUSPENDED': return <Badge variant="warning">Suspendido</Badge>;
-      case 'REJECTED': return <Badge variant="error">Rechazado</Badge>;
-      default: return <Badge variant="outline">{estado}</Badge>;
-    }
-  };
+  const columns: ColumnDef<UsuarioMaster>[] = [
+    {
+      id: 'nombre',
+      accessorFn: (u) => `${u.nombre} ${u.apellido}`,
+      header: 'Usuario',
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-foreground">
+            {row.original.nombre} {row.original.apellido}
+          </span>
+          <span className="text-[11px] text-muted-foreground">{row.original.correo}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'dni',
+      accessorKey: 'dni',
+      header: 'Identidad',
+      cell: ({ row }) => (
+        <span className="rounded-md border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+          DNI {row.original.dni || '---'}
+        </span>
+      ),
+    },
+    {
+      id: 'estado',
+      accessorKey: 'estado',
+      header: 'Estado',
+      cell: ({ row }) => {
+        const meta = ESTADO_BADGE[row.original.estado];
+        return (
+          <Badge variant={meta.variant} className={meta.className}>
+            {meta.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: 'whatsapp',
+      accessorKey: 'telefonoVerificado',
+      header: 'WhatsApp',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <span
+            className={`size-1.5 rounded-full ${row.original.telefonoVerificado ? 'bg-success' : 'bg-muted-foreground/40'}`}
+            aria-hidden
+          />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            {row.original.telefonoVerificado ? 'Verificado' : 'Pendiente'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: 'acciones',
+      header: () => <span className="sr-only">Acciones</span>,
+      enableHiding: false,
+      cell: ({ row }) => {
+        const user = row.original;
+        return (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Más acciones">
+                  <MoreHorizontal className="size-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {user.estado === 'BANNED' ? (
+                  <DropdownMenuItem onClick={() => handleActivar(user.id)}>
+                    <CheckCircle2 className="text-success" aria-hidden />
+                    Activar
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => handleBan(user.id)}>
+                    <ShieldOff aria-hidden />
+                    Banear
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => handleDelete(user.id)} className="text-destructive focus:text-destructive">
+                  <Trash2 aria-hidden />
+                  Eliminar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
-    <Card padding="none" className="border border-slate-200 bg-white shadow-none rounded-xl overflow-hidden mb-6">
-      {/* Header Section */}
-      <div className="px-8 py-6 border-b border-slate-100">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <Card className="mb-6 overflow-hidden">
+      <CardHeader className="border-b border-border">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{title}</h2>
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px] mt-1">
-              {description} • {users.length} Registros
+            <h2 className="text-xl font-black tracking-tight text-foreground">{title}</h2>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {description} · {users.length} registros
             </p>
           </div>
-          <div className="w-full md:w-80">
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-xl">search</span>
-              <Input 
-                placeholder="Buscar registros..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-white border-slate-200 border rounded-lg pl-12 h-10 text-xs focus:ring-0 focus:border-primary transition-colors font-medium"
-              />
-            </div>
-          </div>
         </div>
-      </div>
-
-      {/* Content Section */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="text-slate-400 uppercase text-[9px] font-black tracking-widest bg-slate-50/50">
-              <th className="py-4 px-8 border-b border-slate-100">Usuario</th>
-              <th className="py-4 px-8 border-b border-slate-100">Identidad</th>
-              <th className="py-4 px-8 border-b border-slate-100">Estado</th>
-              <th className="py-4 px-8 border-b border-slate-100">WhatsApp</th>
-              <th className="py-4 px-8 border-b border-slate-100 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="py-20 text-center">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Cargando base de datos...</span>
-                </td>
-              </tr>
-            ) : filteredUsers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-20 text-center">
-                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sin resultados</span>
-                </td>
-              </tr>
-            ) : filteredUsers.map(user => (
-              <tr key={user.id} className="hover:bg-slate-50/30 transition-colors">
-                <td className="py-4 px-8">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-slate-800 text-sm">{user.nombre} {user.apellido}</span>
-                    <span className="text-[10px] font-medium text-slate-400">{user.correo}</span>
-                  </div>
-                </td>
-                <td className="py-4 px-8">
-                  <span className="text-[10px] font-bold text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md">
-                    DNI {user.dni || '---'}
-                  </span>
-                </td>
-                <td className="py-4 px-8">
-                  {getStatusBadge(user.estado)}
-                </td>
-                <td className="py-4 px-8">
-                  <div className="flex items-center gap-2">
-                     <span className={`w-1.5 h-1.5 rounded-full ${user.telefonoVerificado ? 'bg-green-500' : 'bg-slate-300'}`}></span>
-                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">
-                       {user.telefonoVerificado ? 'Verificado' : 'Pendiente'}
-                     </span>
-                  </div>
-                </td>
-                <td className="py-4 px-8 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                     {user.estado === 'BANNED' ? (
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         onClick={() => {
-                           if (window.confirm('¿Deseas restaurar el acceso?')) {
-                             usuarioMasterService.activarUsuario(user.id).then(loadUsers);
-                           }
-                         }}
-                         className="text-slate-300 hover:text-green-600 p-2 h-auto rounded-md"
-                         title="Activar"
-                       >
-                         <span className="material-symbols-outlined text-lg">check_circle</span>
-                       </Button>
-                     ) : (
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         onClick={() => handleBan(user.id)}
-                         className="text-slate-300 hover:text-red-500 p-2 h-auto rounded-md"
-                         title="Banear"
-                       >
-                         <span className="material-symbols-outlined text-lg">block</span>
-                       </Button>
-                     )}
-                     
-                     <Button 
-                       variant="ghost" 
-                       size="sm" 
-                       onClick={() => handleDelete(user.id)}
-                       className="text-slate-300 hover:text-red-600 p-2 h-auto rounded-md"
-                       title="Eliminar"
-                     >
-                       <span className="material-symbols-outlined text-lg">delete</span>
-                     </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </CardHeader>
+      <CardContent className="pt-6">
+        <DataTable
+          columns={columns}
+          data={users}
+          loading={loading}
+          searchPlaceholder="Buscar por nombre o correo…"
+          searchColumnId="nombre"
+          emptyMessage="Sin resultados."
+        />
+      </CardContent>
     </Card>
   );
-};
+}

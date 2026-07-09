@@ -208,7 +208,7 @@ export default function UniversidadFormPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
           {isNew ? 'Nueva universidad' : 'Editar universidad'}

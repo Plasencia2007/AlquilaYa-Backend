@@ -35,9 +35,9 @@ function CenteredStepper({ currentIdx }: { currentIdx: number }) {
             <div key={s.key} className="flex flex-col items-center gap-2">
               <div className={cn(
                 'flex size-10 items-center justify-center rounded-full text-sm font-bold shadow-sm transition-all duration-300',
-                status === 'done'    && 'bg-primary text-white shadow-primary/20',
-                status === 'active'  && 'bg-primary text-white shadow-lg shadow-primary/25 ring-4 ring-primary/15',
-                status === 'pending' && 'border border-border bg-white text-muted-foreground',
+                status === 'done'    && 'bg-primary text-primary-foreground shadow-primary/20',
+                status === 'active'  && 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-4 ring-primary/15',
+                status === 'pending' && 'border border-border bg-card text-muted-foreground',
               )}>
                 {status === 'done' ? <Check className="size-4" /> : i + 1}
               </div>
@@ -64,7 +64,7 @@ export function RegisterPageClient() {
   const isRoleStep = step === 'role';
 
   return (
-    <div className="flex min-h-dvh flex-col bg-white dark:bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
 
       {/* Header */}
       <header className="flex w-full items-center justify-between px-6 py-4 sm:px-10">

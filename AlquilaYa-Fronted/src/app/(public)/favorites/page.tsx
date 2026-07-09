@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart } from 'lucide-react';
 
+import { CenteredSpinner } from '@/components/shared/centered-spinner';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
@@ -31,11 +32,7 @@ export default function FavoritesPage() {
   }, [cargando, estaAutenticado, usuario, router]);
 
   if (cargando || estaAutenticado) {
-    return (
-      <main className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </main>
-    );
+    return <CenteredSpinner className="min-h-[60vh] items-center" />;
   }
 
   return (

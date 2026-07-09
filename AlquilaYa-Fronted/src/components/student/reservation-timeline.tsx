@@ -55,7 +55,7 @@ export function ReservationTimeline({ estado, motivoRechazo }: Props) {
       ))}
 
       {cancelado && motivoRechazo && (
-        <li className="rounded-xl bg-red-50 p-3 text-xs text-red-800">
+        <li className="rounded-xl bg-destructive/10 p-3 text-xs text-destructive">
           <strong className="block font-bold">Motivo</strong>
           <span>{motivoRechazo}</span>
         </li>

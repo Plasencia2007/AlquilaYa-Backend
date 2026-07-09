@@ -4,12 +4,12 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
+import { SuccessScreen } from '@/components/shared/success-screen';
 import { PasswordStrength } from '@/components/auth/password-strength';
 import { servicioAuth } from '@/services/auth-service';
 import { useAuthModal } from '@/stores/auth-modal-store';
@@ -36,8 +36,7 @@ function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const { open: openAuthModal } = useAuthModal();
-  
-  const [showPassword, setShowPassword] = useState(false);
+
   const [exito, setExito] = useState(false);
 
   const form = useForm<ResetPasswordFormData>({
@@ -63,7 +62,7 @@ function ResetPasswordContent() {
   if (!token) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
-        <h1 className="font-headline text-2xl font-bold text-foreground">Token inválido</h1>
+        <h1 className="font-headline text-2xl font-bold tracking-tight text-foreground">Token inválido</h1>
         <p className="text-muted-foreground mt-2 max-w-sm">
           El enlace de recuperación no es válido o ha expirado. Por favor, solicita uno nuevo.
         </p>
@@ -76,24 +75,15 @@ function ResetPasswordContent() {
 
   if (exito) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
-        <div className="rounded-full bg-primary/10 p-4 text-primary mb-4">
-          <CheckCircle2 className="size-12" />
-        </div>
-        <h1 className="font-headline text-2xl font-bold text-foreground">¡Contraseña restablecida!</h1>
-        <p className="text-muted-foreground mt-2 max-w-sm">
-          Tu contraseña ha sido actualizada exitosamente. Ya puedes iniciar sesión con tus nuevas credenciales.
-        </p>
-        <Button 
-          onClick={() => {
-            router.push('/');
-            setTimeout(() => openAuthModal('login'), 100);
-          }} 
-          className="mt-6 rounded-full shadow-lg shadow-primary/20"
-        >
-          Iniciar sesión
-        </Button>
-      </div>
+      <SuccessScreen
+        title="¡Contraseña restablecida!"
+        description="Tu contraseña ha sido actualizada exitosamente. Ya puedes iniciar sesión con tus nuevas credenciales."
+        actionLabel="Iniciar sesión"
+        onAction={() => {
+          router.push('/');
+          setTimeout(() => openAuthModal('login'), 100);
+        }}
+      />
     );
   }
 
@@ -120,26 +110,13 @@ function ResetPasswordContent() {
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <div className="relative">
-                      <Lock
-                        className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <Input
-                        {...field}
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        placeholder="Nueva contraseña"
-                        className="h-12 rounded-xl bg-input pl-11 pr-11 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary"
-                      >
-                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      {...field}
+                      showIcon
+                      autoComplete="new-password"
+                      placeholder="Nueva contraseña"
+                      className="h-12"
+                    />
                   </FormControl>
                   <PasswordStrength password={field.value} />
                   <FormMessage className="px-1 text-xs" />
@@ -153,19 +130,13 @@ function ResetPasswordContent() {
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <div className="relative">
-                      <Lock
-                        className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <Input
-                        {...field}
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        placeholder="Confirmar contraseña"
-                        className="h-12 rounded-xl bg-input pl-11 text-sm"
-                      />
-                    </div>
+                    <PasswordInput
+                      {...field}
+                      showIcon
+                      autoComplete="new-password"
+                      placeholder="Confirmar contraseña"
+                      className="h-12"
+                    />
                   </FormControl>
                   <FormMessage className="px-1 text-xs" />
                 </FormItem>

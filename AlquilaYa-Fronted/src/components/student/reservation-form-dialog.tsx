@@ -39,6 +39,7 @@ import { useVerificationStatus } from '@/hooks/use-verification-status';
 import { reservationService } from '@/services/reservation-service';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
+import { formatPEN } from '@/lib/money';
 import { POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
 import type { Habitacion, Propiedad } from '@/types/propiedad';
 
@@ -153,7 +154,7 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
         </DialogTrigger>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="font-headline text-xl font-bold">
+            <DialogTitle className="text-h2">
               {requiereVerificacion ? 'Verifica tu identidad' : 'Reservar cuarto'}
             </DialogTitle>
             <DialogDescription>
@@ -300,17 +301,17 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
                 </p>
               )}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {habitacion ? `${habitacion.nombre}: ` : ''}S/ {precioUnitario.toLocaleString('es-PE')} × {meses}
+                <span className="tnum text-muted-foreground">
+                  {habitacion ? `${habitacion.nombre}: ` : ''}{formatPEN(precioUnitario)} × {meses}
                 </span>
-                <span className="font-bold text-foreground">
-                  S/ {total.toLocaleString('es-PE')}
+                <span className="tnum font-bold text-foreground">
+                  {formatPEN(total)}
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
                 <span className="text-sm font-bold">Total</span>
-                <span className="text-xl font-black text-primary">
-                  S/ {total.toLocaleString('es-PE')}
+                <span className="tnum text-xl font-black text-primary">
+                  {formatPEN(total)}
                 </span>
               </div>
             </div>

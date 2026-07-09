@@ -46,7 +46,7 @@ export function PropertyRating({
         className,
       )}
     >
-      <Star className={cn(iconSize, 'fill-yellow-500 text-yellow-500')} aria-hidden />
+      <Star className={cn(iconSize, 'fill-warning text-warning')} aria-hidden />
       <span>{calificacion.toFixed(1)}</span>
       <span className="font-normal text-muted-foreground">({totalResenas})</span>
     </span>

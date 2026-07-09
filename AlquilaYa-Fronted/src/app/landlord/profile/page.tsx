@@ -456,7 +456,7 @@ export default function LandlordProfilePage() {
   const esArrendador = perfil?.rol === 'ARRENDADOR';
 
   return (
-    <div className="space-y-6 max-w-3xl animate-fade-in pb-12">
+    <div className="space-y-6 max-w-3xl animate-in fade-in slide-in-from-bottom-2 duration-400 pb-12">
 
       <EmailVerificationBanner />
 

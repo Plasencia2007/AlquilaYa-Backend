@@ -28,7 +28,7 @@ export function ResultStep() {
 
   return (
     <div className="flex flex-col items-center space-y-6 text-center">
-      <div className="flex size-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+      <div className="flex size-20 items-center justify-center rounded-full bg-success-light text-success">
         <CheckCircle2 className="size-10" aria-hidden />
       </div>
 

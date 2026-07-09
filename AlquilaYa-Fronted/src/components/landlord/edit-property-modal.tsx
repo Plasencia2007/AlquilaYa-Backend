@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal } from '@/components/ui/modal';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/legacy-button';
 import { RoomManager } from '@/components/landlord/room-manager';
 import { propiedadService } from '@/services/landlord-property-service';
@@ -12,34 +12,9 @@ import {
 } from '@/services/catalogos-service';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
+import { resolveIcon } from '@/lib/icons';
 import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
 import type { PrecioTemporada, PropiedadUpdate } from '@/types/propiedad';
-
-/* ── Icon mapper (FA → Material Symbols) ──────────────────── */
-const FA_TO_MATERIAL: Record<string, string> = {
-  'fa-wifi': 'wifi', 'fa-tint': 'water_drop', 'fa-bolt': 'bolt',
-  'fa-lightbulb': 'lightbulb', 'fa-tshirt': 'checkroom', 'fa-shirt': 'checkroom',
-  'fa-utensils': 'restaurant', 'fa-key': 'key', 'fa-shower': 'shower',
-  'fa-bath': 'bathtub', 'fa-tv': 'tv', 'fa-snowflake': 'ac_unit',
-  'fa-parking': 'local_parking', 'fa-bus': 'directions_bus', 'fa-lock': 'lock',
-  'fa-couch': 'weekend', 'fa-bed': 'bed', 'fa-dumbbell': 'fitness_center',
-  'fa-broom': 'cleaning_services', 'fa-shield-alt': 'security',
-  'fa-paw': 'pets', 'fa-dog': 'pets', 'fa-smoking-ban': 'smoke_free',
-  'fa-smoking': 'smoking_rooms', 'fa-graduation-cap': 'school',
-  'fa-music': 'music_note', 'fa-glass-martini': 'local_bar',
-  'fa-cocktail': 'local_bar', 'fa-beer': 'sports_bar',
-  'fa-volume-up': 'volume_up', 'fa-user-friends': 'group', 'fa-users': 'group',
-  'fa-ban': 'block', 'fa-check': 'check_circle', 'fa-times': 'cancel',
-  'fa-home': 'home', 'fa-building': 'apartment', 'fa-hotel': 'hotel',
-  'fa-calendar-alt': 'calendar_month', 'fa-calendar': 'calendar_today',
-  'fa-calendar-day': 'today', 'fa-repeat': 'event_repeat',
-};
-function resolveIcon(icon: string | undefined) {
-  if (!icon) return undefined;
-  const k = icon.toLowerCase().trim();
-  if (k.startsWith('fa-')) return FA_TO_MATERIAL[k] ?? 'label';
-  return icon;
-}
 
 /* ── ChipsMultiselect ─────────────────────────────────────── */
 function ChipsMultiselect({
@@ -558,14 +533,13 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
   const sectionTitleCls = 'flex items-center gap-2 text-xs font-bold text-foreground mb-3';
 
   return (
-    <Modal
+    <Dialog
       open={!!prop}
-      onClose={saving ? () => null : intentarCerrar}
-      title=""
-      size="lg"
-      showCloseButton={false}
-      className="max-w-3xl p-0 overflow-hidden"
+      onOpenChange={(v) => {
+        if (!v && !saving) intentarCerrar();
+      }}
     >
+      <DialogContent showCloseButton={false} className="max-w-3xl p-0 gap-0 overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="bg-primary px-6 pt-5 pb-0">
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -573,9 +547,11 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
             <p className="text-primary-foreground/60 text-[11px] font-bold uppercase tracking-widest mb-0.5">
               Editar propiedad
             </p>
-            <h2 className="text-primary-foreground font-black text-xl leading-tight line-clamp-1">
-              {prop?.titulo ?? ''}
-            </h2>
+            <DialogTitle asChild>
+              <h2 className="text-primary-foreground font-black text-xl leading-tight line-clamp-1">
+                {prop?.titulo || 'Editar propiedad'}
+              </h2>
+            </DialogTitle>
           </div>
           <button
             type="button"
@@ -1155,6 +1131,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
           </Button>
         </div>
       </div>
-    </Modal>
+      </DialogContent>
+    </Dialog>
   );
 }
