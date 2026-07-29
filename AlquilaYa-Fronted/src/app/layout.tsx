@@ -8,11 +8,17 @@ import { Navbar } from '@/components/layout/navbar';
 import Footer from '@/components/shared/Footer';
 import { AuthDialog } from '@/components/auth/auth-dialog';
 import { CommandPalette } from '@/components/shared/command-palette';
+import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { GoogleAuthProvider } from '@/components/auth/google-auth-provider';
 import CampusHydrator from '@/components/shared/CampusHydrator';
+import { SiteJsonLd } from '@/components/shared/site-json-ld';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { SkipLink } from '@/components/shared/skip-link';
+import { AxeProvider } from '@/components/dev/axe-provider';
+import { QueryProvider } from '@/components/providers/query-provider';
+import { WebVitals } from './web-vitals';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -97,24 +103,44 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
         />
+        {/* Ítem 417: acelera el handshake TLS con Cloudinary antes de que next/image
+            pida la primera imagen de propiedad (todas las fotos de la app viven ahí). */}
+        <link rel="preconnect" href="https://res.cloudinary.com" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Datos estructurados de sitio (Organization + WebSite/SearchAction), ítem 104. */}
+        <SiteJsonLd />
       </head>
 
       <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider>
-            <GoogleAuthProvider>
-              <CampusHydrator />
-              <ServiceWorkerRegister />
-              <AuthDialog />
-              <CommandPalette />
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
-              <Toaster richColors closeButton position="top-right" />
-            </GoogleAuthProvider>
-          </ThemeProvider>
-        </NextIntlClientProvider>
+        {/* Ítem 394: primer elemento enfocable de la página — invisible hasta
+            que recibe foco por teclado, salta el navbar completo. */}
+        <SkipLink href="#contenido" />
+        {/* Ítem 431: reporta Core Web Vitals (LCP, CLS, INP, FCP, TTFB) vía
+            track() — no renderiza nada, ver `web-vitals.tsx`. */}
+        <WebVitals />
+        {/* Ítem 391: audita accesibilidad en consola SOLO en desarrollo (no-op en
+            producción, ver `AxeProvider`). */}
+        {process.env.NODE_ENV !== 'production' && <AxeProvider />}
+        {/* Ítem 423: QueryClientProvider global (TanStack Query) — envuelve toda la app para
+            que cualquier página client-side pueda usar useQuery/useMutation. Ver
+            `docs/TANSTACK-QUERY.md`. */}
+        <QueryProvider>
+          <NextIntlClientProvider locale={locale} messages={messages}>
+            <ThemeProvider>
+              <GoogleAuthProvider>
+                <CampusHydrator />
+                <ServiceWorkerRegister />
+                <AuthDialog />
+                <CommandPalette />
+                <ImpersonationBanner />
+                <Navbar />
+                <main id="contenido" className="flex-1">{children}</main>
+                <Footer />
+                <Toaster richColors closeButton position="top-right" />
+              </GoogleAuthProvider>
+            </ThemeProvider>
+          </NextIntlClientProvider>
+        </QueryProvider>
       </body>
     </html>
   );

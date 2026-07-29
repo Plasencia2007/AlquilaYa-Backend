@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SkeletonCard } from '@/components/shared/skeleton-card';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -9,7 +11,8 @@ import { ErrorState } from '@/components/shared/error-state';
 import { EmptyReservationsIllustration } from '@/components/shared/illustrations';
 import { ReservationCard } from '@/components/student/reservation-card';
 import { useReservations } from '@/hooks/use-reservations';
-import type { EstadoReserva, Reserva } from '@/types/reserva';
+import { useTabParam } from '@/hooks/use-tab-param';
+import type { EstadoReserva } from '@/types/reserva';
 
 type FiltroEstado = 'TODAS' | EstadoReserva;
 
@@ -23,14 +26,15 @@ const FILTROS: Array<{ value: FiltroEstado; label: string }> = [
   { value: 'CANCELADA', label: 'Canceladas' },
 ];
 
-export default function StudentReservationsPage() {
-  const [filtro, setFiltro] = useState<FiltroEstado>('TODAS');
-  const { items, cargando, error, refrescar, cancelar } = useReservations();
+const FILTRO_VALUES = FILTROS.map((f) => f.value);
 
-  const filtradas: Reserva[] = useMemo(() => {
-    if (filtro === 'TODAS') return items;
-    return items.filter((r) => r.estado === filtro);
-  }, [items, filtro]);
+function StudentReservationsContent() {
+  const [filtro, setFiltro] = useTabParam({ values: FILTRO_VALUES, defaultValue: 'TODAS' });
+  // Ítem 234: el backend pagina DENTRO del filtro de estado activo — ya no se
+  // trae todo de una vez para filtrar del lado del cliente.
+  const estadoFiltro = filtro === 'TODAS' ? undefined : filtro;
+  const { items, cargando, error, pagina, totalPaginas, refrescar, irAPagina, cancelar } =
+    useReservations(estadoFiltro);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-8 md:py-12">
@@ -74,7 +78,7 @@ export default function StudentReservationsPage() {
         />
       )}
 
-      {!cargando && !error && filtradas.length === 0 && (
+      {!cargando && !error && items.length === 0 && (
         <EmptyState
           illustration={EmptyReservationsIllustration}
           title={filtro === 'TODAS' ? 'No tienes reservas todavía' : 'Sin reservas en este estado'}
@@ -91,13 +95,57 @@ export default function StudentReservationsPage() {
         />
       )}
 
-      {!cargando && !error && filtradas.length > 0 && (
-        <div className="space-y-4">
-          {filtradas.map((r) => (
-            <ReservationCard key={r.id} reserva={r} onCancelar={cancelar} />
-          ))}
-        </div>
+      {!cargando && !error && items.length > 0 && (
+        <>
+          <div className="space-y-4">
+            {items.map((r) => (
+              <ReservationCard key={r.id} reserva={r} onCancelar={cancelar} />
+            ))}
+          </div>
+
+          {totalPaginas > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => irAPagina(pagina - 1)}
+                disabled={pagina === 0}
+                className="gap-1"
+              >
+                <ChevronLeft className="size-4" /> Anterior
+              </Button>
+              <span className="text-sm font-semibold text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => irAPagina(pagina + 1)}
+                disabled={pagina >= totalPaginas - 1}
+                className="gap-1"
+              >
+                Siguiente <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+export default function StudentReservationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-5xl space-y-3 px-4 py-8 md:px-8 md:py-12">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      }
+    >
+      <StudentReservationsContent />
+    </Suspense>
   );
 }

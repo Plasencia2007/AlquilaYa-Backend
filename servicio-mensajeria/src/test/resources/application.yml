@@ -42,3 +42,10 @@ eureka:
 jwt:
   secret: test-secret-at-least-256-bits-long-for-testing-purposes-only-0123456789
   expiration: 7200000
+
+# Ítem 254: CloudinaryConfig exige estas propiedades para construir el bean Cloudinary
+# (sin default en @Value). Valores dummy — el contextLoads no llama a la API real.
+cloudinary:
+  cloud-name: test-cloud
+  api-key: test-key
+  api-secret: test-secret

@@ -19,6 +19,8 @@ export interface GrupoRoommate {
   cuposOcupados: number;
   estado: EstadoGrupo;
   codigoInvitacion: string;
+  /** Link del grupo de WhatsApp para coordinar (ítem 221), solo lo edita el creador. */
+  linkWhatsapp?: string;
   /** Reserva grupal generada (Fase 2), si ya reservó. */
   reservaId?: number;
   miembros: MiembroGrupo[];
@@ -79,6 +81,11 @@ export const grupoService = {
   },
   eliminar: async (id: number | string): Promise<void> => {
     await api.delete(`${BASE}/${id}`);
+  },
+  /** Solo el creador puede setear/editar el link del grupo de WhatsApp (ítem 221). */
+  actualizarWhatsapp: async (id: number | string, linkWhatsapp: string): Promise<GrupoRoommate> => {
+    const { data } = await api.patch<GrupoRoommate>(`${BASE}/${id}/whatsapp`, { linkWhatsapp });
+    return data;
   },
 
   // ===== Fase 2: reserva grupal + pago dividido =====

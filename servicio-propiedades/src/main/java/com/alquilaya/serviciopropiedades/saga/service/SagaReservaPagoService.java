@@ -1,7 +1,11 @@
 package com.alquilaya.serviciopropiedades.saga.service;
 
+import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
+import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
+import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
+import com.alquilaya.serviciopropiedades.kafka.ReservaEventProducer;
 import com.alquilaya.serviciopropiedades.outbox.envelope.EventEnvelope;
 import com.alquilaya.serviciopropiedades.outbox.publisher.OutboxPublisher;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
@@ -31,10 +35,13 @@ import java.util.UUID;
  * <h3>Casos cubiertos</h3>
  * <ol>
  *   <li>Pago exitoso mientras la reserva está APROBADA → ruta feliz: PAGADA + saga COMPLETADA.</li>
- *   <li>Pago exitoso pero reserva ya CANCELADA/RECHAZADA → emitir
+ *   <li>Pago exitoso pero reserva ya CANCELADA/RECHAZADA/EXPIRADA → emitir
  *       {@code REFUND_REQUERIDO} (compensación). Si falla, queda en COMPENSANDO
  *       y el {@link com.alquilaya.serviciopropiedades.saga.scheduler.SagaCompensationScheduler}
  *       reintenta.</li>
+ *   <li>Pago exitoso pero reserva sigue SOLICITADA (nunca aprobada por el arrendador, sin
+ *       saga activa) → mismo tratamiento que el caso anterior: {@code REFUND_REQUERIDO} +
+ *       log en ERROR para que un admin audite por qué se cobró sin aprobación.</li>
  *   <li>Arrendador cancela una reserva PAGADA o con saga en curso → idem refund.</li>
  * </ol>
  *
@@ -64,17 +71,23 @@ public class SagaReservaPagoService {
     private final OutboxPublisher outboxPublisher;
     private final com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService;
     private final com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository cuotaRepo;
+    private final ReservaEventProducer reservaEventProducer;
+    private final UsuariosClient usuariosClient;
 
     public SagaReservaPagoService(SagaReservaPagoRepository sagaRepository,
                                   ReservaRepository reservaRepository,
                                   OutboxPublisher outboxPublisher,
                                   com.alquilaya.serviciopropiedades.services.HabitacionService habitacionService,
-                                  com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository cuotaRepo) {
+                                  com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository cuotaRepo,
+                                  ReservaEventProducer reservaEventProducer,
+                                  UsuariosClient usuariosClient) {
         this.sagaRepository = sagaRepository;
         this.reservaRepository = reservaRepository;
         this.outboxPublisher = outboxPublisher;
         this.habitacionService = habitacionService;
         this.cuotaRepo = cuotaRepo;
+        this.reservaEventProducer = reservaEventProducer;
+        this.usuariosClient = usuariosClient;
     }
 
     // =====================================================================
@@ -202,7 +215,43 @@ public class SagaReservaPagoService {
         reservaRepository.save(reserva);
         habitacionService.recomputarTrasCambioReserva(reserva);
         log.info("Saga {}: reserva {} → PAGADA (ruta feliz)", saga.getSagaId(), reserva.getId());
+        emitirReservaPagada(reserva);
         marcarSagaCompletada(saga, PasoSaga.PAGO_CONFIRMADO);
+    }
+
+    /**
+     * Emite {@code RESERVA_PAGADA} a {@code reserva-events} (#286) — antes de esta saga
+     * (Ola 3) el hito de pago transicionaba la reserva sin notificar a nadie. Mismo patrón
+     * de enriquecimiento vía Feign que {@code ReservaService.emitirEvento}: best-effort, no
+     * aborta la transición si servicio-usuarios no responde.
+     */
+    private void emitirReservaPagada(Reserva reserva) {
+        Map<String, Object> extra = new HashMap<>();
+        extra.put("propiedadId", reserva.getPropiedadId());
+        extra.put("estudianteId", reserva.getEstudianteId());
+        extra.put("arrendadorId", reserva.getArrendadorId());
+        extra.put("montoTotal", reserva.getMontoTotal());
+
+        try {
+            EstudianteInfoDTO est = usuariosClient.obtenerEstudiante(reserva.getEstudianteId());
+            if (est != null) {
+                extra.put("estudianteNombre", est.getNombre() + " " + (est.getApellido() != null ? est.getApellido() : ""));
+                extra.put("estudianteTelefono", est.getTelefono());
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo obtener info del estudiante {}: {}", reserva.getEstudianteId(), e.getMessage());
+        }
+        try {
+            ArrendadorInfoDTO arr = usuariosClient.obtenerArrendador(reserva.getArrendadorId());
+            if (arr != null) {
+                extra.put("arrendadorNombre", arr.getNombre() + " " + (arr.getApellido() != null ? arr.getApellido() : ""));
+                extra.put("arrendadorTelefono", arr.getTelefono());
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo obtener info del arrendador {}: {}", reserva.getArrendadorId(), e.getMessage());
+        }
+
+        reservaEventProducer.emitir("RESERVA_PAGADA", reserva.getId(), extra);
     }
 
     /**
@@ -446,15 +495,33 @@ public class SagaReservaPagoService {
             log.info("Reserva {} → PAGADA (sin saga; fallback)", reserva.getId());
         } else if (estado == EstadoReserva.CANCELADA
                 || estado == EstadoReserva.RECHAZADA
-                || estado == EstadoReserva.EXPIRADA) {
-            // Sin saga vigente, crear una "huérfana" para auditar el refund.
+                || estado == EstadoReserva.EXPIRADA
+                || estado == EstadoReserva.SOLICITADA) {
+            // Sin saga vigente, crear una "huérfana" para auditar el refund. SOLICITADA se trata
+            // igual que CANCELADA/RECHAZADA/EXPIRADA: si el pago llegó con la reserva aún
+            // SOLICITADA, el arrendador nunca la aprobó, así que no hay reserva válida que
+            // honrar y el dinero cobrado NO puede quedar sin acción — se dispara el mismo
+            // REFUND_REQUERIDO (reembolso real vía RefundService en servicio-pagos) en vez de
+            // solo loguearlo. Se sube a ERROR (antes era log.debug silencioso) porque, a
+            // diferencia de un pago tardío sobre algo ya cancelado, este caso indica que el
+            // flujo de aprobación se saltó por completo y conviene que un admin lo audite.
+            boolean esSolicitada = estado == EstadoReserva.SOLICITADA;
+            if (esSolicitada) {
+                log.error("Pago exitoso recibido para reserva {} que sigue SOLICITADA (nunca fue "
+                                + "aprobada por el arrendador). Emitiendo REFUND_REQUERIDO; revisar "
+                                + "manualmente por qué se cobró sin aprobación.",
+                        reserva.getId());
+            }
+            String razon = esSolicitada
+                    ? "saga_huerfana_pago_sobre_reserva_no_aprobada"
+                    : "saga_huerfana_pago_post_cancel";
             SagaReservaPago huerfana = SagaReservaPago.builder()
                     .sagaId(UUID.randomUUID())
                     .reservaId(reserva.getId())
                     .estadoSaga(EstadoSaga.COMPENSANDO)
                     .pasoActual(PasoSaga.COMPENSACION_REFUND)
                     .intentos(0)
-                    .payload(serializarPayload(Map.of("razon", "saga_huerfana_pago_post_cancel")))
+                    .payload(serializarPayload(Map.of("razon", razon)))
                     .build();
             SagaReservaPago guardada = sagaRepository.save(huerfana);
             Long pagoId = extraerPagoIdDelEnvelope(envelope);

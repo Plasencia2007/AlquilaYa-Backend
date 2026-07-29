@@ -32,6 +32,15 @@ public class SecurityConfig {
                         // Documentacion Swagger / OpenAPI: acceso libre
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/auth/**").permitAll()
+                        // Alertas por correo de nuevas propiedades (#99/#492): endpoints públicos
+                        // para visitantes anónimos del home (alta, confirmación double opt-in y baja).
+                        // El alta (POST) está rate-limited por IP en RateLimitFilter y por correo en Redis.
+                        .requestMatchers("/api/v1/usuarios/alertas/**").permitAll()
+                        // Ingesta de telemetría de analítica CLIENTE (ítem 455): visitantes anónimos
+                        // también disparan eventos (p.ej. una búsqueda antes de loguearse). Si el
+                        // caller trae JWT, AnalyticsController resuelve usuarioId igual; si no, queda
+                        // null. Rate-limited por IP en RateLimitFilter (endpoint público que persiste).
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/analytics/eventos").permitAll()
                         // Chequeos de permiso del PROPIO usuario (RBAC dinámico #32): cualquier
                         // autenticado puede consultar SUS permisos efectivos. La gestión (CRUD de
                         // permisos) sigue restringida abajo + @PreAuthorize de método.
@@ -59,7 +68,17 @@ public class SecurityConfig {
                         // eliminar SU cuenta (el id se resuelve del token, no de la URL).
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/usuarios/me").authenticated()
                         // Perfil propio: el usuario autenticado edita SUS datos (resueltos por el token).
+                        // NOTA: esta regla va ANTES que la de preferencias-notificacion S2S de abajo
+                        // para que /api/v1/usuarios/perfil/preferencias-notificacion (perfil propio)
+                        // siga exigiendo autenticación — Spring Security usa la PRIMERA regla que matchea.
                         .requestMatchers("/api/v1/usuarios/perfil/**").authenticated()
+                        // Variante S2S de preferencias de notificación (ítem 210): sin PII, consumida
+                        // por servicio-mensajeria incluso desde consumers de Kafka sin JWT que propagar.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*/preferencias-notificacion").permitAll()
+                        // Ítem 378: ids de administradores ACTIVOS, S2S sin PII — lo consume
+                        // servicio-mensajeria desde un Kafka consumer (evento DOCUMENTO_SUBIDO)
+                        // sin request HTTP entrante del que propagar un JWT.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/admin/ids-activos").permitAll()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN") // Gestión de usuarios exclusiva para ADMIN
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session

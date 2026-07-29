@@ -3,6 +3,7 @@ package com.alquilaya.serviciousuarios.services;
 import com.alquilaya.serviciousuarios.entities.AuditLog;
 import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.repositories.AuditLogRepository;
+import com.alquilaya.serviciousuarios.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
     private final com.alquilaya.serviciousuarios.repositories.UsuarioRepository usuarioRepository;
+    private final ClientIpResolver clientIpResolver;
 
     /** Núcleo append-only. Nunca lanza: audita en su propia transacción implícita. */
     public void registrar(Long actorUsuarioId, String actorCorreo, String accion,
@@ -51,7 +53,7 @@ public class AuditLogService {
     public void registrar(Long actorUsuarioId, String actorCorreo, String accion,
                           String entidad, Long entidadId, String detalle, HttpServletRequest req) {
         registrar(actorUsuarioId, actorCorreo, accion, entidad, entidadId, detalle,
-                SesionService.clientIp(req));
+                clientIpResolver.resolve(req));
     }
 
     /**
@@ -72,7 +74,7 @@ public class AuditLogService {
         } catch (Exception e) {
             log.warn("[AUDIT] No se pudo resolver el actor autenticado: {}", e.getMessage());
         }
-        registrar(actorId, correo, accion, entidad, entidadId, detalle, SesionService.clientIp(req));
+        registrar(actorId, correo, accion, entidad, entidadId, detalle, clientIpResolver.resolve(req));
     }
 
     /** Consulta paginada de la auditoría (solo lectura). Normaliza filtros vacíos a null. */

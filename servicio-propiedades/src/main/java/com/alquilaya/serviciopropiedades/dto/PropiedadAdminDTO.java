@@ -16,6 +16,8 @@ public class PropiedadAdminDTO {
     private String titulo;
     private String descripcion;
     private BigDecimal precio;
+    /** Depósito de garantía (S/), adicional a la renta. Null si no está cargado. */
+    private BigDecimal deposito;
     private String direccion;
     private String tipoPropiedad;
     private String periodoAlquiler;

@@ -9,7 +9,11 @@ import com.alquilaya.serviciousuarios.dto.ArrendadorPublicoResponse;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordPerfilRequest;
 import com.alquilaya.serviciousuarios.dto.CambiarPasswordRequest;
 import com.alquilaya.serviciousuarios.dto.EstudianteInfoResponse;
+import com.alquilaya.serviciousuarios.dto.ActualizarPreferenciasNotificacionRequest;
+import com.alquilaya.serviciousuarios.dto.PreferenciasNotificacionResponse;
 import com.alquilaya.serviciousuarios.dto.ReputacionResumen;
+import com.alquilaya.serviciousuarios.dto.UsuarioDetalleResponse;
+import com.alquilaya.serviciousuarios.dto.UsuarioResumenResponse;
 import com.alquilaya.serviciousuarios.entities.Arrendador;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
 import com.alquilaya.serviciousuarios.entities.Usuario;
@@ -89,6 +93,7 @@ public class UsuarioController {
         Estudiante e = estudianteRepository.findByUsuario(u)
                 .orElseThrow(() -> new RecursoNoEncontradoException("El usuario autenticado no tiene perfil de estudiante"));
         e.setUniversidad(req.getUniversidad().trim());
+        e.setUniversidadId(req.getUniversidadId());
         e.setCodigoEstudiante(req.getCodigoEstudiante().trim());
         e.setCarrera(req.getCarrera().trim());
         e.setCiclo(parseCiclo(req.getCiclo()));
@@ -101,6 +106,62 @@ public class UsuarioController {
     public ResponseEntity<Void> cambiarPasswordPerfil(@Valid @RequestBody CambiarPasswordPerfilRequest req) {
         Usuario u = usuarioActual();
         usuarioService.cambiarPassword(u.getId(), req.getActual(), req.getNueva());
+        return ResponseEntity.noContent().build();
+    }
+
+    // ===== Preferencias de notificación (ítem 210) =====
+
+    @GetMapping("/perfil/preferencias-notificacion")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PreferenciasNotificacionResponse> obtenerPreferenciasNotificacion() {
+        return ResponseEntity.ok(mapPreferencias(usuarioActual()));
+    }
+
+    @PutMapping("/perfil/preferencias-notificacion")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PreferenciasNotificacionResponse> actualizarPreferenciasNotificacion(
+            @Valid @RequestBody ActualizarPreferenciasNotificacionRequest req) {
+        Usuario u = usuarioActual();
+        u.setNotificarMensajes(req.isNotificarMensajes());
+        u.setNotificarReservas(req.isNotificarReservas());
+        u.setNotificarMarketing(req.isNotificarMarketing());
+        usuarioRepository.save(u);
+        return ResponseEntity.ok(mapPreferencias(u));
+    }
+
+    /**
+     * Variante S2S sin PII (solo 3 booleans): consumida por servicio-mensajeria para filtrar
+     * el envío de notificaciones según la preferencia del destinatario (ítem 210, enforcement
+     * real en NotificacionService.crear). Pública a propósito: se invoca también desde
+     * consumers de Kafka, sin request HTTP entrante del que propagar un JWT (a diferencia de
+     * /arrendador/{id}/info y /estudiante/{id}/info, que sí llevan cabecera Authorization
+     * cuando el caller es una petición síncrona del chat).
+     */
+    @GetMapping("/{id}/preferencias-notificacion")
+    public ResponseEntity<PreferenciasNotificacionResponse> obtenerPreferenciasNotificacionPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(mapPreferencias(usuarioService.obtenerPorId(id)));
+    }
+
+    private PreferenciasNotificacionResponse mapPreferencias(Usuario u) {
+        return PreferenciasNotificacionResponse.builder()
+                .notificarMensajes(u.isNotificarMensajes())
+                .notificarReservas(u.isNotificarReservas())
+                .notificarMarketing(u.isNotificarMarketing())
+                .build();
+    }
+
+    /**
+     * Baja de cuenta propia (GDPR, G8-B). El id se resuelve del token (no de la URL) para que
+     * un usuario solo pueda anonimizar SU PROPIA cuenta. Autorizado en {@code SecurityConfig}
+     * para cualquier autenticado; aquí se delega en el mismo flujo de anonimización que usa
+     * el borrado admin ({@link UsuarioService#anonimizarCuenta(Long)}).
+     */
+    @DeleteMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> eliminarCuentaPropia() {
+        Usuario u = usuarioActual();
+        log.warn("Baja de cuenta propia (GDPR) para usuario ID: {}", u.getId());
+        usuarioService.anonimizarCuenta(u.getId());
         return ResponseEntity.noContent().build();
     }
 
@@ -121,29 +182,58 @@ public class UsuarioController {
 
     @GetMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
-    public ResponseEntity<List<Usuario>> listarTodos() {
-        return ResponseEntity.ok(usuarioService.listarTodos());
+    public ResponseEntity<org.springframework.data.domain.Page<Usuario>> listarTodos(
+            @org.springframework.data.web.PageableDefault(size = 20) org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(usuarioService.listarTodos(pageable));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS') or @permisoEnforcer.esPropioUsuario(#id)")
-    public ResponseEntity<Usuario> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(usuarioService.obtenerPorId(id));
+    public ResponseEntity<UsuarioDetalleResponse> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(UsuarioDetalleResponse.from(usuarioService.obtenerPorId(id)));
     }
 
     @GetMapping("/rol/{rol}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
-    public ResponseEntity<List<Usuario>> listarPorRol(@PathVariable String rol) {
+    public ResponseEntity<List<UsuarioResumenResponse>> listarPorRol(@PathVariable String rol) {
         log.debug("Solicitud recibida para listar usuarios con Rol: {}", rol);
         List<Usuario> usuarios = usuarioService.listarPorRol(Rol.valueOf(rol.toUpperCase()));
         log.info("Usuarios encontrados para rol {}: {}", rol, usuarios.size());
-        return ResponseEntity.ok(usuarios);
+        return ResponseEntity.ok(usuarios.stream().map(UsuarioResumenResponse::from).toList());
+    }
+
+    /** Listado por estado de cuenta (#367, p.ej. BANNED) para el panel admin de baneos activos. */
+    @GetMapping("/estado/{estado}")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
+    public ResponseEntity<List<UsuarioResumenResponse>> listarPorEstado(@PathVariable String estado) {
+        List<Usuario> usuarios = usuarioService.listarPorEstado(EstadoUsuario.valueOf(estado.toUpperCase()));
+        return ResponseEntity.ok(usuarios.stream().map(UsuarioResumenResponse::from).toList());
     }
 
     @GetMapping("/admin/arrendadores")
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
     public ResponseEntity<List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO>> listarArrendadoresAdmin() {
         return ResponseEntity.ok(usuarioService.listarArrendadoresAdmin());
+    }
+
+    /**
+     * Búsqueda por texto libre de usuarios (ítem 377) para el command palette admin (Ctrl+K):
+     * antes el frontend traía TODOS los usuarios por rol (3 llamadas) y filtraba en cliente, sin
+     * endpoint server-side. Coincide contra nombre/apellido/correo/DNI. {@code limit} acota el
+     * resultado (autocompletar, no un listado paginado completo) entre 1 y 20, default 15.
+     */
+    @GetMapping("/admin/buscar")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('VER_USUARIOS')")
+    public ResponseEntity<List<UsuarioResumenResponse>> buscarUsuarios(
+            @RequestParam("q") String q,
+            @RequestParam(value = "limit", defaultValue = "15") int limit) {
+        if (q == null || q.isBlank()) {
+            return ResponseEntity.ok(List.of());
+        }
+        int limiteAcotado = Math.min(Math.max(limit, 1), 20);
+        List<Usuario> usuarios = usuarioRepository.buscarPorTexto(q.trim(),
+                org.springframework.data.domain.PageRequest.of(0, limiteAcotado));
+        return ResponseEntity.ok(usuarios.stream().map(UsuarioResumenResponse::from).toList());
     }
 
     /** Detección de cuentas duplicadas (#8): grupos que comparten DNI/teléfono/email canónico. */
@@ -153,9 +243,42 @@ public class UsuarioController {
         return ResponseEntity.ok(deteccionDuplicadosService.detectar());
     }
 
+    /**
+     * Ítem 385: marca un cluster de cuentas duplicadas como "revisado — no es duplicado" para
+     * que deje de aparecer en {@link #detectarDuplicados()}. NO fusiona cuentas (fase 2, fuera
+     * de alcance): solo silencia el falso positivo.
+     */
+    @PostMapping("/admin/duplicados/revisar")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO')")
+    public ResponseEntity<Void> marcarDuplicadoRevisado(
+            @Valid @RequestBody com.alquilaya.serviciousuarios.dto.RevisarDuplicadoRequest request,
+            jakarta.servlet.http.HttpServletRequest req) {
+        Long actorId = usuarioActual().getId();
+        deteccionDuplicadosService.marcarRevisado(request.criterio(), request.valor(), actorId);
+        // G8: audita que un admin descartó un cluster de duplicados detectado automáticamente.
+        auditLogService.registrarActorActual("MARCAR_DUPLICADO_REVISADO", "DuplicadoRevisado", null,
+                "criterio=" + request.criterio() + ", valor=" + request.valor(), req);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Ítem 378: ids de administradores ACTIVOS, sin PII (solo el id numérico). Pública a
+     * propósito — igual que {@code /{id}/preferencias-notificacion} — porque la consume
+     * servicio-mensajeria desde un Kafka consumer (evento DOCUMENTO_SUBIDO en
+     * {@code UserApprovalEventConsumer}) que no tiene un request HTTP entrante del que
+     * propagar un JWT.
+     */
+    @GetMapping("/admin/ids-activos")
+    public ResponseEntity<List<Long>> idsAdminsActivos() {
+        return ResponseEntity.ok(usuarioService.listarPorRol(Rol.ADMIN).stream()
+                .filter(u -> u.getEstado() == EstadoUsuario.ACTIVE)
+                .map(Usuario::getId)
+                .toList());
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('EDITAR_USUARIO') or @permisoEnforcer.esPropioUsuario(#id)")
-    public ResponseEntity<Usuario> actualizarUsuario(
+    public ResponseEntity<UsuarioDetalleResponse> actualizarUsuario(
             @PathVariable Long id,
             @Valid @RequestBody ActualizarUsuarioRequest updates,
             jakarta.servlet.http.HttpServletRequest req) {
@@ -171,10 +294,17 @@ public class UsuarioController {
         Usuario actualizado = usuarioService.actualizarUsuario(id, updates);
         // G8: audita el cambio de estado hecho por un admin (suspender/banear/rechazar/activar).
         if (cambioEstadoAdmin) {
+            String detalleCambioEstado = "nuevo estado=" + updates.getEstado();
+            // Ítem del panel de baneos activos: si el cambio es hacia BANNED y llegó motivo, se
+            // deja también en el audit log (además de persistirse en usuario.motivoBaneo).
+            if (updates.getEstado() == EstadoUsuario.BANNED
+                    && updates.getMotivo() != null && !updates.getMotivo().isBlank()) {
+                detalleCambioEstado += ", motivo=" + updates.getMotivo();
+            }
             auditLogService.registrarActorActual("CAMBIO_ESTADO_USUARIO", "Usuario", id,
-                    "nuevo estado=" + updates.getEstado(), req);
+                    detalleCambioEstado, req);
         }
-        return ResponseEntity.ok(actualizado);
+        return ResponseEntity.ok(UsuarioDetalleResponse.from(actualizado));
     }
 
     @DeleteMapping("/{id}")
@@ -254,10 +384,10 @@ public class UsuarioController {
                 .calificacion(a.getCalificacion())
                 .avatar(u != null ? u.getFotoUrl() : null)
                 .verificado(verificado)
-                // TODO: métrica real de tiempo de respuesta promedio del arrendador
-                // (requiere job/agregación sobre servicio-mensajeria). Por ahora null
-                // y la UI muestra "—".
-                .tiempoRespuestaPromedio(null)
+                // Métrica calculada por servicio-mensajeria y propagada por Kafka
+                // (TIEMPO_RESPUESTA_ARRENDADOR_ACTUALIZADO); puede ser null hasta la primera
+                // señal, en cuyo caso la UI muestra "—".
+                .tiempoRespuestaPromedio(a.getTiempoRespuestaPromedio())
                 .numResenas(a.getNumResenas())
                 .score(rep.score())
                 .nivelReputacion(rep.nivel().name())
@@ -301,7 +431,7 @@ public class UsuarioController {
                 .calificacion(a.getCalificacion())
                 .avatar(u != null ? u.getFotoUrl() : null)
                 .verificado(verificado)
-                .tiempoRespuestaPromedio(null)
+                .tiempoRespuestaPromedio(a.getTiempoRespuestaPromedio())
                 .numResenas(a.getNumResenas())
                 .score(rep.score())
                 .nivelReputacion(rep.nivel().name())
@@ -324,6 +454,7 @@ public class UsuarioController {
                 .fotoUrl(u.getFotoUrl())
                 .fechaNacimiento(u.getFechaNacimiento())
                 .universidad(e.getUniversidad())
+                .universidadId(e.getUniversidadId())
                 .codigoEstudiante(e.getCodigoEstudiante())
                 .carrera(e.getCarrera())
                 .ciclo(e.getCiclo())

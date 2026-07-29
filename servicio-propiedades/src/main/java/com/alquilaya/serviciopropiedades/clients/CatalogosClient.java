@@ -15,7 +15,12 @@ public interface CatalogosClient {
     @GetMapping("/api/v1/catalogos/universidades/principal")
     CampusPrincipalDTO obtenerCampusPrincipal();
 
-    /** Zonas activas con geometría (público): para resolver la zona de una propiedad al publicar. */
-    @GetMapping("/api/v1/catalogos/universidades/zonas/activas")
+    /**
+     * Zonas activas con geometría Y comisión por zona (endpoint INTERNO de catalogos). Se usa para
+     * resolver la zona de una propiedad al publicar y para calcular la comisión de cada venta.
+     * Requiere la cabecera {@code X-Internal-Key} (la añade {@link FeignConfig}); el endpoint público
+     * equivalente NO trae comisión, por eso apuntamos al interno.
+     */
+    @GetMapping("/api/v1/catalogos/universidades/zonas/activas/interno")
     List<ZonaResolucionDTO> listarZonasActivas();
 }

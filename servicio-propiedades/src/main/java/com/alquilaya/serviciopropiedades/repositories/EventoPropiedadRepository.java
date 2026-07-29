@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -17,6 +18,15 @@ public interface EventoPropiedadRepository extends JpaRepository<EventoPropiedad
 
     long countByPropiedadIdAndTipoAndFechaCreacionAfter(
             Long propiedadId, TipoEvento tipo, LocalDateTime desde);
+
+    /**
+     * Cuenta, en una sola query agregada (COUNT + IN + >=), los eventos de un tipo desde
+     * una fecha para un CONJUNTO de propiedades. Lo usa el dashboard del arrendador para
+     * sumar las VISTAs de los últimos 30 días across todas sus propiedades sin hacer N
+     * queries. El caller debe evitar invocarlo con una colección vacía (IN () inválido).
+     */
+    long countByPropiedadIdInAndTipoAndFechaCreacionAfter(
+            Collection<Long> propiedadIds, TipoEvento tipo, LocalDateTime desde);
 
     /** Conteo por día de un tipo de evento desde una fecha (para el gráfico de vistas por ventana). */
     @Query("""

@@ -4,6 +4,7 @@ import type {
   DatosAcademicosData,
   DatosPersonalesData,
 } from '@/schemas/student-profile-schema';
+import type { NivelReputacion } from '@/types/reputacion';
 
 export interface EstudianteInfo {
   id: number;
@@ -15,10 +16,15 @@ export interface EstudianteInfo {
   fotoUrl?: string;
   fechaNacimiento?: string;
   universidad?: string;
+  /** Ítem 226: id del catálogo de universidades (servicio-catalogos), si se guardó desde el Combobox. */
+  universidadId?: number;
   codigoEstudiante?: string;
   carrera?: string;
   ciclo?: number;
   verificado?: boolean;
+  /** Score de reputación 0-100 (#26), calculado por servicio-usuarios. */
+  score?: number;
+  nivelReputacion?: NivelReputacion;
 }
 
 /**

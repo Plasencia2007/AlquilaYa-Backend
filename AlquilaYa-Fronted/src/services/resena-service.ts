@@ -34,6 +34,30 @@ export interface ResumenCategorias {
   trato: number | null;
 }
 
+/**
+ * Testimonio de la home (#85): reseña destacada ya anonimizada por el backend.
+ * `autor` es un nombre parcial ("María G.") o "Estudiante" si no se pudo resolver;
+ * `carrera` puede venir vacía para visitantes anónimos. Nunca trae PII.
+ */
+export interface Testimonio {
+  id: number;
+  autor: string;
+  carrera?: string;
+  calificacion: number;
+  comentario: string;
+  fechaCreacion: string;
+}
+
+/** Forma que devuelve el backend (TestimonioDTO). */
+interface TestimonioBackendDTO {
+  id: number;
+  autor: string;
+  carrera?: string | null;
+  rating: number;
+  comentario?: string | null;
+  fechaCreacion: string;
+}
+
 /** Forma real que devuelve el backend (ResenaResponseDTO / entidad). */
 interface ResenaBackendDTO {
   id: number;
@@ -128,5 +152,20 @@ export const resenaService = {
   getResenasPorArrendador: async (arrendadorId: string | number): Promise<Resena[]> => {
     const { data } = await api.get<ResenaBackendDTO[]>(`/resenas/arrendador/${arrendadorId}`);
     return data.map(fromBackend);
+  },
+
+  /** Reseñas destacadas (prueba social) para la home. Endpoint público y privacy-safe. */
+  getDestacadas: async (limit = 5): Promise<Testimonio[]> => {
+    const { data } = await api.get<TestimonioBackendDTO[]>('/resenas/destacadas', {
+      params: { limit },
+    });
+    return data.map((t) => ({
+      id: t.id,
+      autor: t.autor,
+      carrera: t.carrera ?? undefined,
+      calificacion: t.rating ?? 0,
+      comentario: t.comentario ?? '',
+      fechaCreacion: t.fechaCreacion,
+    }));
   },
 };

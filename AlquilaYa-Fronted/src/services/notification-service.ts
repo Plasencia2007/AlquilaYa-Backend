@@ -1,18 +1,10 @@
 import { api } from '@/lib/api';
 import type { Notificacion } from '@/types/notificacion';
-
-interface PaginaNotificaciones {
-  content: Notificacion[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
-  last: boolean;
-}
+import type { Page } from '@/types/pagination';
 
 export const notificationService = {
-  listar: async (page = 0, size = 20): Promise<PaginaNotificaciones> => {
-    const { data } = await api.get<PaginaNotificaciones>('/notificaciones/mis', {
+  listar: async (page = 0, size = 20): Promise<Page<Notificacion>> => {
+    const { data } = await api.get<Page<Notificacion>>('/notificaciones/mis', {
       params: { page, size },
     });
     return data;

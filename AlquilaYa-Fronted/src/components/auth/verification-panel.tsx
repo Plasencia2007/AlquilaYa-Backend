@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle, Clock, FileText, Info, ShieldCheck, Upload, X, XCircle } from 'lucide-react';
 
+import { Timeline, type TimelineStepStatus } from '@/components/shared/timeline';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import { documentUploadSchema } from '@/schemas/document-schema';
@@ -74,16 +76,20 @@ function StatusBadge({ estado }: StatusBadgeProps) {
 interface PreviewModalProps { url: string; onClose: () => void }
 function PreviewModal({ url, onClose }: PreviewModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  // Ítem 396: focus trap básico — reemplaza el listener de Escape a mano que
+  // había acá (el hook ya cubre Escape + Tab/Shift+Tab en un solo lugar).
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   return createPortal(
     <div
-      ref={overlayRef}
+      ref={(node) => {
+        overlayRef.current = node;
+        trapRef.current = node;
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Documento de verificación"
+      tabIndex={-1}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
@@ -315,6 +321,24 @@ export default function VerificationPanel() {
   const pct = total === 0 ? 0 : Math.round((aprobados / total) * 100);
   const todosAprobados = aprobados === total && total > 0;
 
+  const subidos = documentos.length;
+  const pendientesRevision = documentos.filter(d => d.estadoVerificacion === 'PENDIENTE').length;
+  const todosSubidos = total > 0 && subidos >= total;
+
+  const pasoSubir: TimelineStepStatus = todosSubidos ? 'completed' : subidos > 0 ? 'active' : 'pending';
+  const pasoRevision: TimelineStepStatus = todosAprobados
+    ? 'completed'
+    : todosSubidos && pendientesRevision > 0
+      ? 'active'
+      : 'pending';
+  const pasoVerificado: TimelineStepStatus = todosAprobados ? 'completed' : 'pending';
+
+  const pasosVerificacion = [
+    { title: 'Sube tus documentos', description: 'DNI u otro documento de identidad válido.', status: pasoSubir },
+    { title: 'Revisión del equipo', description: 'Puede tardar hasta 24 horas hábiles.', status: pasoRevision },
+    { title: 'Identidad verificada', description: 'Listo, ya puedes reservar sin restricciones.', status: pasoVerificado },
+  ];
+
   return (
     <>
       {previewUrl && (
@@ -385,6 +409,13 @@ export default function VerificationPanel() {
           colapsado ? 'max-h-0' : 'max-h-[1000px]'
         )}>
           <div className="relative z-10 space-y-5 px-6 pb-6">
+            {/* Timeline del proceso de verificación */}
+            {!cargando && total > 0 && (
+              <div className="rounded-2xl border border-border bg-card/60 p-4">
+                <Timeline steps={pasosVerificacion} />
+              </div>
+            )}
+
             {/* Barra de progreso completa */}
             {!cargando && total > 0 && (
               <ProgressBar aprobados={aprobados} total={total} />

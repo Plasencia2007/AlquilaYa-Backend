@@ -1,15 +1,20 @@
 'use client';
 
-export default function AdminPlaceholderPage() {
+import SystemHealthDashboard from '@/components/admin/SystemHealthDashboard';
+
+/** Ítem 352: reemplaza el placeholder — SystemHealthDashboard ya está cableado a datos reales
+ *  (/api/admin/health, /api/admin/logs). Solo faltaba montarlo aquí. */
+export default function AdminSystemMetricsPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
-      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
-        <span className="material-symbols-outlined text-primary text-3xl">monitor_heart</span>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+      <div className="mb-8">
+        <span className="text-primary font-bold tracking-wider uppercase text-[10px] mb-2 block">Torre de Control</span>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight leading-none">Monitor del Sistema</h1>
+        <p className="text-slate-400 font-semibold text-xs mt-2">
+          Estado de los microservicios y latencia de la red AlquilaYa, vía Actuator del Gateway.
+        </p>
       </div>
-      <h1 className="text-3xl font-black text-foreground tracking-tighter mb-2">Monitor del Sistema</h1>
-      <p className="text-muted-foreground font-medium opacity-70 max-w-md">
-        Estado de los microservicios y latencia de la red AlquilaYa.
-      </p>
+      <SystemHealthDashboard />
     </div>
   );
 }

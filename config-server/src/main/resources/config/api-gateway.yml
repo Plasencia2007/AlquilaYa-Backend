@@ -34,6 +34,23 @@ spring:
                 args:
                   id: catalogosCB
                   fallbackUri: forward:/fallback/catalogos
+              # Ítem 434 de MEJORAS.md: cache HTTP para catálogos (tipos, períodos, servicios,
+              # reglas, zonas, universidades, carreras). AddResponseHeader es un filtro de
+              # RESPUESTA sin distinción por método HTTP, y esta misma ruta (Path=/api/v1/catalogos/**)
+              # también sirve las mutaciones admin (POST/PUT/DELETE en .../admin, .../admin/{id},
+              # .../admin/filtros, .../admin/banners/imagen — ver UniversidadController,
+              # CarreraController, ItemCatalogoController, BannerImagenController), así que el
+              # header se agrega igual en esas respuestas.
+              # Verificado (no asumido): es inofensivo ahí porque (1) nginx no tiene proxy_cache
+              # configurado, solo hace reverse-proxy; (2) el HTTP cache de los navegadores solo
+              # indexa respuestas GET/HEAD, nunca POST/PUT/DELETE, sin importar Cache-Control;
+              # (3) un CDN eventual tampoco cachea no-GET por defecto. Restringir esta ruta con
+              # `Method=GET` (en vez de aceptar el header inofensivo en escrituras) rompería las
+              # mutaciones admin, que quedarían sin ruta → 404. Por eso no se separó en dos rutas.
+              - name: AddResponseHeader
+                args:
+                  name: Cache-Control
+                  value: "public, max-age=300, stale-while-revalidate=3600"
           - id: servicio-pagos
             uri: lb://servicio-pagos
             predicates:

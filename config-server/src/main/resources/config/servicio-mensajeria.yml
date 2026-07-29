@@ -33,9 +33,24 @@ spring:
       # Earliest para no perder eventos previos al arranque; idempotencia (processed_events)
       # filtra duplicados en caso de reprocesamiento.
       auto-offset-reset: earliest
+  servlet:
+    multipart:
+      # Ítem 254: adjuntos de chat (imágenes). El límite de negocio real (10MB, con
+      # mensaje de error amigable) lo aplica CloudinaryService.validar(); este tope de
+      # Spring se deja un poco más alto para que ESA validación sea la que dispare
+      # primero en el caso límite, en vez del MaxUploadSizeExceededException genérico.
+      max-file-size: 12MB
+      max-request-size: 12MB
 
 server:
   port: 8086
+
+# Configuración de Cloudinary (ítem 254: imágenes adjuntas en el chat). Mismas
+# variables de entorno que servicio-propiedades — no se inventan credenciales nuevas.
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
+  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
+  api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 feign:
   circuitbreaker:

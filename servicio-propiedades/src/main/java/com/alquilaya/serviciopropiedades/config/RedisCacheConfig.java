@@ -12,10 +12,13 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Configuración Redis para:
  *   - Cache de listados públicos de propiedades (TTL 5 min).
+ *   - Cache de puntos de interés/tiempo caminando por propiedad (TTL 24h, override —
+ *     ver {@code CACHES_TTL_LARGO} más abajo).
  *   - Templates para uso directo (cola de limpieza Cloudinary).
  *
  * Convenciones de keys (todas con prefijo `propiedades:` para aislamiento del
@@ -30,6 +33,10 @@ public class RedisCacheConfig {
     public static final String PREFIX = "propiedades:";
     public static final String CACHE_PREFIX = PREFIX + "cache:";
     public static final String CACHE_LISTADO = "propiedades:listado";
+    /** Puntos de interés cercanos a una propiedad (Overpass). Ver {@code LugaresCercanosService}. */
+    public static final String CACHE_LUGARES_CERCANOS = "propiedades:lugaresCercanos";
+    /** Tiempo caminando desde una propiedad a un destino (OSRM). Ver {@code LugaresCercanosService}. */
+    public static final String CACHE_TIEMPO_CAMINANDO = "propiedades:tiempoCaminando";
 
     private GenericJackson2JsonRedisSerializer jsonSerializer() {
         // Partimos del serializer por defecto (su mapper interno ya trae el manejo
@@ -51,8 +58,19 @@ public class RedisCacheConfig {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer()));
 
+        // Override de TTL para lugares cercanos/tiempo caminando (Overpass/OSRM): a diferencia
+        // del listado de propiedades (cambia seguido, TTL 5 min por defecto arriba), los puntos
+        // de interés y rutas cercanas a una propiedad casi nunca cambian. Un TTL largo (24h)
+        // evita golpear esas APIs públicas sin SLA en cada visita mientras el caché siga fresco.
+        RedisCacheConfiguration configTtlLargo = config.entryTtl(Duration.ofHours(24));
+        Map<String, RedisCacheConfiguration> overridesTtl = Map.of(
+                CACHE_LUGARES_CERCANOS, configTtlLargo,
+                CACHE_TIEMPO_CAMINANDO, configTtlLargo
+        );
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
+                .withInitialCacheConfigurations(overridesTtl)
                 .build();
     }
 

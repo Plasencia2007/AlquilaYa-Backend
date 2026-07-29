@@ -1,5 +1,6 @@
 package com.alquilaya.api_gateway.config;
 
+import com.alquilaya.api_gateway.filter.ImpersonationReadOnlyInterceptor;
 import com.alquilaya.api_gateway.filter.JwtRevocationInterceptor;
 import com.alquilaya.api_gateway.filter.RateLimitGlobalFilter;
 import org.springframework.context.annotation.Configuration;
@@ -19,11 +20,14 @@ public class RateLimitConfig implements WebMvcConfigurer {
 
     private final RateLimitGlobalFilter rateLimitFilter;
     private final JwtRevocationInterceptor jwtRevocationInterceptor;
+    private final ImpersonationReadOnlyInterceptor impersonationReadOnlyInterceptor;
 
     public RateLimitConfig(RateLimitGlobalFilter rateLimitFilter,
-                           JwtRevocationInterceptor jwtRevocationInterceptor) {
+                           JwtRevocationInterceptor jwtRevocationInterceptor,
+                           ImpersonationReadOnlyInterceptor impersonationReadOnlyInterceptor) {
         this.rateLimitFilter = rateLimitFilter;
         this.jwtRevocationInterceptor = jwtRevocationInterceptor;
+        this.impersonationReadOnlyInterceptor = impersonationReadOnlyInterceptor;
     }
 
     /**
@@ -44,6 +48,13 @@ public class RateLimitConfig implements WebMvcConfigurer {
         // Rechaza tokens revocados (logout / cierre remoto) en un solo punto para todos
         // los servicios. Va después del rate-limit.
         registry.addInterceptor(jwtRevocationInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(DOCS);
+        // Ítem 379: bloquea mutaciones de un token de impersonación en un solo punto para
+        // todos los servicios (salvo el WS de mensajería, que no pasa por acá — ver
+        // WebSocketAuthInterceptor). Va después de la revocación (si el token ya está
+        // revocado, ni llega a evaluarse esto).
+        registry.addInterceptor(impersonationReadOnlyInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(DOCS);
     }

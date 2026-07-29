@@ -4,6 +4,7 @@ import com.alquilaya.serviciousuarios.validaciones.anotaciones.ContrasenaSegura;
 import com.alquilaya.serviciousuarios.validaciones.anotaciones.DniPeruano;
 import com.alquilaya.serviciousuarios.validaciones.anotaciones.TelefonoPeruano;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -53,4 +54,16 @@ public class RegisterRequest {
 
     @Valid
     private DetallesEstudianteRequest detallesEstudiante;
+
+    /** Token del widget Cloudflare Turnstile (#184). Opcional a nivel DTO: si el frontend no
+     *  lo manda (widget sin configurar), {@code TurnstileService} decide qué hacer. */
+    private String turnstileToken;
+
+    /** Checkbox de términos y condiciones / política de privacidad (ítem 185). El frontend ya
+     *  bloquea el avance del wizard si no está marcado, pero se re-valida acá server-side para
+     *  cobertura legal real (un cliente que no sea el frontend oficial no podría saltárselo).
+     *  El timestamp de aceptación se registra server-side en {@code Usuario.aceptaTerminosEn}
+     *  (reloj del servidor, no el del cliente). */
+    @AssertTrue(message = "Debes aceptar los términos y condiciones para continuar")
+    private boolean aceptaTerminos;
 }

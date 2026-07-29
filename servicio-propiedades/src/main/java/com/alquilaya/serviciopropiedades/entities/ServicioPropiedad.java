@@ -10,6 +10,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * Servicio de una propiedad con su estado (incluido / aparte / no disponible). Embebido como
  * @ElementCollection en {@link Propiedad}.
@@ -28,4 +30,12 @@ public class ServicioPropiedad {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado", length = 20)
     private EstadoServicio estado;
+
+    /**
+     * Monto mensual (S/) de este servicio cuando {@code estado} es APARTE (se paga
+     * por fuera de la renta). Nullable: no aplica a INCLUIDO/NO_DISPONIBLE ni a
+     * filas legacy sin monto cargado.
+     */
+    @Column(name = "monto")
+    private BigDecimal monto;
 }

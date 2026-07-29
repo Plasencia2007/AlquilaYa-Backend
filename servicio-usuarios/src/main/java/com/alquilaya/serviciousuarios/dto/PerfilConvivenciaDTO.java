@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -29,6 +30,8 @@ public class PerfilConvivenciaDTO {
     private int completitud;          // % del perfil de convivencia completado
     private Integer compatibilidadScore;
     private String compatibilidadNivel;
+    /** Desglose por dimensión (ítem 215) — única fuente de verdad, calculado junto al score. */
+    private List<CompatibilidadItemDTO> compatibilidadDesglose;
 
     // Sobre mí
     private String bio;

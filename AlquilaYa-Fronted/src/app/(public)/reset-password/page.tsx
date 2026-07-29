@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { PasswordInput } from '@/components/ui/password-input';
 import { SuccessScreen } from '@/components/shared/success-screen';
 import { PasswordStrength } from '@/components/auth/password-strength';
@@ -109,6 +109,9 @@ function ResetPasswordContent() {
               name="password"
               render={({ field }) => (
                 <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                    Nueva contraseña
+                  </FormLabel>
                   <FormControl>
                     <PasswordInput
                       {...field}
@@ -129,6 +132,9 @@ function ResetPasswordContent() {
               name="confirmPassword"
               render={({ field }) => (
                 <FormItem>
+                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                    Confirmar contraseña
+                  </FormLabel>
                   <FormControl>
                     <PasswordInput
                       {...field}

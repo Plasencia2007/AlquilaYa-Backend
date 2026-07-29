@@ -3,9 +3,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
-  Eye, EyeOff, Star, Camera, Upload, CheckCircle, Clock, XCircle,
-  Loader2, FileImage, FileText, MapPin,
+  Star, Camera, Upload, CheckCircle, Clock, XCircle,
+  Loader2, FileImage, FileText, MapPin, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
@@ -14,12 +17,19 @@ import { documentsService } from '@/services/documents-service';
 import { EmailVerificationBanner } from '@/components/auth/email-verification-banner';
 import { ActiveSessions } from '@/components/auth/active-sessions';
 import { UPEU_COORDS } from '@/lib/geo';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { PasswordInput } from '@/components/ui/password-input';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import {
+  personalDataSchema, arrendadorDataSchema, DNI_REGEX,
+  type PersonalDataFormData, type ArrendadorDataFormData,
+} from '@/schemas/landlord-profile-schema';
 import type { Perfil, Documento, TipoDocumento, EstadoUsuario } from '@/types/profile';
 
 const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), {
   ssr: false,
   loading: () => (
-    <div className="h-[250px] w-full animate-pulse rounded-xl bg-slate-700/50 flex items-center justify-center text-slate-400 text-sm">
+    <div className="h-[250px] w-full animate-pulse rounded-xl bg-muted flex items-center justify-center text-muted-foreground text-sm">
       Cargando mapa…
     </div>
   ),
@@ -41,10 +51,13 @@ const DOC_CFG = {
   RECHAZADO:{ label: 'Rechazado',   Icon: XCircle,      cls: 'text-red-400    bg-red-500/10    border-red-500/20'    },
 };
 
+/** Estilo de input compartido entre `InputField` (estado local) y los campos RHF de este archivo. */
+const INPUT_CLS = 'w-full px-4 py-2.5 rounded-xl bg-input border border-border text-foreground text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-6 space-y-5">
-      <h2 className="text-white text-lg font-black">{title}</h2>
+    <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+      <h2 className="text-foreground text-lg font-black">{title}</h2>
       {children}
     </div>
   );
@@ -58,59 +71,50 @@ function InputField({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">{label}</span>
+      <span className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">{label}</span>
       <input
         type={type}
         value={value}
         onChange={e => onChange?.(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-4 py-2.5 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className={INPUT_CLS}
       />
     </label>
   );
 }
 
-function PasswordField({
-  label, value, onChange, show, onToggle,
-}: {
-  label: string; value: string; onChange: (v: string) => void;
-  show: boolean; onToggle: () => void;
-}) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">{label}</span>
-      <div className="relative">
-        <input
-          type={show ? 'text' : 'password'}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className="w-full px-4 py-2.5 pr-11 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary transition-colors"
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-        >
-          {show ? <EyeOff size={16} /> : <Eye size={16} />}
-        </button>
-      </div>
-    </label>
-  );
-}
+const cambiarPasswordSchema = z
+  .object({
+    actual: z.string().min(1, 'Ingresa tu contraseña actual'),
+    nueva: z.string().min(8, 'Debe tener al menos 8 caracteres'),
+    confirmar: z.string().min(1, 'Confirma la nueva contraseña'),
+  })
+  .refine((data) => data.nueva !== data.actual, {
+    message: 'La nueva contraseña debe ser diferente a la actual',
+    path: ['nueva'],
+  })
+  .refine((data) => data.nueva === data.confirmar, {
+    message: 'Las contraseñas no coinciden',
+    path: ['confirmar'],
+  });
+type CambiarPasswordFormData = z.infer<typeof cambiarPasswordSchema>;
 
 function PrimaryButton({
-  children, onClick, disabled, loading, type = 'button',
+  children, onClick, disabled, loading, type = 'button', className,
 }: {
   children: React.ReactNode; onClick?: () => void; disabled?: boolean;
-  loading?: boolean; type?: 'button' | 'submit';
+  loading?: boolean; type?: 'button' | 'submit'; className?: string;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary text-white text-sm font-bold transition-colors disabled:opacity-50"
+      className={cn(
+        'flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold transition-colors disabled:opacity-50',
+        className,
+      )}
     >
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
@@ -125,10 +129,10 @@ function Estrellas({ valor }: { valor: number }) {
         <Star
           key={i}
           size={13}
-          className={i <= Math.round(valor) ? 'fill-yellow-400 text-yellow-400' : 'fill-slate-700 text-slate-700'}
+          className={i <= Math.round(valor) ? 'fill-yellow-400 text-yellow-400' : 'fill-muted text-muted-foreground/30'}
         />
       ))}
-      <span className="text-slate-400 text-xs ml-1">{valor.toFixed(1)}</span>
+      <span className="text-muted-foreground text-xs ml-1">{valor.toFixed(1)}</span>
     </div>
   );
 }
@@ -156,10 +160,10 @@ function DocumentCard({
   const isPdf = documento?.archivoUrl?.toLowerCase().includes('.pdf');
 
   return (
-    <div className="bg-slate-700/50 border border-slate-600/50 rounded-xl p-4 space-y-3 flex flex-col">
-      <p className="text-white text-sm font-bold">{titulo}</p>
+    <div className="bg-muted/50 border border-border/60 rounded-xl p-4 space-y-3 flex flex-col">
+      <p className="text-foreground text-sm font-bold">{titulo}</p>
 
-      <div className="h-32 rounded-lg overflow-hidden bg-slate-600/50 flex items-center justify-center flex-1">
+      <div className="h-32 rounded-lg overflow-hidden bg-background flex items-center justify-center flex-1">
         {documento?.archivoUrl ? (
           isPdf ? (
             <a href={documento.archivoUrl} target="_blank" rel="noreferrer"
@@ -172,7 +176,7 @@ function DocumentCard({
             <img src={documento.archivoUrl} alt={titulo} className="w-full h-full object-cover" />
           )
         ) : (
-          <div className="flex flex-col items-center gap-1 text-slate-500">
+          <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <FileImage size={32} />
             <span className="text-xs">Sin documento</span>
           </div>
@@ -196,7 +200,7 @@ function DocumentCard({
       <button
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-600/80 hover:bg-slate-600 text-white text-xs font-bold transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted text-foreground text-xs font-bold transition-colors disabled:opacity-50"
       >
         {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
         {uploading ? 'Subiendo…' : documento ? 'Reemplazar' : 'Subir documento'}
@@ -212,19 +216,34 @@ export default function LandlordProfilePage() {
   const [cargando, setCargando] = useState(true);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
 
-  const [formPersonal, setFormPersonal] = useState({ nombre: '', apellido: '', dni: '', telefono: '' });
-  const [formArrendador, setFormArrendador] = useState({ nombreComercial: '', ruc: '', esEmpresa: false });
+  // 338: datos personales y de arrendador migrados a React Hook Form + Zod
+  // (prerequisito real de 339 — necesitamos un `isDirty` confiable por sección).
+  const personalForm = useForm<PersonalDataFormData>({
+    resolver: zodResolver(personalDataSchema),
+    defaultValues: { nombre: '', apellido: '', dni: '', telefono: '' },
+  });
+  const arrendadorForm = useForm<ArrendadorDataFormData>({
+    resolver: zodResolver(arrendadorDataSchema),
+    defaultValues: { nombreComercial: '', ruc: '', esEmpresa: false },
+  });
+
+  // Ubicación se mantiene como estado local plano (el mapa no es un input
+  // formulario estándar); `ubicacionGuardadaRef` guarda el último valor
+  // persistido para poder calcular su propio "dirty" y alimentar el guard 339.
   const [formUbicacion, setFormUbicacion] = useState({
     lat: UPEU_COORDS.lat, lng: UPEU_COORDS.lng, direccionCuartos: '',
   });
-  const [formSeguridad, setFormSeguridad] = useState({ actual: '', nueva: '', confirmar: '' });
+  const ubicacionGuardadaRef = useRef(formUbicacion);
+
+  const passwordForm = useForm<CambiarPasswordFormData>({
+    resolver: zodResolver(cambiarPasswordSchema),
+    defaultValues: { actual: '', nueva: '', confirmar: '' },
+  });
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const [savingPersonal, setSavingPersonal] = useState(false);
-  const [savingArrendador, setSavingArrendador] = useState(false);
   const [verificandoRuc, setVerificandoRuc] = useState(false);
   const [verificandoDni, setVerificandoDni] = useState(false);
   const [savingUbicacion, setSavingUbicacion] = useState(false);
@@ -232,13 +251,11 @@ export default function LandlordProfilePage() {
   const [savingFoto, setSavingFoto] = useState(false);
   const [subiendoDoc, setSubiendoDoc] = useState<string | null>(null);
 
-  const [showActual, setShowActual] = useState(false);
-  const [showNueva, setShowNueva] = useState(false);
-  const [showConfirmar, setShowConfirmar] = useState(false);
-
   useEffect(() => {
+    // `cargando` ya arranca en `true` (useState(true)) y este efecto sólo corre
+    // una vez al montar ([] deps) — llamar setCargando(true) aquí sería un no-op
+    // redundante (y lo marca la regla react-hooks/set-state-in-effect).
     let cancelado = false;
-    setCargando(true);
     Promise.allSettled([
       profileService.obtenerMiPerfil(),
       documentsService.listarMisDocumentos(),
@@ -247,18 +264,25 @@ export default function LandlordProfilePage() {
       if (perfilRes.status === 'fulfilled') {
         const p = perfilRes.value;
         setPerfil(p);
-        setFormPersonal({ nombre: p.nombre, apellido: p.apellido, dni: p.dni ?? '', telefono: p.telefono ?? '' });
+        personalForm.reset({
+          nombre: p.nombre,
+          apellido: p.apellido,
+          dni: p.dni ?? '',
+          telefono: p.telefono ?? '',
+        });
         if (p.detallesArrendador) {
-          setFormArrendador({
+          arrendadorForm.reset({
             nombreComercial: p.detallesArrendador.nombreComercial ?? '',
             ruc: p.detallesArrendador.ruc ?? '',
             esEmpresa: p.detallesArrendador.esEmpresa ?? false,
           });
-          setFormUbicacion({
+          const ubicacionInicial = {
             lat: p.detallesArrendador.latitud ?? UPEU_COORDS.lat,
             lng: p.detallesArrendador.longitud ?? UPEU_COORDS.lng,
             direccionCuartos: p.detallesArrendador.direccionPropiedades ?? '',
-          });
+          };
+          setFormUbicacion(ubicacionInicial);
+          ubicacionGuardadaRef.current = ubicacionInicial;
         }
       } else {
         notify.error(perfilRes.reason, 'No se pudo cargar el perfil');
@@ -267,7 +291,23 @@ export default function LandlordProfilePage() {
       setCargando(false);
     });
     return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 339: guard de cambios sin guardar — agrega el dirty de ambos formularios
+  // RHF, la ubicación (comparada contra el último valor persistido) y la
+  // foto de perfil pendiente de subir.
+  const ubicacionDirty =
+    formUbicacion.lat !== ubicacionGuardadaRef.current.lat ||
+    formUbicacion.lng !== ubicacionGuardadaRef.current.lng ||
+    formUbicacion.direccionCuartos !== ubicacionGuardadaRef.current.direccionCuartos;
+
+  useUnsavedChanges(
+    personalForm.formState.isDirty ||
+    arrendadorForm.formState.isDirty ||
+    ubicacionDirty ||
+    pendingAvatarFile !== null
+  );
 
   const onAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -295,41 +335,43 @@ export default function LandlordProfilePage() {
     }
   };
 
-  const guardarPersonal = async () => {
-    setSavingPersonal(true);
+  const guardarPersonal = async (data: PersonalDataFormData) => {
     try {
       const actualizado = await profileService.actualizarPerfil({
-        nombre: formPersonal.nombre,
-        apellido: formPersonal.apellido,
-        dni: formPersonal.dni || undefined,
-        telefono: formPersonal.telefono || undefined,
+        nombre: data.nombre,
+        apellido: data.apellido,
+        dni: data.dni || undefined,
+        telefono: data.telefono || undefined,
       });
       setPerfil(actualizado);
+      personalForm.reset(data);
       notify.success('Datos personales actualizados');
     } catch (err) {
       notify.error(err, 'No se pudo actualizar');
-    } finally {
-      setSavingPersonal(false);
     }
   };
 
-  const buildDetallesArrendador = () => ({
-    nombreComercial: formArrendador.nombreComercial || undefined,
-    ruc: formArrendador.ruc || undefined,
-    esEmpresa: formArrendador.esEmpresa,
+  const buildDetallesArrendador = (data: ArrendadorDataFormData) => ({
+    nombreComercial: data.nombreComercial || undefined,
+    ruc: data.ruc || undefined,
+    esEmpresa: data.esEmpresa,
     direccionCuartos: formUbicacion.direccionCuartos,
     latitud: formUbicacion.lat,
     longitud: formUbicacion.lng,
   });
 
+  const dniActual = personalForm.watch('dni');
+  const rucActual = arrendadorForm.watch('ruc');
+
   const handleVerificarDni = async () => {
-    if (formPersonal.dni.length !== 8) {
+    const dni = personalForm.getValues('dni');
+    if (!DNI_REGEX.test(dni)) {
       notify.error(null, 'El DNI debe tener exactamente 8 dígitos.');
       return;
     }
     setVerificandoDni(true);
     try {
-      await documentsService.verificarDniInstantaneo(formPersonal.dni);
+      await documentsService.verificarDniInstantaneo(dni);
       notify.success('DNI verificado con RENIEC', 'Tu identidad ha sido validada.');
       const actualizado = await profileService.obtenerMiPerfil();
       setPerfil(actualizado);
@@ -341,24 +383,21 @@ export default function LandlordProfilePage() {
   };
 
   const handleVerificarRuc = async () => {
-    if (formArrendador.ruc.length !== 11) {
+    const ruc = arrendadorForm.getValues('ruc');
+    if (ruc.length !== 11) {
       notify.error(null, 'El RUC debe tener exactamente 11 dígitos.');
       return;
     }
     setVerificandoRuc(true);
     try {
-      const res = await profileService.verificarRuc(formArrendador.ruc);
+      const res = await profileService.verificarRuc(ruc);
       if (res.success) {
         notify.success('RUC verificado con SUNAT', 'Datos comerciales cargados.');
-        setFormArrendador(p => ({
-          ...p,
-          nombreComercial: res.razonSocial || p.nombreComercial,
-        }));
+        if (res.razonSocial) {
+          arrendadorForm.setValue('nombreComercial', res.razonSocial, { shouldDirty: true });
+        }
         if (res.direccion) {
-          setFormUbicacion(p => ({
-            ...p,
-            direccionCuartos: res.direccion,
-          }));
+          setFormUbicacion(p => ({ ...p, direccionCuartos: res.direccion }));
         }
       } else {
         notify.error(null, res.message || 'No se pudo verificar el RUC.');
@@ -370,20 +409,19 @@ export default function LandlordProfilePage() {
     }
   };
 
-  const guardarArrendador = async () => {
+  const guardarArrendador = async (data: ArrendadorDataFormData) => {
     if (!formUbicacion.direccionCuartos.trim()) {
       notify.error(null, 'Completa la dirección en la sección Ubicación primero');
       return;
     }
-    setSavingArrendador(true);
     try {
-      const actualizado = await profileService.actualizarPerfil({ detallesArrendador: buildDetallesArrendador() });
+      const actualizado = await profileService.actualizarPerfil({ detallesArrendador: buildDetallesArrendador(data) });
       setPerfil(actualizado);
+      arrendadorForm.reset(data);
+      ubicacionGuardadaRef.current = formUbicacion;
       notify.success('Datos de arrendador actualizados');
     } catch (err) {
       notify.error(err, 'No se pudo actualizar');
-    } finally {
-      setSavingArrendador(false);
     }
   };
 
@@ -394,8 +432,11 @@ export default function LandlordProfilePage() {
     }
     setSavingUbicacion(true);
     try {
-      const actualizado = await profileService.actualizarPerfil({ detallesArrendador: buildDetallesArrendador() });
+      const actualizado = await profileService.actualizarPerfil({
+        detallesArrendador: buildDetallesArrendador(arrendadorForm.getValues()),
+      });
       setPerfil(actualizado);
+      ubicacionGuardadaRef.current = formUbicacion;
       notify.success('Ubicación actualizada');
     } catch (err) {
       notify.error(err, 'No se pudo actualizar la ubicación');
@@ -404,15 +445,11 @@ export default function LandlordProfilePage() {
     }
   };
 
-  const guardarSeguridad = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (formSeguridad.nueva.length < 8) { notify.error(null, 'La nueva contraseña debe tener al menos 8 caracteres'); return; }
-    if (formSeguridad.nueva !== formSeguridad.confirmar) { notify.error(null, 'Las contraseñas no coinciden'); return; }
-    if (formSeguridad.nueva === formSeguridad.actual) { notify.error(null, 'La nueva contraseña debe ser diferente a la actual'); return; }
+  const guardarSeguridad = async (data: CambiarPasswordFormData) => {
     setSavingSeguridad(true);
     try {
-      await profileService.cambiarPassword(formSeguridad.actual, formSeguridad.nueva);
-      setFormSeguridad({ actual: '', nueva: '', confirmar: '' });
+      await profileService.cambiarPassword(data.actual, data.nueva);
+      passwordForm.reset();
       notify.success('Contraseña actualizada correctamente');
     } catch (err) {
       notify.error(err, 'No se pudo cambiar la contraseña');
@@ -443,9 +480,9 @@ export default function LandlordProfilePage() {
   if (cargando) {
     return (
       <div className="space-y-6 max-w-3xl animate-pulse">
-        <div className="bg-slate-800 rounded-2xl p-6 h-40" />
-        <div className="bg-slate-800 rounded-2xl p-6 h-64" />
-        <div className="bg-slate-800 rounded-2xl p-6 h-48" />
+        <div className="bg-card rounded-2xl p-6 h-40" />
+        <div className="bg-card rounded-2xl p-6 h-64" />
+        <div className="bg-card rounded-2xl p-6 h-48" />
       </div>
     );
   }
@@ -461,21 +498,24 @@ export default function LandlordProfilePage() {
       <EmailVerificationBanner />
 
       {/* ── Header card ─────────────────────────────────────────────────────── */}
-      <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-6">
+      <div className="bg-card border border-border rounded-2xl p-6">
         <div className="flex items-start gap-5 flex-wrap">
 
           {/* Avatar */}
           <div className="relative shrink-0">
             <div
               onClick={() => avatarInputRef.current?.click()}
-              className="w-[110px] h-[110px] rounded-full overflow-hidden bg-slate-700 flex items-center justify-center cursor-pointer group ring-4 ring-slate-700/50 hover:ring-primary/40 transition-all"
+              className="w-[110px] h-[110px] rounded-full overflow-hidden bg-muted flex items-center justify-center cursor-pointer group ring-4 ring-border hover:ring-primary/40 transition-all"
             >
               {avatarSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarSrc} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-3xl font-black text-white/70">{initials}</span>
+                <span className="text-3xl font-black text-foreground/70">{initials}</span>
               )}
+              {/* Overlay siempre oscuro con ícono blanco: patrón establecido en la app
+                  para overlays sobre foto (image-uploader.tsx, property-gallery.tsx,
+                  room-manager.tsx) — independiente del tema claro/oscuro. */}
               <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera size={22} className="text-white" />
               </div>
@@ -486,7 +526,7 @@ export default function LandlordProfilePage() {
           {/* Info */}
           <div className="flex-1 space-y-2 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-white text-2xl font-black tracking-tight">
+              <h1 className="text-foreground text-2xl font-black tracking-tight">
                 {perfil?.nombre} {perfil?.apellido}
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/30">
@@ -503,7 +543,7 @@ export default function LandlordProfilePage() {
               <Estrellas valor={perfil.detallesArrendador.calificacion} />
             )}
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-400 text-sm">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground text-sm">
               {perfil?.correo && <span>{perfil.correo}</span>}
               {perfil?.telefono && <span>{perfil.telefono}</span>}
             </div>
@@ -519,107 +559,181 @@ export default function LandlordProfilePage() {
 
       {/* ── Datos personales ────────────────────────────────────────────────── */}
       <SectionCard title="Datos personales">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InputField label="Nombre" value={formPersonal.nombre}
-            onChange={v => setFormPersonal(p => ({ ...p, nombre: v }))} />
-          <InputField label="Apellido" value={formPersonal.apellido}
-            onChange={v => setFormPersonal(p => ({ ...p, apellido: v }))} />
-          <div className="flex flex-col sm:flex-row items-end gap-2">
-            <div className="flex-1 w-full">
-              <InputField label="DNI" value={formPersonal.dni}
-                onChange={v => setFormPersonal(p => ({ ...p, dni: v }))}
-                placeholder="12345678" />
+        <Form {...personalForm}>
+          <form onSubmit={personalForm.handleSubmit(guardarPersonal)} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={personalForm.control}
+                name="nombre"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">Nombre</FormLabel>
+                    <FormControl>
+                      <input {...field} className={INPUT_CLS} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={personalForm.control}
+                name="apellido"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">Apellido</FormLabel>
+                    <FormControl>
+                      <input {...field} className={INPUT_CLS} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex flex-col sm:flex-row items-end gap-2">
+                <FormField
+                  control={personalForm.control}
+                  name="dni"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 w-full">
+                      <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">DNI</FormLabel>
+                      <FormControl>
+                        <input {...field} placeholder="12345678" className={INPUT_CLS} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <PrimaryButton
+                  type="button"
+                  onClick={handleVerificarDni}
+                  disabled={verificandoDni || !DNI_REGEX.test(dniActual)}
+                  className="h-[42px] shrink-0 w-full sm:w-auto"
+                >
+                  {verificandoDni ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Validando…
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck size={14} />
+                      Validar DNI
+                    </>
+                  )}
+                </PrimaryButton>
+              </div>
+              <FormField
+                control={personalForm.control}
+                name="telefono"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">Teléfono</FormLabel>
+                    <FormControl>
+                      <input {...field} placeholder="+51987654321" className={INPUT_CLS} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="sm:col-span-2">
+                <InputField label="Correo electrónico" value={perfil?.correo ?? ''} disabled />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleVerificarDni}
-              disabled={verificandoDni || formPersonal.dni.length !== 8}
-              className="h-[42px] px-4 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-slate-700 disabled:to-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/10 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
-            >
-              {verificandoDni ? (
-                <>
-                  <Loader2 size={13} className="animate-spin" />
-                  Validando...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[16px]">verified</span>
-                  Validar DNI
-                </>
-              )}
-            </button>
-          </div>
-          <InputField label="Teléfono" value={formPersonal.telefono}
-            onChange={v => setFormPersonal(p => ({ ...p, telefono: v }))}
-            placeholder="+51 9XX XXX XXX" />
-          <div className="sm:col-span-2">
-            <InputField label="Correo electrónico" value={perfil?.correo ?? ''} disabled />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <PrimaryButton onClick={guardarPersonal} loading={savingPersonal}>
-            {savingPersonal ? 'Guardando…' : 'Guardar datos personales'}
-          </PrimaryButton>
-        </div>
+            <div className="flex justify-end">
+              <PrimaryButton type="submit" loading={personalForm.formState.isSubmitting}>
+                {personalForm.formState.isSubmitting ? 'Guardando…' : 'Guardar datos personales'}
+              </PrimaryButton>
+            </div>
+          </form>
+        </Form>
       </SectionCard>
 
       {/* ── Datos de arrendador ─────────────────────────────────────────────── */}
       {esArrendador && (
         <SectionCard title="Datos de arrendador">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InputField label="Nombre comercial" value={formArrendador.nombreComercial}
-              onChange={v => setFormArrendador(p => ({ ...p, nombreComercial: v }))}
-              placeholder="Ej: Cuartos Plasencia" />
-            <div className="flex flex-col sm:flex-row items-end gap-2">
-              <div className="flex-1 w-full">
-                <InputField label="RUC" value={formArrendador.ruc}
-                  onChange={v => setFormArrendador(p => ({ ...p, ruc: v }))}
-                  placeholder="20XXXXXXXXX" />
+          <Form {...arrendadorForm}>
+            <form onSubmit={arrendadorForm.handleSubmit(guardarArrendador)} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={arrendadorForm.control}
+                  name="nombreComercial"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">Nombre comercial</FormLabel>
+                      <FormControl>
+                        <input {...field} placeholder="Ej: Cuartos Plasencia" className={INPUT_CLS} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex flex-col sm:flex-row items-end gap-2">
+                  <FormField
+                    control={arrendadorForm.control}
+                    name="ruc"
+                    render={({ field }) => (
+                      <FormItem className="flex-1 w-full">
+                        <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">RUC</FormLabel>
+                        <FormControl>
+                          <input {...field} placeholder="20XXXXXXXXX" className={INPUT_CLS} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <PrimaryButton
+                    type="button"
+                    onClick={handleVerificarRuc}
+                    disabled={verificandoRuc || rucActual.length !== 11}
+                    className="h-[42px] shrink-0 w-full sm:w-auto"
+                  >
+                    {verificandoRuc ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Validando…
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={14} />
+                        Validar RUC
+                      </>
+                    )}
+                  </PrimaryButton>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleVerificarRuc}
-                disabled={verificandoRuc || formArrendador.ruc.length !== 11}
-                className="h-[42px] px-4 bg-gradient-to-r from-primary to-violet-600 hover:from-primary/95 hover:to-violet-600/95 disabled:from-slate-700 disabled:to-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-primary/10 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
-              >
-                {verificandoRuc ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin" />
-                    Validando...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[16px]">verified</span>
-                    Validar RUC
-                  </>
+
+              <FormField
+                control={arrendadorForm.control}
+                name="esEmpresa"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-3 space-y-0">
+                    <FormControl>
+                      <SwitchPrimitive.Root
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        className="w-11 h-6 rounded-full bg-muted transition-colors data-[state=checked]:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <SwitchPrimitive.Thumb className="block w-5 h-5 rounded-full bg-white shadow-md transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
+                      </SwitchPrimitive.Root>
+                    </FormControl>
+                    <FormLabel className="text-foreground text-sm font-medium !mt-0">Soy empresa / persona jurídica</FormLabel>
+                  </FormItem>
                 )}
-              </button>
-            </div>
-          </div>
+              />
 
-          <div className="flex items-center gap-3">
-            <SwitchPrimitive.Root
-              checked={formArrendador.esEmpresa}
-              onCheckedChange={v => setFormArrendador(p => ({ ...p, esEmpresa: v }))}
-              className="w-11 h-6 rounded-full bg-slate-600 transition-colors data-[state=checked]:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <SwitchPrimitive.Thumb className="block w-5 h-5 rounded-full bg-white shadow-md transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
-            </SwitchPrimitive.Root>
-            <span className="text-slate-300 text-sm font-medium">Soy empresa / persona jurídica</span>
-          </div>
-
-          <div className="flex justify-end">
-            <PrimaryButton onClick={guardarArrendador} loading={savingArrendador}>
-              {savingArrendador ? 'Guardando…' : 'Guardar datos de arrendador'}
-            </PrimaryButton>
-          </div>
+              <div className="flex justify-end">
+                <PrimaryButton type="submit" loading={arrendadorForm.formState.isSubmitting}>
+                  {arrendadorForm.formState.isSubmitting ? 'Guardando…' : 'Guardar datos de arrendador'}
+                </PrimaryButton>
+              </div>
+            </form>
+          </Form>
         </SectionCard>
       )}
 
       {/* ── Ubicación ───────────────────────────────────────────────────────── */}
       {esArrendador && (
         <SectionCard title="Ubicación de propiedades">
-          <p className="text-slate-400 text-xs -mt-2">
+          <p className="text-muted-foreground text-xs -mt-2">
             Haz clic en el mapa o arrastra el marcador para indicar la zona donde están tus cuartos.
           </p>
 
@@ -636,7 +750,7 @@ export default function LandlordProfilePage() {
             onPositionChange={onMapPositionChange}
           />
 
-          <div className="flex items-center gap-2 text-slate-500 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
             <MapPin size={12} />
             <span>Lat: {formUbicacion.lat.toFixed(6)} · Lng: {formUbicacion.lng.toFixed(6)}</span>
           </div>
@@ -651,7 +765,7 @@ export default function LandlordProfilePage() {
 
       {/* ── Documentos ──────────────────────────────────────────────────────── */}
       <SectionCard title="Documentos de verificación">
-        <p className="text-slate-400 text-xs -mt-2">
+        <p className="text-muted-foreground text-xs -mt-2">
           Sube fotos nítidas de tu DNI. Serán revisadas por el equipo de AlquilaYa.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -670,37 +784,63 @@ export default function LandlordProfilePage() {
 
       {/* ── Seguridad ───────────────────────────────────────────────────────── */}
       <SectionCard title="Cambiar contraseña">
-        <form onSubmit={guardarSeguridad} className="space-y-4">
-          <PasswordField
-            label="Contraseña actual"
-            value={formSeguridad.actual}
-            onChange={v => setFormSeguridad(p => ({ ...p, actual: v }))}
-            show={showActual}
-            onToggle={() => setShowActual(s => !s)}
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <PasswordField
-              label="Nueva contraseña"
-              value={formSeguridad.nueva}
-              onChange={v => setFormSeguridad(p => ({ ...p, nueva: v }))}
-              show={showNueva}
-              onToggle={() => setShowNueva(s => !s)}
+        <Form {...passwordForm}>
+          <form onSubmit={passwordForm.handleSubmit(guardarSeguridad)} className="space-y-4">
+            <FormField
+              control={passwordForm.control}
+              name="actual"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">
+                    Contraseña actual
+                  </FormLabel>
+                  <FormControl>
+                    <PasswordInput {...field} autoComplete="current-password" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <PasswordField
-              label="Confirmar nueva contraseña"
-              value={formSeguridad.confirmar}
-              onChange={v => setFormSeguridad(p => ({ ...p, confirmar: v }))}
-              show={showConfirmar}
-              onToggle={() => setShowConfirmar(s => !s)}
-            />
-          </div>
-          <p className="text-slate-500 text-xs">Mínimo 8 caracteres. Diferente a la contraseña actual.</p>
-          <div className="flex justify-end">
-            <PrimaryButton type="submit" loading={savingSeguridad}>
-              {savingSeguridad ? 'Cambiando…' : 'Cambiar contraseña'}
-            </PrimaryButton>
-          </div>
-        </form>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={passwordForm.control}
+                name="nueva"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">
+                      Nueva contraseña
+                    </FormLabel>
+                    <FormControl>
+                      <PasswordInput {...field} autoComplete="new-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={passwordForm.control}
+                name="confirmar"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-[11px] font-bold uppercase tracking-widest">
+                      Confirmar nueva contraseña
+                    </FormLabel>
+                    <FormControl>
+                      <PasswordInput {...field} autoComplete="new-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">Mínimo 8 caracteres. Diferente a la contraseña actual.</p>
+            <div className="flex justify-end">
+              <PrimaryButton type="submit" loading={savingSeguridad}>
+                {savingSeguridad ? 'Cambiando…' : 'Cambiar contraseña'}
+              </PrimaryButton>
+            </div>
+          </form>
+        </Form>
       </SectionCard>
 
       <ActiveSessions />

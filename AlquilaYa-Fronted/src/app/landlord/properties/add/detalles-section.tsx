@@ -63,6 +63,26 @@ export function DetallesSection({
         </div>
       </div>
 
+      <div data-field="deposito">
+        <Field label="Depósito de garantía" hint="S/ · opcional" error={errores.deposito}>
+          <InputField
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            name="deposito"
+            icon="savings"
+            value={form.deposito}
+            onChange={onInput}
+            placeholder="0"
+            error={!!errores.deposito}
+          />
+        </Field>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Se muestra al estudiante en el estimado mensual de costos, aparte de la renta.
+        </p>
+      </div>
+
       {/* Distribución — obligatoria para inmuebles completos (depa / mini depa / casa) */}
       <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4">
         <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">

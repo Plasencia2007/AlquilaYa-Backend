@@ -25,6 +25,8 @@ export interface ItemCatalogo {
   tipo: TipoItemCatalogo;
   icono?: string;
   descripcion?: string;
+  /** Solo aplica a `BANNER`: URL de la imagen del hero gestionable. */
+  imagenUrl?: string | null;
   activo: boolean;
 }
 

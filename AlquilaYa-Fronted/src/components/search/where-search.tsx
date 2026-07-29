@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MapPin, Navigation, School, Search, X } from 'lucide-react';
+import { Clock, MapPin, Navigation, School, Search, X } from 'lucide-react';
 
 import { universidadService, type Universidad } from '@/services/universidad-service';
+import { useRecentSearchesStore } from '@/stores/recent-searches-store';
 import { cn } from '@/lib/cn';
 
 interface Props {
@@ -40,6 +41,16 @@ export function WhereSearch({
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const defaultAplicado = useRef(false);
+
+  // Búsquedas recientes (ítem 113): persistidas en localStorage con hidratación manual.
+  const recientes = useRecentSearchesStore((s) => s.recientes);
+  const registrarReciente = useRecentSearchesStore((s) => s.registrar);
+  const eliminarReciente = useRecentSearchesStore((s) => s.eliminar);
+  const limpiarRecientes = useRecentSearchesStore((s) => s.limpiar);
+
+  useEffect(() => {
+    void useRecentSearchesStore.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     let cancel = false;
@@ -127,7 +138,17 @@ export function WhereSearch({
   };
 
   const buscarTexto = () => {
-    onSelectTexto(texto.trim());
+    const t = texto.trim();
+    if (t) registrarReciente(t);
+    onSelectTexto(t);
+    cerrar();
+  };
+
+  // Re-aplica una búsqueda reciente y la sube al tope por recencia.
+  const usarReciente = (t: string) => {
+    registrarReciente(t);
+    setTexto('');
+    onSelectTexto(t);
     cerrar();
   };
 
@@ -206,6 +227,48 @@ export function WhereSearch({
                 className="h-11 w-full rounded-xl border border-border bg-input pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
+
+            {/* Búsquedas recientes: solo cuando no se está tecleando (ítem 113) */}
+            {!q && recientes.length > 0 && (
+              <div className="mb-1">
+                <div className="flex items-center justify-between px-2 pb-1 pt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Recientes
+                  </p>
+                  <button
+                    type="button"
+                    onClick={limpiarRecientes}
+                    className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Borrar
+                  </button>
+                </div>
+                {recientes.map((r) => (
+                  <div key={r.texto} className="group flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => usarReciente(r.texto)}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card">
+                        <Clock className="size-4 text-muted-foreground" />
+                      </span>
+                      <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                        {r.texto}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Quitar "${r.texto}" de recientes`}
+                      onClick={() => eliminarReciente(r.texto)}
+                      className="shrink-0 rounded-full p-2 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
               Sugerencias

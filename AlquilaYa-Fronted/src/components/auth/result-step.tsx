@@ -13,6 +13,12 @@ export function ResultStep() {
 
   const destino = targetRole === 'ARRENDADOR' ? '/landlord/dashboard' : '/';
 
+  // Ítem 428: el destino ya se conoce al montar (viene de `targetRole`) y hay 2.2s de
+  // espera antes de navegar — de sobra para que la ruta esté "tibia" cuando se dispare.
+  useEffect(() => {
+    router.prefetch(destino);
+  }, [router, destino]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       close();

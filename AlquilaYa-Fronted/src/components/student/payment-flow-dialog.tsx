@@ -45,6 +45,7 @@ export function PaymentFlowDialog({
   const [montoPagado, setMontoPagado] = useState<number | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const [reintentando, setReintentando] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
 
@@ -131,6 +132,40 @@ export function PaymentFlowDialog({
     setNonce((n) => n + 1);
   };
 
+  const reintentarPago = async () => {
+    setReintentando(true);
+    try {
+      const { url } = await pagoService.crearPreferencia(reservaId);
+      if (!url) throw new Error('Sin URL de checkout');
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setFase('waiting');
+      setNonce((n) => n + 1);
+    } catch (err) {
+      notify.error(err, 'No pudimos generar un nuevo intento de pago. Inténtalo de nuevo.');
+    } finally {
+      setReintentando(false);
+    }
+  };
+
+  // Solo existe en el backend fuera de prod (DevOnlyPagoController, @Profile("!prod")); el gate
+  // de NODE_ENV + la variable explícita evitan que el botón aparezca en producción o en demos.
+  const mostrarSimulador =
+    process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_DEV_PAY === 'true';
+  const simularPagoDev = async () => {
+    const promesa = pagoService.simularExito(reservaId);
+    notify.promise(promesa, {
+      loading: 'Simulando pago…',
+      success: 'Pago simulado, confirmando…',
+      error: 'No se pudo simular el pago',
+    });
+    try {
+      await promesa;
+      setNonce((n) => n + 1); // fuerza un poll inmediato del estado real
+    } catch {
+      // el toast de notify.promise ya informó el error
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -184,6 +219,17 @@ export function PaymentFlowDialog({
               {checkoutUrl && (
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={reabrir}>
                   <ExternalLink className="size-4" /> Reabrir Mercado Pago
+                </Button>
+              )}
+              {mostrarSimulador && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-dashed border-warning/50 text-warning hover:bg-warning/10"
+                  onClick={simularPagoDev}
+                >
+                  Simular pago exitoso (dev)
                 </Button>
               )}
               <button
@@ -287,11 +333,10 @@ export function PaymentFlowDialog({
               </p>
             </div>
             <div className="flex w-full flex-col gap-2">
-              {checkoutUrl && (
-                <Button className="font-bold" onClick={reabrir}>
-                  Intentar de nuevo
-                </Button>
-              )}
+              <Button className="gap-1.5 font-bold" onClick={reintentarPago} disabled={reintentando}>
+                {reintentando && <Loader2 className="size-4 animate-spin" />}
+                {reintentando ? 'Generando nuevo intento...' : 'Intentar de nuevo'}
+              </Button>
               <button
                 onClick={onClose}
                 className="text-xs font-medium text-muted-foreground hover:text-foreground"

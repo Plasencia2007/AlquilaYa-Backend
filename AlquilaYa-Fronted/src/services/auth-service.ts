@@ -1,5 +1,23 @@
 import { Usuario } from '@/types/auth';
 import { api } from '@/lib/api';
+import type { LandlordDetails, StudentDetails } from '@/stores/auth-modal-store';
+
+/** Detalles de perfil por rol que se mandan al registrar (ítem 156/hallazgo: era `any`). */
+export type DetallesPerfilRegistro = StudentDetails | LandlordDetails;
+
+interface RegistrarseBody {
+  nombre: string;
+  apellido: string;
+  dni: string;
+  correo: string;
+  password: string;
+  rol: string;
+  telefono: string;
+  aceptaTerminos: true;
+  turnstileToken?: string;
+  detallesEstudiante?: StudentDetails;
+  detallesArrendador?: LandlordDetails;
+}
 
 // S5: TANTO el access token como el refresh token viven en cookies httpOnly que pone el
 // BACKEND (Set-Cookie) — este frontend nunca los lee ni los escribe directamente (JS no
@@ -14,12 +32,23 @@ export interface SesionDispositivo {
   jti: string;
   dispositivo: string;
   ip: string;
+  /** "Ciudad, País" resuelta por IP (ítem 188). `null` si no se pudo geolocalizar. */
+  ciudad: string | null;
   creado: number | null; // epoch ms
   actual: boolean;
 }
 
+/** Respuesta de `POST /resend-otp` (ítem 191): incluye cuántos reenvíos quedan en la ventana. */
+export interface ReenviarOtpResponse {
+  mensaje: string;
+  intentosRestantes: number;
+}
+
 export interface AuthResponseBody {
   autenticado: boolean;
+  /** Ítem 229: true cuando autenticado=false porque la cuenta tiene 2FA activo — el password
+   *  fue correcto pero falta el código TOTP (completar con servicioAuth.verificarTotpLogin). */
+  requiere2fa?: boolean;
   id: number;
   nombre: string;
   correo: string;
@@ -28,6 +57,17 @@ export interface AuthResponseBody {
   foto?: string | null;
   emailVerificado?: boolean;
   tipoLogin?: 'LOCAL' | 'GOOGLE';
+}
+
+/** Error distintivo cuando /login se detiene en el paso de 2FA (ítem 229): credenciales
+ *  correctas pero falta el código TOTP. No es un error de credenciales inválidas. */
+export class Requiere2faError extends Error {
+  correo: string;
+  constructor(correo: string) {
+    super('REQUIERE_2FA');
+    this.name = 'Requiere2faError';
+    this.correo = correo;
+  }
 }
 
 function usuarioDesdeRespuesta(body: AuthResponseBody): Usuario {
@@ -49,11 +89,33 @@ export const servicioAuth = {
       correo,
       password: contrasena,
     });
+    // Ítem 229: si la cuenta tiene 2FA activo, el backend detiene el login aquí
+    // (autenticado=false, requiere2fa=true, SIN cookies) en vez de emitir la sesión — hay que
+    // completar con verificarTotpLogin(). Lanzamos un error distintivo en vez de devolver un
+    // Usuario "fantasma" (antes de 2FA, autenticado siempre venía true en /login o el backend
+    // directamente rechazaba con 403, así que esta rama era inalcanzable).
+    if (!response.data.autenticado) {
+      if (response.data.requiere2fa) {
+        throw new Requiere2faError(response.data.correo);
+      }
+      return null;
+    }
     // El backend ya dejó las cookies httpOnly puestas (Set-Cookie) — nada que guardar acá.
     return usuarioDesdeRespuesta(response.data);
   },
 
-  registrarse: async (nombre: string, apellido: string, dni: string, correo: string, contrasena: string, rol: string, detallesPerfil: any, telefono: string): Promise<Usuario | null> => {
+  /** Ítem 229: completa el login tras Requiere2faError, con el código de la app autenticadora.
+   *  Si es válido, el backend emite la sesión igual que un login normal (cookies httpOnly). */
+  verificarTotpLogin: async (correo: string, codigo: string): Promise<Usuario | null> => {
+    const response = await api.post<AuthResponseBody>('usuarios/auth/2fa/login-verificar', {
+      correo,
+      codigo,
+    });
+    if (!response.data.autenticado) return null;
+    return usuarioDesdeRespuesta(response.data);
+  },
+
+  registrarse: async (nombre: string, apellido: string, dni: string, correo: string, contrasena: string, rol: string, detallesPerfil: DetallesPerfilRegistro, telefono: string, turnstileToken?: string): Promise<Usuario | null> => {
     try {
       const rolUpper = rol.toUpperCase();
 
@@ -61,7 +123,7 @@ export const servicioAuth = {
       //   ESTUDIANTE  -> detallesEstudiante
       //   ARRENDADOR  -> detallesArrendador
       // El frontend maneja un solo 'detallesPerfil' y aqui lo mapeamos.
-      const body: Record<string, any> = {
+      const body: RegistrarseBody = {
         nombre,
         apellido,
         dni,
@@ -69,11 +131,18 @@ export const servicioAuth = {
         password: contrasena,
         rol: rolUpper,
         telefono,
+        // ítem 185: sólo se llega a llamar a registrarse() tras pasar el paso de datos
+        // personales, cuyo schema (registerSchema.aceptaTerminos) ya exige que el checkbox
+        // esté marcado — el backend además lo vuelve a exigir (@AssertTrue en RegisterRequest).
+        aceptaTerminos: true,
+        // ítem 184: token del widget Cloudflare Turnstile; undefined si el sitekey no está
+        // configurado (caso normal en desarrollo) — el backend degrada a "permitir" entonces.
+        turnstileToken,
       };
       if (rolUpper === 'ESTUDIANTE') {
-        body.detallesEstudiante = detallesPerfil;
+        body.detallesEstudiante = detallesPerfil as StudentDetails;
       } else if (rolUpper === 'ARRENDADOR') {
-        body.detallesArrendador = detallesPerfil;
+        body.detallesArrendador = detallesPerfil as LandlordDetails;
       }
 
       const response = await api.post<AuthResponseBody>('usuarios/auth/register', body);
@@ -132,8 +201,10 @@ export const servicioAuth = {
     return usuarioDesdeRespuesta(response.data);
   },
 
-  solicitarResetPassword: async (correo: string): Promise<string> => {
-    const response = await api.post('usuarios/auth/forgot-password', { correo });
+  /** `turnstileToken` es opcional (#184): el backend degrada a "permitir siempre" si Turnstile
+   *  no está configurado, así que se manda solo cuando el widget lo produjo. */
+  solicitarResetPassword: async (correo: string, turnstileToken?: string): Promise<string> => {
+    const response = await api.post('usuarios/auth/forgot-password', { correo, turnstileToken });
     return response.data.mensaje;
   },
 
@@ -180,13 +251,23 @@ export const servicioAuth = {
     return response.data.mensaje;
   },
 
+  /** Verifica el correo con el enlace de un solo click (ítem 179), alternativa al código
+   *  manual de 6 dígitos. Mismo AuthResponseBody que verificarCodigoEmail/verificarOtp: si
+   *  `autenticado` es true, el backend ya dejó las cookies httpOnly puestas. */
+  verificarEmailToken: async (token: string): Promise<AuthResponseBody> => {
+    const response = await api.get<AuthResponseBody>('usuarios/auth/verify-email-token', {
+      params: { token },
+    });
+    return response.data;
+  },
+
   verificarOtp: async (telefono: string, codigo: string): Promise<AuthResponseBody> => {
     const response = await api.post<AuthResponseBody>('usuarios/auth/verify-otp', { telefono, codigo });
     return response.data;
   },
 
-  reenviarOtp: async (telefono: string): Promise<any> => {
-    const response = await api.post('usuarios/auth/resend-otp', { telefono });
+  reenviarOtp: async (telefono: string): Promise<ReenviarOtpResponse> => {
+    const response = await api.post<ReenviarOtpResponse>('usuarios/auth/resend-otp', { telefono });
     return response.data;
   },
 };

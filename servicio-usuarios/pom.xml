@@ -195,6 +195,14 @@
 			<artifactId>cloudinary-http44</artifactId>
 			<version>1.36.0</version>
 		</dependency>
+		<!-- 2FA/TOTP (RFC 6238) para item 229: genera/verifica secrets y URIs otpauth://.
+		     El QR se renderiza en el cliente (qrcode.react) a partir de la URI, por lo que
+		     no hace falta un generador de imagenes (zxing) en el backend. -->
+		<dependency>
+			<groupId>dev.samstevens.totp</groupId>
+			<artifactId>totp</artifactId>
+			<version>1.7.1</version>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>

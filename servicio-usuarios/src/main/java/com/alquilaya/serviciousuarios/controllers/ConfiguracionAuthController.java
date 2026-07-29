@@ -25,9 +25,14 @@ public class ConfiguracionAuthController {
         return ResponseEntity.ok(new ConfiguracionVerificacionDTO(configuracionAuthService.getMetodo()));
     }
 
-    /** Cambia el método — requiere permiso de gestión de sistema (#32). */
+    /**
+     * Cambia el método — solo ADMIN. Nota: la regla de URL del SecurityConfig
+     * (`/api/v1/usuarios/** → hasRole('ADMIN')`) ya fuerza ADMIN aquí; el
+     * @PreAuthorize granular anterior (`GESTIONAR_SISTEMA`) era engañoso porque
+     * nunca llegaba a aplicarse. Se hace explícito para que el código no mienta.
+     */
     @PutMapping("/admin/configuracion/verificacion")
-    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ConfiguracionVerificacionDTO> actualizar(
             @Valid @RequestBody ConfiguracionVerificacionDTO req) {
         return ResponseEntity.ok(new ConfiguracionVerificacionDTO(

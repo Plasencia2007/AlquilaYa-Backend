@@ -1,13 +1,30 @@
 'use client';
 
-import { Card } from '@/components/ui/legacy-card';
 import { Button } from '@/components/ui/legacy-button';
-import { useNotifications } from '@/hooks/use-notifications';
-import { cn } from '@/lib/cn';
-import { tiempoRelativo } from '@/lib/relative-time';
+import { NotificationList } from '@/components/shared/notification-list';
+import { useNotificationList } from '@/hooks/use-notification-list';
 
+/**
+ * Ítem 343: paridad con `(private)/student/notifications` — antes esta página solo leía del
+ * store global (tope ~30, sin paginar ni agrupar). Ahora comparte `useNotificationList()` +
+ * `<NotificationList />` con el panel estudiante: fetch paginado propio, agrupación Hoy/Ayer/Esta
+ * semana/Anteriores con headers sticky, ícono por tipo, y estados de carga/error/vacío. Solo el
+ * encabezado (título, subtítulo y botón "marcar todas") se queda con el estilo propio del panel
+ * arrendador (`legacy-button`, tipografía "torre de control").
+ */
 export default function LandlordNotificationsPage() {
-  const { items, noLeidas, marcarLeida, marcarTodasLeidas, cargada } = useNotifications();
+  const {
+    noLeidas,
+    grupos,
+    cargando,
+    cargandoMas,
+    error,
+    hayMas,
+    sentinelRef,
+    onItemClick,
+    onMarcarTodas,
+    reintentar,
+  } = useNotificationList();
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
@@ -23,68 +40,25 @@ export default function LandlordNotificationsPage() {
           </p>
         </div>
         {noLeidas > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => marcarTodasLeidas()}>
+          <Button variant="ghost" size="sm" onClick={onMarcarTodas}>
             Marcar todas como leídas
           </Button>
         )}
       </header>
 
-      <div className="space-y-3">
-        {!cargada && (
-          <Card className="bg-white/40 border border-border p-6 text-sm text-muted-foreground">
-            Cargando notificaciones…
-          </Card>
-        )}
-        {cargada && items.length === 0 && (
-          <Card className="bg-white/40 border border-border p-6 text-sm text-muted-foreground">
-            No tienes notificaciones todavía.
-          </Card>
-        )}
-        {items.map((n) => (
-          <button
-            key={n.id}
-            onClick={() => {
-              if (!n.leida) marcarLeida(n.id);
-            }}
-            className="w-full text-left"
-          >
-            <Card
-              className={cn(
-                'border p-4 flex gap-4 items-start transition-colors',
-                n.leida
-                  ? 'bg-white/40 border-border'
-                  : 'bg-primary/5 border-primary/20 hover:bg-primary/10',
-              )}
-            >
-              <div
-                className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-                  n.leida ? 'bg-foreground/10 text-foreground/50' : 'bg-primary/20 text-primary',
-                )}
-              >
-                <span className="material-symbols-outlined text-[20px]">notifications</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h4 className="font-black text-sm text-foreground/90 truncate">{n.titulo}</h4>
-                  <span className="text-[10px] text-foreground/40 font-bold shrink-0">
-                    {tiempoRelativo(n.fechaCreacion)}
-                  </span>
-                </div>
-                <p className="text-[12px] text-muted-foreground font-medium mt-1 leading-relaxed">
-                  {n.mensaje}
-                </p>
-                <p className="text-[9px] text-foreground/40 font-black uppercase tracking-widest mt-2">
-                  {n.tipo.replace(/_/g, ' ')}
-                </p>
-              </div>
-              {!n.leida && (
-                <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" aria-hidden />
-              )}
-            </Card>
-          </button>
-        ))}
-      </div>
+      <NotificationList
+        cargando={cargando}
+        error={error}
+        grupos={grupos}
+        hayMas={hayMas}
+        cargandoMas={cargandoMas}
+        sentinelRef={sentinelRef}
+        onItemClick={onItemClick}
+        onRetry={reintentar}
+        // El shell arrendador solo tiene topbar sticky en móvil (h-14); en desktop (`lg:`) no hay
+        // header fijo por encima del contenido, a diferencia del shell estudiante.
+        stickyOffsetClassName="top-14 lg:top-0"
+      />
     </div>
   );
 }

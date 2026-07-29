@@ -18,7 +18,17 @@ import { notify } from '@/lib/notify';
 export function useFavorites() {
   const { estaAutenticado, cargando: cargandoAuth } = useAuth();
   const { open: abrirAuthModal } = useAuthModal();
-  const { ids, cargada, setIds, toggleLocal, esFavorito, reset } = useFavoritesStore();
+  // Ítem 433: selectores atómicos — `setIds`/`toggleLocal`/`reset` son referencias
+  // estables (acciones del store), así que suscribirse a cada una por separado no
+  // dispara re-render en los N componentes que usan este hook cuando cambia el
+  // favorito de OTRA propiedad (antes `useFavoritesStore()` completo sí lo hacía,
+  // porque cualquier `set()` crea un objeto de estado nuevo). El booleano puntual
+  // de "es favorito ESTA propiedad" ya no vive aquí — lo lee `FavoriteButton`
+  // directo del store con su propio selector granular por id.
+  const cargada = useFavoritesStore((s) => s.cargada);
+  const setIds = useFavoritesStore((s) => s.setIds);
+  const toggleLocal = useFavoritesStore((s) => s.toggleLocal);
+  const reset = useFavoritesStore((s) => s.reset);
 
   useEffect(() => {
     if (cargandoAuth) return;
@@ -71,5 +81,5 @@ export function useFavorites() {
     [estaAutenticado, abrirAuthModal, toggleLocal],
   );
 
-  return { ids, esFavorito, toggle, cargada };
+  return { toggle, cargada };
 }

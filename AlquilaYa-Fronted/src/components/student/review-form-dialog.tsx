@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { CheckCircle2, Star } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 import {
   Dialog,
@@ -12,12 +12,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Rating } from '@/components/ui/rating';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { resenaService } from '@/services/resena-service';
 import { notify } from '@/lib/notify';
-import { cn } from '@/lib/cn';
 import type { Reserva } from '@/types/reserva';
 
 interface Props {
@@ -33,45 +33,6 @@ const CATEGORIAS: { key: CategoriaKey; label: string }[] = [
   { key: 'precio', label: 'Precio' },
   { key: 'trato', label: 'Trato' },
 ];
-
-function StarPicker({
-  value,
-  onChange,
-  size = 'lg',
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  size?: 'md' | 'lg';
-}) {
-  const [hover, setHover] = useState(0);
-  const activo = hover || value;
-  return (
-    <div className="flex gap-1" role="radiogroup" aria-label="Calificación">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <button
-          key={s}
-          type="button"
-          role="radio"
-          aria-checked={value === s}
-          aria-label={`${s} ${s === 1 ? 'estrella' : 'estrellas'}`}
-          onMouseEnter={() => setHover(s)}
-          onMouseLeave={() => setHover(0)}
-          onClick={() => onChange(s)}
-          className="transition-transform hover:scale-110"
-        >
-          <Star
-            className={cn(
-              size === 'lg' ? 'size-8' : 'size-6',
-              s <= activo
-                ? 'fill-warning text-warning'
-                : 'fill-muted text-muted-foreground/30',
-            )}
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /**
  * Reseña post-estadía: visible solo para reservas FINALIZADAS (el backend
@@ -223,7 +184,8 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
                     {CATEGORIAS.map((c) => (
                       <div key={c.key} className="flex items-center justify-between gap-3">
                         <span className="text-sm text-foreground">{c.label}</span>
-                        <StarPicker
+                        <Rating
+                          mode="interactive"
                           value={cats[c.key]}
                           onChange={(v) => setCats((prev) => ({ ...prev, [c.key]: v }))}
                           size="md"
@@ -261,7 +223,8 @@ export function ReviewFormDialog({ reserva, trigger }: Props) {
                   </div>
                   {calificarArrendador && (
                     <>
-                      <StarPicker
+                      <Rating
+                        mode="interactive"
                         value={ratingArrendador}
                         onChange={setRatingArrendador}
                         size="md"

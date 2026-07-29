@@ -12,6 +12,8 @@ interface HistoryState {
   entradas: HistorialEntry[];
   registrar: (propiedadId: string) => void;
   limpiar: () => void;
+  /** Quita una sola entrada del historial (usado por el botón ✕ en la lista). */
+  remover: (propiedadId: string) => void;
   /** `true` si la propiedad fue visitada (existe en `entradas`). */
   isViewed: (propiedadId: string) => boolean;
 }
@@ -33,6 +35,11 @@ export const useHistoryStore = create<HistoryState>()(
         }),
 
       limpiar: () => set({ entradas: [] }),
+
+      remover: (propiedadId) =>
+        set((state) => ({
+          entradas: state.entradas.filter((e) => e.propiedadId !== propiedadId),
+        })),
 
       isViewed: (propiedadId) => get().entradas.some((e) => e.propiedadId === propiedadId),
     }),

@@ -23,4 +23,6 @@ public class ConversacionResumenDTO {
     LocalDateTime fechaUltimaActividad;
     String ultimoMensajePreview;
     long noLeidos;
+    /** Ítem 265: true si el último mensaje real de la conversación lo mandó el caller ("Tú: …"). */
+    boolean ultimoMensajeEsMio;
 }

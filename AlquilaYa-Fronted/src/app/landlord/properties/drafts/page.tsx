@@ -114,8 +114,9 @@ export default function BorradoresPage() {
                   type="button"
                   onClick={() => eliminar(b.id)}
                   disabled={borrando === b.id}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 disabled:opacity-50"
                   title="Eliminar borrador"
+                  aria-label={`Eliminar borrador "${b.titulo?.trim() || 'sin título'}"`}
                 >
                   <span className="material-symbols-outlined text-[18px]">delete</span>
                 </button>

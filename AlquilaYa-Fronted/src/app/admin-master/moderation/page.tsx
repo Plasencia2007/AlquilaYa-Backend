@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useDebounce } from '@/hooks/use-debounce';
+import { useHasMounted } from '@/hooks/use-has-mounted';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import {
   adminModerationService,
   ConversacionAdmin,
@@ -12,7 +15,6 @@ import {
 import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
-import { Input } from '@/components/ui/legacy-input';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,23 +48,27 @@ function MotivoDialog({
   onConfirm, onCancel, loading,
 }: MotivoDialogProps) {
   const [motivo, setMotivo] = useState('');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="motivo-dialog-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8"
+      >
         <div className="flex items-center gap-3 mb-6">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconColor}`}>
             <span className="material-symbols-outlined text-xl">{icon}</span>
           </div>
           <div>
-            <h3 className="text-base font-black text-slate-900 tracking-tight">{title}</h3>
+            <h3 id="motivo-dialog-title" className="text-base font-black text-slate-900 tracking-tight">{title}</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{description}</p>
           </div>
         </div>
@@ -114,11 +120,10 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
   const [bloquearTarget, setBloquearTarget] = useState<MensajeAdmin | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  // Ítem 396: mientras `bloquearTarget` está abierto, ESE dialog es el más
+  // reciente y debe atrapar Tab/Escape (la pila de `useFocusTrap` se encarga).
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -199,11 +204,18 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
         </div>
       )}
 
-      <div className="bg-white h-full w-full max-w-lg shadow-2xl flex flex-col">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mensajes-panel-title"
+        tabIndex={-1}
+        className="bg-white h-full w-full max-w-lg shadow-2xl flex flex-col"
+      >
         {/* Panel header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between">
           <div>
-            <h3 className="text-base font-black text-slate-900 tracking-tight">
+            <h3 id="mensajes-panel-title" className="text-base font-black text-slate-900 tracking-tight">
               Mensajes — Conv. #{conv.id}
             </h3>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
@@ -215,7 +227,8 @@ function MensajesPanel({ conv, onClose }: MensajesPanelProps) {
           </div>
           <button
             onClick={onClose}
-            className="text-slate-300 hover:text-slate-600 transition-colors mt-0.5"
+            aria-label="Cerrar panel de mensajes"
+            className="text-slate-300 hover:text-slate-600 transition-colors mt-0.5 min-h-11 min-w-11 flex items-center justify-center"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
@@ -336,6 +349,9 @@ export default function AdminModeracionMensajeriaPage() {
   const [totalElements, setTotalElements] = useState(0);
   const [page, setPage] = useState(0);
   const [filtroEstado, setFiltroEstado] = useState<EstadoConversacion | ''>('');
+  // Búsqueda de texto libre (ítem 384): filtra por contenido de mensaje, server-side, debounced.
+  const [busqueda, setBusqueda] = useState('');
+  const busquedaDebounced = useDebounce(busqueda, 400);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [dialog, setDialog] = useState<DialogAction>(null);
@@ -356,6 +372,7 @@ export default function AdminModeracionMensajeriaPage() {
         page,
         size: PAGE_SIZE,
         estado: filtroEstado,
+        q: busquedaDebounced,
       });
       setConversaciones(data.content);
       setTotalPages(data.totalPages);
@@ -367,7 +384,7 @@ export default function AdminModeracionMensajeriaPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, filtroEstado]);
+  }, [page, filtroEstado, busquedaDebounced]);
 
   useEffect(() => {
     loadConversaciones();
@@ -409,6 +426,11 @@ export default function AdminModeracionMensajeriaPage() {
     setFiltroEstado(estado);
     setPage(0);
   };
+
+  // Vuelve a la página 0 cuando cambia el término de búsqueda (ya debounced).
+  useEffect(() => {
+    setPage(0);
+  }, [busquedaDebounced]);
 
   return (
     <div className="p-6">
@@ -472,6 +494,18 @@ export default function AdminModeracionMensajeriaPage() {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
+              {/* Búsqueda de texto libre (ítem 384): filtra por contenido de mensaje */}
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-lg">
+                  search
+                </span>
+                <input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar en mensajes..."
+                  className="h-10 w-56 rounded-lg border border-slate-200 pl-9 pr-3 text-xs font-medium bg-slate-50/60 focus:bg-white focus:border-primary outline-none transition-colors"
+                />
+              </div>
               {/* Filtro de estado */}
               <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                 {(['', 'ACTIVA', 'SUSPENDIDA'] as (EstadoConversacion | '')[]).map((estado) => (
@@ -558,7 +592,9 @@ export default function AdminModeracionMensajeriaPage() {
                     </td>
                     <td className="py-4 px-8">
                       <span className="text-[11px] font-medium text-slate-500">
-                        {conv.propiedadTitulo || `Propiedad #${conv.propiedadId || '---'}`}
+                        {conv.tipo === 'ROOMMATE'
+                          ? 'Chat entre roommates'
+                          : conv.propiedadTitulo || `Propiedad #${conv.propiedadId ?? '---'}`}
                       </span>
                     </td>
                     <td className="py-4 px-8">
@@ -570,7 +606,7 @@ export default function AdminModeracionMensajeriaPage() {
                     </td>
                     <td className="py-4 px-8">
                       <span className="text-[11px] font-medium text-slate-400">
-                        {formatFecha(conv.ultimaActividad)}
+                        {formatFecha(conv.fechaUltimaActividad)}
                       </span>
                     </td>
                     <td className="py-4 px-8 text-right">
@@ -580,8 +616,9 @@ export default function AdminModeracionMensajeriaPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setMensajesConv(conv)}
-                          className="text-slate-300 hover:text-primary p-2 h-auto rounded-md"
+                          className="text-slate-300 hover:text-primary p-2 h-auto min-h-11 min-w-11 rounded-md"
                           title="Ver mensajes"
+                          aria-label={`Ver mensajes de la conversación #${conv.id}`}
                         >
                           <span className="material-symbols-outlined text-lg">chat_bubble</span>
                         </Button>
@@ -593,8 +630,9 @@ export default function AdminModeracionMensajeriaPage() {
                             size="sm"
                             onClick={() => setDialog({ type: 'suspender', conv })}
                             disabled={actionLoading !== null}
-                            className="text-slate-300 hover:text-amber-500 p-2 h-auto rounded-md"
+                            className="text-slate-300 hover:text-amber-500 p-2 h-auto min-h-11 min-w-11 rounded-md"
                             title="Suspender conversación"
+                            aria-label={`Suspender conversación #${conv.id}`}
                           >
                             {actionLoading === conv.id ? (
                               <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
@@ -608,8 +646,9 @@ export default function AdminModeracionMensajeriaPage() {
                             size="sm"
                             onClick={() => setDialog({ type: 'reactivar', conv })}
                             disabled={actionLoading !== null}
-                            className="text-slate-300 hover:text-green-500 p-2 h-auto rounded-md"
+                            className="text-slate-300 hover:text-green-500 p-2 h-auto min-h-11 min-w-11 rounded-md"
                             title="Reactivar conversación"
+                            aria-label={`Reactivar conversación #${conv.id}`}
                           >
                             {actionLoading === conv.id ? (
                               <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
@@ -637,7 +676,8 @@ export default function AdminModeracionMensajeriaPage() {
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || loading}
-                className="h-8 w-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Página anterior"
+                className="h-11 w-11 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-sm">chevron_left</span>
               </button>
@@ -663,7 +703,8 @@ export default function AdminModeracionMensajeriaPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1 || loading}
-                className="h-8 w-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Página siguiente"
+                className="h-11 w-11 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </button>

@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { Smartphone } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
+import { useResendCooldown } from '@/hooks/use-resend-cooldown';
 import { notify } from '@/lib/notify';
 import { servicioAuth } from '@/services/auth-service';
 import { otpSchema, type OtpFormData } from '@/schemas/auth-schema';
@@ -18,16 +20,14 @@ import { otpSchema, type OtpFormData } from '@/schemas/auth-schema';
 export function OtpStep() {
   const { personal, setStep } = useAuthModal();
   const { inicializar } = useAuth();
-  
-  const [cooldown, setCooldown] = useState(60);
-  const [reenviando, setReenviando] = useState(false);
 
-  useEffect(() => {
-    if (cooldown > 0) {
-      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [cooldown]);
+  // El código ya se envió como parte del registro, así que el cooldown arranca corriendo.
+  const { segundosRestantes, puedeReenviar, iniciarCooldown } = useResendCooldown(60, true);
+  const [reenviando, setReenviando] = useState(false);
+  // Hallazgo de backend (ítem 191): /resend-otp ahora informa cuántos reenvíos quedan en la
+  // ventana de 15 min. Solo aplica al OTP por teléfono — email-code-step/verify-email no lo
+  // tienen (ese resend es anti-enumeración por diseño, ítem 194, y no expone contadores).
+  const [intentosRestantes, setIntentosRestantes] = useState<number | null>(null);
 
   const form = useForm<OtpFormData>({
     resolver: zodResolver(otpSchema),
@@ -49,13 +49,14 @@ export function OtpStep() {
   };
 
   const handleReenviar = async () => {
-    if (cooldown > 0 || reenviando) return;
+    if (!puedeReenviar || reenviando) return;
     setReenviando(true);
-    
+
     try {
-      await servicioAuth.reenviarOtp(personal?.telefono ?? '');
+      const res = await servicioAuth.reenviarOtp(personal?.telefono ?? '');
       notify.success('Código reenviado', 'Te hemos enviado un nuevo código por WhatsApp.');
-      setCooldown(60);
+      setIntentosRestantes(res.intentosRestantes);
+      iniciarCooldown();
     } catch (err) {
       notify.error(err, 'Error de conexión con el servidor al reenviar OTP');
     } finally {
@@ -85,17 +86,22 @@ export function OtpStep() {
             control={form.control}
             name="codigo"
             render={({ field }) => (
-              <FormItem className="mx-auto max-w-[240px]">
+              <FormItem className="mx-auto w-fit">
                 <FormControl>
-                  <Input
-                    {...field}
-                    inputMode="numeric"
+                  <InputOTP
                     maxLength={6}
-                    placeholder="000000"
+                    inputMode="numeric"
+                    pattern={REGEXP_ONLY_DIGITS}
                     autoComplete="one-time-code"
-                    onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ''))}
-                    className="h-14 rounded-xl bg-input text-center text-2xl font-black tracking-[0.5em]"
-                  />
+                    disabled={form.formState.isSubmitting}
+                    {...field}
+                  >
+                    <InputOTPGroup>
+                      {Array.from({ length: 6 }, (_, i) => (
+                        <InputOTPSlot key={i} index={i} />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
                 </FormControl>
                 <FormMessage className="text-center text-xs" />
               </FormItem>
@@ -105,23 +111,35 @@ export function OtpStep() {
           <Button
             type="submit"
             size="lg"
-            disabled={form.formState.isSubmitting}
+            loading={form.formState.isSubmitting}
             className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
           >
-            {form.formState.isSubmitting ? 'Verificando…' : 'Confirmar código'}
+            Confirmar código
           </Button>
 
           <p className="text-[11px] text-muted-foreground">
             ¿No recibiste el mensaje?{' '}
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleReenviar}
-              disabled={cooldown > 0 || reenviando}
+              disabled={!puedeReenviar || reenviando}
               className="font-bold text-primary transition-colors hover:text-primary/80 disabled:opacity-50 disabled:hover:text-primary"
             >
-              {reenviando ? 'Reenviando...' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar código'}
+              {reenviando
+                ? 'Reenviando...'
+                : !puedeReenviar
+                  ? `Reenviar en ${segundosRestantes}s`
+                  : 'Reenviar código'}
             </button>
           </p>
+
+          {intentosRestantes != null && (
+            <p className="text-[10px] text-muted-foreground">
+              {intentosRestantes > 0
+                ? `Te quedan ${intentosRestantes} reenvío${intentosRestantes === 1 ? '' : 's'} en 15 min.`
+                : 'Alcanzaste el máximo de reenvíos por ahora. Intenta de nuevo en 15 min.'}
+            </p>
+          )}
         </form>
       </Form>
     </div>

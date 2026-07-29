@@ -1,5 +1,6 @@
 package com.alquilaya.servicio_catalogos.controllers;
 
+import com.alquilaya.servicio_catalogos.dto.ItemCatalogoRequest;
 import com.alquilaya.servicio_catalogos.entities.ItemCatalogo;
 import com.alquilaya.servicio_catalogos.enums.TipoItem;
 import com.alquilaya.servicio_catalogos.services.ItemCatalogoService;
@@ -37,14 +38,14 @@ public class ItemCatalogoController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/filtros")
-    public ResponseEntity<ItemCatalogo> crear(@Valid @RequestBody ItemCatalogo item) {
-        return ResponseEntity.ok(service.guardar(item));
+    public ResponseEntity<ItemCatalogo> crear(@Valid @RequestBody ItemCatalogoRequest request) {
+        return ResponseEntity.ok(service.guardar(request));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/admin/filtros/{id}")
-    public ResponseEntity<ItemCatalogo> actualizar(@PathVariable Long id, @Valid @RequestBody ItemCatalogo item) {
-        return ResponseEntity.ok(service.actualizar(id, item));
+    public ResponseEntity<ItemCatalogo> actualizar(@PathVariable Long id, @Valid @RequestBody ItemCatalogoRequest request) {
+        return ResponseEntity.ok(service.actualizar(id, request));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

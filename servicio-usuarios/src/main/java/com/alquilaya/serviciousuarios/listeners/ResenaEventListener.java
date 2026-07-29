@@ -40,6 +40,7 @@ public class ResenaEventListener {
                     case "CALIFICACION_ARRENDADOR_ACTUALIZADA" -> aplicarCalificacion(payload);
                     case "ACTIVIDAD_ARRENDADOR_ACTUALIZADA" -> aplicarActividadArrendador(payload);
                     case "ACTIVIDAD_ESTUDIANTE_ACTUALIZADA" -> aplicarActividadEstudiante(payload);
+                    case "TIEMPO_RESPUESTA_ARRENDADOR_ACTUALIZADO" -> aplicarTiempoRespuesta(payload);
                     default -> log.debug("eventType {} ignorado por {}", ev.getEventType(), CONSUMER_NAME);
                 }
             } else {
@@ -85,6 +86,27 @@ public class ResenaEventListener {
             arrendadorRepository.save(a);
             log.info("Actividad arrendador {}: {} completadas, {} fallidas", id, comp, fall);
         });
+    }
+
+    /**
+     * Actualiza el tiempo de respuesta promedio (minutos) que el arrendador tarda en responder en
+     * el chat, calculado por servicio-mensajeria. {@code tiempoRespuestaMinutos} puede llegar
+     * {@code null} (sin datos suficientes): en ese caso se persiste {@code null} y la UI muestra
+     * "—". Null-safe: si el arrendador no existe, se loguea y se sigue (no revienta el consumer).
+     */
+    private void aplicarTiempoRespuesta(JsonNode node) {
+        if (node == null || !node.hasNonNull("arrendadorId")) {
+            log.debug("Payload de tiempo de respuesta incompleto: {}", node);
+            return;
+        }
+        Long id = node.get("arrendadorId").asLong();
+        Integer minutos = node.hasNonNull("tiempoRespuestaMinutos")
+                ? node.get("tiempoRespuestaMinutos").asInt() : null;
+        arrendadorRepository.findById(id).ifPresentOrElse(a -> {
+            a.setTiempoRespuestaPromedio(minutos);
+            arrendadorRepository.save(a);
+            log.info("Tiempo de respuesta arrendador {} actualizado a {} min", id, minutos);
+        }, () -> log.warn("Arrendador {} no encontrado; se ignora TIEMPO_RESPUESTA_ARRENDADOR_ACTUALIZADO", id));
     }
 
     private void aplicarActividadEstudiante(JsonNode node) {

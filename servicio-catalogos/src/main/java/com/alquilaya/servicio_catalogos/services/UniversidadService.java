@@ -4,12 +4,15 @@ import com.alquilaya.servicio_catalogos.dto.CampusPrincipalResponse;
 import com.alquilaya.servicio_catalogos.dto.UniversidadRequest;
 import com.alquilaya.servicio_catalogos.dto.UniversidadResponse;
 import com.alquilaya.servicio_catalogos.dto.ZonaCoberturaRequest;
+import com.alquilaya.servicio_catalogos.dto.ZonaPublicaResponse;
 import com.alquilaya.servicio_catalogos.dto.ZonaResolucionResponse;
 import com.alquilaya.servicio_catalogos.entities.Universidad;
 import com.alquilaya.servicio_catalogos.entities.ZonaCobertura;
 import com.alquilaya.servicio_catalogos.enums.TipoLimite;
 import com.alquilaya.servicio_catalogos.repositories.UniversidadRepository;
 import com.alquilaya.servicio_catalogos.repositories.ZonaCoberturaRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -27,6 +30,7 @@ public class UniversidadService {
     private final UniversidadRepository repository;
     private final ZonaCoberturaRepository zonaRepository;
     private final CatalogosEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     @Cacheable(value = "universidadesActivas")
     @Transactional(readOnly = true)
@@ -85,9 +89,36 @@ public class UniversidadService {
     }
 
     /**
-     * Todas las zonas ACTIVAS de universidades ACTIVAS, en formato plano para resolución de
-     * pertenencia. Las consume servicio-propiedades para asignar la zona a una propiedad al
-     * publicarla. Ordenadas por prioridad para que el primer match gane en solapamientos.
+     * Vista PÚBLICA de las zonas activas: la misma lista plana con geometría, pero SIN la comisión
+     * de plataforma. La consumen visitantes anónimos (búsqueda, mapa, calculadora de ingresos). Se
+     * deriva de {@link #listarZonasActivas()} para no duplicar la consulta ni el orden por prioridad.
+     */
+    @Transactional(readOnly = true)
+    public List<ZonaPublicaResponse> listarZonasPublicas() {
+        return listarZonasActivas().stream()
+                .map(z -> ZonaPublicaResponse.builder()
+                        .id(z.getId())
+                        .universidadId(z.getUniversidadId())
+                        .universidadNombre(z.getUniversidadNombre())
+                        .nombre(z.getNombre())
+                        .descripcion(z.getDescripcion())
+                        .color(z.getColor())
+                        .ordenPrioridad(z.getOrdenPrioridad())
+                        .tipoLimite(z.getTipoLimite())
+                        .latitud(z.getLatitud())
+                        .longitud(z.getLongitud())
+                        .radioKm(z.getRadioKm())
+                        .poligonoJson(z.getPoligonoJson())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * Vista INTERNA de todas las zonas ACTIVAS de universidades ACTIVAS, en formato plano para
+     * resolución de pertenencia. INCLUYE la comisión de plataforma por zona. La consume
+     * servicio-propiedades (vía el endpoint interno protegido por cabecera) para asignar la zona a
+     * una propiedad al publicarla y calcular la comisión de cada venta. Ordenadas por prioridad
+     * para que el primer match gane en solapamientos.
      */
     @Transactional(readOnly = true)
     public List<ZonaResolucionResponse> listarZonasActivas() {
@@ -100,6 +131,8 @@ public class UniversidadService {
                             .universidadId(u.getId())
                             .universidadNombre(u.getNombre())
                             .nombre(z.getNombre())
+                            .descripcion(z.getDescripcion())
+                            .color(z.getColor())
                             .ordenPrioridad(z.getOrdenPrioridad())
                             .tipoLimite(z.getTipoLimite())
                             .latitud(z.getLatitud())
@@ -245,6 +278,44 @@ public class UniversidadService {
             if (req.getPoligonoJson() == null || req.getPoligonoJson().trim().isEmpty()) {
                 throw new IllegalArgumentException(
                         "La zona '" + req.getNombre() + "' (polígono) requiere el JSON de coordenadas");
+            }
+            validarPoligonoJson(req.getNombre(), req.getPoligonoJson());
+        }
+    }
+
+    /**
+     * Valida que {@code poligonoJson} sea un array JSON de al menos 3 vértices
+     * {@code {"lat":.., "lng":..}} con coordenadas en rango válido. Mismo formato que
+     * consume {@code ZonaResolver} en servicio-propiedades (ray casting sobre lat/lng).
+     * No detecta auto-intersección: solo cubre el caso más común de polígono corrupto.
+     */
+    private void validarPoligonoJson(String nombreZona, String poligonoJson) {
+        JsonNode arr;
+        try {
+            arr = objectMapper.readTree(poligonoJson);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                    "La zona '" + nombreZona + "' (polígono) tiene un JSON de coordenadas inválido");
+        }
+        if (arr == null || !arr.isArray() || arr.size() < 3) {
+            throw new IllegalArgumentException(
+                    "La zona '" + nombreZona + "' (polígono) requiere al menos 3 vértices");
+        }
+        for (JsonNode punto : arr) {
+            if (punto == null || !punto.hasNonNull("lat") || !punto.hasNonNull("lng")
+                    || !punto.get("lat").isNumber() || !punto.get("lng").isNumber()) {
+                throw new IllegalArgumentException(
+                        "La zona '" + nombreZona + "' (polígono) tiene un vértice sin lat/lng numéricos");
+            }
+            double lat = punto.get("lat").asDouble();
+            double lng = punto.get("lng").asDouble();
+            if (lat < -90.0 || lat > 90.0) {
+                throw new IllegalArgumentException(
+                        "La zona '" + nombreZona + "' (polígono) tiene una latitud fuera de rango (-90 a 90): " + lat);
+            }
+            if (lng < -180.0 || lng > 180.0) {
+                throw new IllegalArgumentException(
+                        "La zona '" + nombreZona + "' (polígono) tiene una longitud fuera de rango (-180 a 180): " + lng);
             }
         }
     }

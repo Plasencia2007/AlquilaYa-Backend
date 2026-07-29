@@ -48,6 +48,49 @@ public class JwtService {
         return generateToken(extraClaims, usuario.getCorreo());
     }
 
+    /**
+     * Ítem 379 (impersonación auditada): token de vida corta e independiente de
+     * {@code jwt.expiration}, con claims {@code impersonacion=true} e
+     * {@code impersonadoPor=<adminId>}. Estos dos claims son lo que:
+     * <ul>
+     *   <li>{@code ImpersonationReadOnlyInterceptor} (api-gateway) usa para bloquear
+     *       cualquier método distinto de GET/HEAD/OPTIONS — un solo punto de aplicación
+     *       para TODOS los servicios detrás del gateway.</li>
+     *   <li>{@code WebSocketAuthInterceptor} (servicio-mensajeria) usa para rechazar el
+     *       CONNECT directamente, porque el WS de mensajería NO pasa por el gateway.</li>
+     * </ul>
+     * Nunca se persiste este token en {@code SesionService} (no es una sesión real del
+     * usuario objetivo) — se revoca vía el blacklist normal de logout cuando el admin
+     * sale de la impersonación ({@code JwtBlacklistService#blacklist}).
+     */
+    private static final long IMPERSONATION_EXPIRATION_MS = 15 * 60 * 1000L; // 15 min, fijo
+
+    public String generateImpersonationToken(Usuario objetivo, Long perfilId, Long adminId) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("userId", objetivo.getId());
+        if (perfilId != null) {
+            extraClaims.put("perfilId", perfilId);
+        }
+        extraClaims.put("rol", objetivo.getRol().name());
+        extraClaims.put("nombre", objetivo.getNombre());
+        extraClaims.put("emailVerificado", objetivo.isEmailVerificado());
+        if (objetivo.getFotoUrl() != null && !objetivo.getFotoUrl().isBlank()) {
+            extraClaims.put("foto", objetivo.getFotoUrl());
+        }
+        extraClaims.put("tipoLogin", objetivo.getTipoLogin() != null ? objetivo.getTipoLogin().name() : "LOCAL");
+        extraClaims.put("jti", java.util.UUID.randomUUID().toString());
+        extraClaims.put("impersonacion", true);
+        extraClaims.put("impersonadoPor", adminId);
+        return Jwts
+                .builder()
+                .setClaims(extraClaims)
+                .setSubject(objetivo.getCorreo())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + IMPERSONATION_EXPIRATION_MS))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
     /** Id de sesión (jti) del token, o null si es un token legacy sin jti. */
     public String extractJti(String token) {
         try {

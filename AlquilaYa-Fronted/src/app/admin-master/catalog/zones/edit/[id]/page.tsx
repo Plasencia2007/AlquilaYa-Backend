@@ -241,6 +241,7 @@ export default function UniversidadFormPage() {
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Universidad Peruana Unión"
                   maxLength={150}
+                  aria-describedby={error ? 'zona-form-error' : undefined}
                 />
               </div>
               <div className="space-y-2">
@@ -534,7 +535,16 @@ export default function UniversidadFormPage() {
               <Switch checked={esPrincipal} onCheckedChange={setEsPrincipal} />
             </div>
 
-            {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+            {/* Ítem 406: `error` cubre validaciones de varios campos (nombre de universidad y,
+                dinámicamente, cada zona de la lista de abajo) — `role="alert"` lo anuncia apenas
+                se monta sin depender de a qué campo específico apunte. El campo estático que sí
+                podemos linkear con certeza (nombre de universidad) lo referencia vía
+                `aria-describedby` más abajo. */}
+            {error && (
+              <p id="zona-form-error" role="alert" className="text-sm text-red-600 mb-4">
+                {error}
+              </p>
+            )}
 
             <button
               type="button"

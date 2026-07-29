@@ -7,9 +7,12 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Vista plana de una zona de cobertura ACTIVA (de una universidad activa), con su geometría,
- * que consume servicio-propiedades para resolver en qué zona cae una propiedad al publicarla.
- * Incluye el nombre de la universidad para mostrarlo sin un segundo viaje.
+ * Vista INTERNA y plana de una zona de cobertura ACTIVA (de una universidad activa), con su
+ * geometría Y la comisión de plataforma, que consume servicio-propiedades (vía el endpoint interno
+ * protegido por cabecera) para resolver en qué zona cae una propiedad al publicarla y calcular la
+ * comisión de cada venta. Incluye el nombre de la universidad para mostrarlo sin un segundo viaje.
+ *
+ * <p>Para el consumo PÚBLICO/anónimo existe {@link ZonaPublicaResponse}, que omite la comisión.</p>
  */
 @Data
 @Builder
@@ -21,6 +24,8 @@ public class ZonaResolucionResponse {
     private Long universidadId;
     private String universidadNombre;
     private String nombre;
+    private String descripcion;
+    private String color;
     private Integer ordenPrioridad;
     private TipoLimite tipoLimite;
     private Double latitud;

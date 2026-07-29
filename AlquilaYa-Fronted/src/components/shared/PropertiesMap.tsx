@@ -7,9 +7,34 @@ import 'leaflet/dist/leaflet.css';
 
 import { getCampusAnchor, distanciaAUpeuKm, formatearDistancia, type LatLng } from '@/lib/geo';
 import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
-import type { Propiedad } from '@/types/propiedad';
 import { cn } from '@/lib/cn';
 import { formatPEN } from '@/lib/money';
+
+/** Estado de moderación (ítem 389) — no confundir con `Propiedad['estado']` (legacy, otro dominio). */
+export type EstadoModeracion = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+
+/**
+ * Forma mínima que necesita el mapa. Cualquier `Propiedad` (catálogo público) la satisface
+ * estructuralmente, así que los callers existentes (`search-map`, `home-map-section`,
+ * `property/[id]/page`) no necesitan cambios. El mapa admin (ítem 389) construye este shape
+ * directo desde `PropiedadAdminDTO` (que no tiene todos los campos de `Propiedad`).
+ */
+export interface PropiedadMapa {
+  id: string;
+  titulo: string;
+  precio: number;
+  imagenes: string[];
+  coordenadas?: LatLng;
+  /** Solo se usa si `colorByEstado` está activo (ítem 389). */
+  estadoModeracion?: EstadoModeracion;
+}
+
+/** Colores semánticos por estado de moderación (tokens de `globals.css`, no hex nuevo). */
+const COLOR_ESTADO: Record<EstadoModeracion, string> = {
+  PENDIENTE: 'var(--warning)',
+  APROBADO: 'var(--success)',
+  RECHAZADO: 'var(--destructive)',
+};
 
 const upeuIcon = new L.Icon({
   iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
@@ -21,20 +46,29 @@ const upeuIcon = new L.Icon({
 });
 
 interface Props {
-  propiedades: Propiedad[];
+  propiedades: PropiedadMapa[];
   className?: string;
   /** id de la propiedad resaltada (hover desde el grid) — su pastilla se destaca. */
   activeId?: string | null;
   /** Notifica hover sobre un marcador (para resaltar la card correspondiente). */
   onHover?: (id: string | null) => void;
+  /** Ítem 389: colorea los pines por `estadoModeracion` (PENDIENTE/APROBADO/RECHAZADO) en vez
+   *  de por precio/hover. Usado por el mapa admin de `metrics/heatmap/page.tsx`. */
+  colorByEstado?: boolean;
+  /**
+   * Ítem 389: destino del popup del pin. Por defecto va a la ficha pública (`/property/{id}`) —
+   * el mapa admin la reemplaza por un link a la revisión, porque una propiedad PENDIENTE/RECHAZADA
+   * no es visible en la ficha pública.
+   */
+  hrefBuilder?: (p: PropiedadMapa) => string;
 }
 
-/** Pastilla de precio estilo Airbnb como marcador del mapa. */
-function precioDivIcon(precio: number, activo: boolean): L.DivIcon {
+/** Pastilla de precio estilo Airbnb como marcador del mapa. `colorEstado`: override del ítem 389. */
+function precioDivIcon(precio: number, activo: boolean, colorEstado?: string): L.DivIcon {
   const txt = formatPEN(Math.round(precio));
   const w = Math.max(48, txt.length * 8 + 18);
-  const bg = activo ? '#1d1b19' : '#ffffff';
-  const fg = activo ? '#ffffff' : '#1d1b19';
+  const bg = colorEstado ?? (activo ? '#1d1b19' : '#ffffff');
+  const fg = colorEstado ? '#ffffff' : (activo ? '#ffffff' : '#1d1b19');
   return L.divIcon({
     className: '',
     html:
@@ -66,7 +100,7 @@ function FitBounds({
   zonas,
   center,
 }: {
-  propiedades: Propiedad[];
+  propiedades: PropiedadMapa[];
   zonas: ZonaResolucion[];
   center: LatLng;
 }) {
@@ -97,7 +131,7 @@ function FitBounds({
   return null;
 }
 
-export default function PropertiesMap({ propiedades, className, activeId, onHover }: Props) {
+export default function PropertiesMap({ propiedades, className, activeId, onHover, colorByEstado, hrefBuilder }: Props) {
   const propiedadesConCoords = propiedades.filter((p) => p.coordenadas);
 
   const [zonas, setZonas] = useState<ZonaResolucion[]>([]);
@@ -129,7 +163,11 @@ export default function PropertiesMap({ propiedades, className, activeId, onHove
   };
 
   return (
-    <div className={cn('isolate', className)}>
+    // aria-hidden (ítem 400): Leaflet no es operable por teclado en la práctica; el mapa
+    // sigue siendo usable con mouse/touch, pero un lector de pantalla no debe intentar
+    // "leer" el canvas ni sus pines/popups. La info equivalente (precio, título, ubicación)
+    // ya vive en paralelo en la lista/tarjetas que consumen esta misma data.
+    <div className={cn('isolate', className)} aria-hidden="true">
       <MapContainer
         center={[campus.lat, campus.lng]}
         zoom={12}
@@ -174,11 +212,12 @@ export default function PropertiesMap({ propiedades, className, activeId, onHove
           const distancia = distanciaAUpeuKm(p.coordenadas);
           const imagen = p.imagenes[0] ?? '/rooms/placeholder.jpg';
           const activo = activeId === p.id;
+          const colorEstado = colorByEstado ? COLOR_ESTADO[p.estadoModeracion ?? 'PENDIENTE'] : undefined;
           return (
             <Marker
               key={p.id}
               position={[p.coordenadas!.lat, p.coordenadas!.lng]}
-              icon={precioDivIcon(p.precio, activo)}
+              icon={precioDivIcon(p.precio, activo, colorEstado)}
               zIndexOffset={activo ? 1000 : 0}
               eventHandlers={{
                 mouseover: () => onHover?.(p.id),
@@ -187,7 +226,7 @@ export default function PropertiesMap({ propiedades, className, activeId, onHove
             >
               <Popup minWidth={190} maxWidth={190} closeButton={false}>
                 <a
-                  href={`/property/${p.id}`}
+                  href={hrefBuilder ? hrefBuilder(p) : `/property/${p.id}`}
                   style={{ display: 'block', width: 190, textDecoration: 'none', borderRadius: 10, overflow: 'hidden' }}
                 >
                   <img

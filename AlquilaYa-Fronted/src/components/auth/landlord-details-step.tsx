@@ -1,10 +1,10 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Locate, Loader2, Search, X } from 'lucide-react';
+import { CheckCircle, Locate, Loader2, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { notify } from '@/lib/notify';
 import { servicioAuth } from '@/services/auth-service';
+import { profileService } from '@/services/profile-service';
 import { landlordDetailsSchema, type LandlordDetailsFormData } from '@/schemas/auth-schema';
 
 const MapPicker = dynamic(() => import('@/components/shared/MapPicker'), { ssr: false });
@@ -24,7 +25,20 @@ interface NominatimResult {
   lon: string;
 }
 
-export function LandlordDetailsStep() {
+interface RucVerificacionResponse {
+  success: boolean;
+  razonSocial?: string;
+  direccion?: string;
+  message?: string;
+}
+
+interface Props {
+  /** ítem 184: token de Turnstile capturado en el paso anterior (personal), reenviado
+   *  al registrar — mismo dato que ya recibe StudentDetailsStep. */
+  turnstileToken?: string;
+}
+
+export function LandlordDetailsStep({ turnstileToken }: Props) {
   const { registrarse } = useAuth();
   const { personal, landlordDetails, setLandlordDetails, setStep } = useAuthModal();
 
@@ -33,6 +47,11 @@ export function LandlordDetailsStep() {
   const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* ── Verificación de RUC en vivo (SUNAT) ── */
+  const [verificandoRuc, setVerificandoRuc] = useState(false);
+  const [rucVerificado, setRucVerificado] = useState<{ razonSocial?: string } | null>(null);
+  const [rucNoVerificado, setRucNoVerificado] = useState(false);
 
   const form = useForm<LandlordDetailsFormData>({
     resolver: zodResolver(landlordDetailsSchema),
@@ -43,6 +62,33 @@ export function LandlordDetailsStep() {
       longitud: landlordDetails?.longitud ?? undefined,
     },
   });
+
+  const rucValue = form.watch('ruc');
+
+  useEffect(() => {
+    if (!rucValue || rucValue.length !== 11) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setVerificandoRuc(true);
+      try {
+        const res = (await profileService.verificarRuc(rucValue)) as RucVerificacionResponse;
+        if (cancelled) return;
+        if (res?.success) {
+          setRucVerificado({ razonSocial: res.razonSocial });
+        } else {
+          setRucNoVerificado(true);
+        }
+      } catch {
+        if (!cancelled) setRucNoVerificado(true);
+      } finally {
+        if (!cancelled) setVerificandoRuc(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [rucValue]);
 
   /* ── Búsqueda de dirección (Nominatim forward geocoding) ── */
   const handleSearch = (q: string) => {
@@ -130,9 +176,10 @@ export function LandlordDetailsStep() {
       setStep('personal');
       return;
     }
-    setLandlordDetails({ ...data, ruc: data.ruc ?? '', latitud: data.latitud ?? null, longitud: data.longitud ?? null });
+    const detalles = { ...data, ruc: data.ruc ?? '', latitud: data.latitud ?? null, longitud: data.longitud ?? null };
+    setLandlordDetails(detalles);
     try {
-      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ARRENDADOR', data, personal.telefono);
+      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ARRENDADOR', detalles, personal.telefono, turnstileToken);
       let metodo = 'WHATSAPP_OTP';
       try { metodo = await servicioAuth.obtenerMetodoVerificacion(); } catch { /* fallback */ }
       if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
@@ -251,7 +298,7 @@ export function LandlordDetailsStep() {
             )}
           />
 
-          {/* ── RUC opcional ── */}
+          {/* ── RUC opcional (verificación en vivo con SUNAT) ── */}
           <FormField
             control={form.control}
             name="ruc"
@@ -261,15 +308,40 @@ export function LandlordDetailsStep() {
                   RUC <span className="font-normal text-muted-foreground/60">(opcional · para facturación)</span>
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    inputMode="numeric"
-                    maxLength={11}
-                    placeholder="20123456789"
-                    className="h-11 rounded-xl bg-input text-sm"
-                  />
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      autoFocus
+                      inputMode="numeric"
+                      maxLength={11}
+                      placeholder="20123456789"
+                      className="h-11 rounded-xl bg-input pr-10 text-sm"
+                      onChange={(e) => {
+                        field.onChange(e);
+                        setRucVerificado(null);
+                        setRucNoVerificado(false);
+                        setVerificandoRuc(false);
+                      }}
+                    />
+                    {verificandoRuc && (
+                      <Loader2 className="absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
+                {rucVerificado && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs font-medium text-emerald-600">
+                    <CheckCircle className="size-3.5 shrink-0" />
+                    <span>
+                      ¿Eres <strong className="font-bold">{rucVerificado.razonSocial ?? 'esta empresa'}</strong>?
+                    </span>
+                  </div>
+                )}
+                {rucNoVerificado && !verificandoRuc && (
+                  <p className="px-1 text-[11px] text-muted-foreground/60">
+                    No pudimos verificar el RUC con SUNAT. Puedes continuar sin problema.
+                  </p>
+                )}
               </FormItem>
             )}
           />
@@ -289,9 +361,9 @@ export function LandlordDetailsStep() {
             type="submit"
             size="lg"
             className="h-12 w-full rounded-full text-sm font-bold tracking-wide"
-            disabled={form.formState.isSubmitting}
+            loading={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro →'}
+            Finalizar registro →
           </Button>
 
           <button

@@ -24,4 +24,6 @@ public class DashboardArrendadorDTO {
     private Long reservasActivas;
     private List<ActividadDTO> actividadReciente;
     private List<IngresoMensualDTO> ingresosPorMes;
+    /** Ítem 321: ocupación histórica retroactiva (últimos ~7 meses), ver DashboardServiceImpl. */
+    private List<PuntoMensualDTO> ocupacionPorMes;
 }

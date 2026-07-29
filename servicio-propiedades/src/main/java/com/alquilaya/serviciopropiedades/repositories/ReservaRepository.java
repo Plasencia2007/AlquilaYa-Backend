@@ -2,6 +2,8 @@ package com.alquilaya.serviciopropiedades.repositories;
 
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,12 +19,22 @@ import java.util.List;
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     List<Reserva> findByEstudianteIdOrderByFechaCreacionDesc(Long estudianteId);
 
+    /** Ítem 234: paginación real de "mis reservas" del estudiante. */
+    Page<Reserva> findByEstudianteIdOrderByFechaCreacionDesc(Long estudianteId, Pageable pageable);
+
+    /** Ítem 234: paginar DENTRO del filtro de estado activo (tabs de la UI). */
+    Page<Reserva> findByEstudianteIdAndEstadoOrderByFechaCreacionDesc(
+            Long estudianteId, EstadoReserva estado, Pageable pageable);
+
     List<Reserva> findByArrendadorIdOrderByFechaCreacionDesc(Long arrendadorId);
 
     List<Reserva> findByArrendadorIdAndEstadoOrderByFechaCreacionDesc(Long arrendadorId, EstadoReserva estado);
 
     /** Reservas en un estado dado (G2: candidatas PAGADA para generar cuotas de renta). */
     List<Reserva> findByEstado(EstadoReserva estado);
+
+    /** Total de reservas en un estado (#86 stats: FINALIZADA = ciclos completados). */
+    long countByEstado(EstadoReserva estado);
 
     List<Reserva> findByPropiedadIdAndEstadoIn(Long propiedadId, Collection<EstadoReserva> estados);
 

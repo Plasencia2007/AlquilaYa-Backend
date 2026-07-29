@@ -45,6 +45,16 @@ public class ReservaResponseDTO {
     private LocalDateTime fechaCreacion;
     /** Si la reserva es grupal (#38 Fase 2): el pago es dividido por cuotas. Null = individual. */
     private Long grupoId;
+    /** Firma electrónica del contrato (G4, ítem 237) — null si esa parte aún no firmó. */
+    private LocalDateTime firmaEstudianteAt;
+    private LocalDateTime firmaArrendadorAt;
+    /**
+     * Momento en que una reserva APROBADA expira si no se paga (ítem 238). Solo se calcula
+     * para {@code estado == APROBADA} (el controller lo setea aparte, ver
+     * {@code ReservaController#toResponseDTO} — necesita {@code ConfiguracionReservaService},
+     * que no es visible desde este DTO estático). Null en cualquier otro estado.
+     */
+    private LocalDateTime fechaExpiracion;
 
     public static ReservaResponseDTO from(Reserva r) {
         return from(r, "", "", "");
@@ -73,6 +83,8 @@ public class ReservaResponseDTO {
                 .motivoCancelacion(r.getMotivoCancelacion())
                 .fechaCreacion(r.getFechaCreacion())
                 .grupoId(r.getGrupoId())
+                .firmaEstudianteAt(r.getFirmaEstudianteAt())
+                .firmaArrendadorAt(r.getFirmaArrendadorAt())
                 .build();
     }
 

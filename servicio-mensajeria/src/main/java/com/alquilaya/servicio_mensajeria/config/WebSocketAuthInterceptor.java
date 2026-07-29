@@ -87,6 +87,18 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             throw new AccessDeniedException("Sesión cerrada. Vuelve a iniciar sesión.");
         }
 
+        // Ítem 379: un token de impersonación (admin viendo como otro usuario) es de SOLO
+        // LECTURA. El gateway (ImpersonationReadOnlyInterceptor) ya bloquea toda mutación REST,
+        // pero el WS de mensajería conecta DIRECTO a este servicio sin pasar por el gateway —
+        // así que sin este check, un admin impersonando podría enviar/leer mensajes de chat
+        // como el usuario objetivo. Se rechaza el CONNECT completo (no solo el envío) porque no
+        // hay forma de "solo lectura" a nivel STOMP sin bloquear también las suscripciones.
+        Boolean impersonacion = jwtService.extractClaim(jwt, claims -> claims.get("impersonacion", Boolean.class));
+        if (Boolean.TRUE.equals(impersonacion)) {
+            log.warn("[WS] CONNECT con token de impersonación rechazado para {}", email);
+            throw new AccessDeniedException("El chat no está disponible en modo de solo lectura.");
+        }
+
         String rol = jwtService.extractClaim(jwt, claims -> claims.get("rol", String.class));
         Long userId = jwtService.extractClaim(jwt, claims -> claims.get("userId", Long.class));
         Long perfilId = jwtService.extractClaim(jwt, claims -> claims.get("perfilId", Long.class));

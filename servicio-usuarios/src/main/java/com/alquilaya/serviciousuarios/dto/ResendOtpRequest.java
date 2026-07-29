@@ -10,4 +10,7 @@ public class ResendOtpRequest {
     @NotBlank(message = "El teléfono es obligatorio")
     @TelefonoPeruano
     private String telefono;
+
+    /** Token del widget Cloudflare Turnstile (#184). */
+    private String turnstileToken;
 }

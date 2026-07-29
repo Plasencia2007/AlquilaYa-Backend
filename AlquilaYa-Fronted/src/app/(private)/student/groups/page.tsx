@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UsersRound } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { notify } from '@/lib/notify';
+import { EmptyState } from '@/components/shared/empty-state';
+import { ErrorState } from '@/components/shared/error-state';
 import { grupoService, type GrupoRoommate } from '@/services/grupo-service';
 
 function SkeletonGroupCard() {
@@ -24,13 +25,32 @@ function SkeletonGroupCard() {
 export default function MisGruposPage() {
   const [grupos, setGrupos] = useState<GrupoRoommate[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
+  const [intento, setIntento] = useState(0);
 
   useEffect(() => {
+    let cancelado = false;
     grupoService
       .mios()
-      .then(setGrupos)
-      .catch((e) => notify.error(e, 'No se pudieron cargar tus grupos.'))
-      .finally(() => setCargando(false));
+      .then((g) => {
+        if (cancelado) return;
+        setGrupos(g);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelado) setError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  const cargar = useCallback(() => {
+    setCargando(true);
+    setIntento((i) => i + 1);
   }, []);
 
   return (
@@ -46,14 +66,19 @@ export default function MisGruposPage() {
             <SkeletonGroupCard key={i} />
           ))}
         </div>
+      ) : error ? (
+        <ErrorState
+          title="No pudimos cargar tus grupos"
+          description="Algo salió mal al buscar tus grupos de roommates."
+          onRetry={cargar}
+        />
       ) : grupos.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
-          <UsersRound className="size-10 text-muted-foreground" />
-          <p className="font-bold text-foreground">Aún no estás en ningún grupo</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Arma un grupo desde la ficha de un departamento, o únete a uno desde Compañeros.
-          </p>
-        </div>
+        <EmptyState
+          icon={UsersRound}
+          title="Aún no estás en ningún grupo"
+          description="Arma un grupo desde la ficha de un departamento, o únete a uno desde Compañeros."
+          action={{ type: 'link', label: 'Buscar un departamento', href: '/search' }}
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {grupos.map((g) => (

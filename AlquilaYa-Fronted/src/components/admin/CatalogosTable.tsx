@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { resolveIcon } from '@/lib/icons';
 import { notify } from '@/lib/notify';
+import { useConfirm } from '@/hooks/use-confirm';
 
 const TIPO_LABELS: Record<TipoItemCatalogo, string> = {
   SERVICIO: 'Servicios',
@@ -113,8 +114,12 @@ const emptyForm = (tipo: TipoItemCatalogo): ItemCatalogoInput => ({
   tipo,
   icono: '',
   descripcion: '',
+  imagenUrl: '',
   activo: true,
 });
+
+/** Validación mínima: solo aceptamos http(s) para previsualizar la imagen del banner. */
+const pareceUrl = (v: string): boolean => /^https?:\/\/.+/i.test(v.trim());
 
 export const CatalogosTable: React.FC = () => {
   const [items, setItems] = useState<ItemCatalogo[]>([]);
@@ -126,6 +131,11 @@ export const CatalogosTable: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Se activa si el navegador no logra cargar la imagen del banner (URL rota) para ocultar el preview.
+  const [bannerImgError, setBannerImgError] = useState(false);
+  // true mientras se sube un archivo de imagen del banner a Cloudinary.
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     try {
@@ -147,6 +157,7 @@ export const CatalogosTable: React.FC = () => {
   const openCreate = () => {
     setForm(emptyForm(selectedType));
     setError(null);
+    setBannerImgError(false);
     setDialog({ mode: 'create' });
   };
 
@@ -157,9 +168,11 @@ export const CatalogosTable: React.FC = () => {
       tipo: item.tipo,
       icono: item.icono || '',
       descripcion: item.descripcion || '',
+      imagenUrl: item.imagenUrl || '',
       activo: item.activo,
     });
     setError(null);
+    setBannerImgError(false);
     setDialog({ mode: 'edit', item });
   };
 
@@ -167,6 +180,8 @@ export const CatalogosTable: React.FC = () => {
     setDialog({ mode: 'closed' });
     setForm(emptyForm(selectedType));
     setError(null);
+    setBannerImgError(false);
+    setSubiendoImagen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,11 +198,21 @@ export const CatalogosTable: React.FC = () => {
       setSaving(true);
       const payload: ItemCatalogoInput = {
         nombre: form.nombre.trim(),
-        valor: form.valor.toUpperCase().trim().replace(/[^A-Z0-9_]/g, '_'),
+        // Los códigos de catálogo (WIFI, NO_MASCOTAS...) se normalizan a mayúsculas,
+        // pero en BANNER el `valor` es una ruta/clave libre (p.ej. `/search`, o
+        // `hero-home` que el hero busca en minúsculas) — se preserva tal cual.
+        valor:
+          form.tipo === 'BANNER'
+            ? form.valor.trim()
+            : form.valor.toUpperCase().trim().replace(/[^A-Z0-9_]/g, '_'),
         tipo: form.tipo,
         icono: form.icono?.trim() || undefined,
         descripcion: form.descripcion?.trim() || undefined,
         activo: form.activo,
+        // La imagen del hero solo tiene sentido para banners; no ensuciamos otros tipos.
+        ...(form.tipo === 'BANNER'
+          ? { imagenUrl: form.imagenUrl?.trim() || undefined }
+          : {}),
       };
 
       if (dialog.mode === 'create') {
@@ -199,10 +224,11 @@ export const CatalogosTable: React.FC = () => {
       }
       await load();
       closeDialog();
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
+        e?.response?.data?.message ||
+        e?.message ||
         'No se pudo guardar el elemento';
       setError(msg);
     } finally {
@@ -210,18 +236,55 @@ export const CatalogosTable: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este elemento del catálogo?')) return;
-    try {
-      setDeletingId(id);
-      await catalogService.eliminarFiltro(id);
-      notify.success('Elemento eliminado correctamente');
-      await load();
-    } catch (err: any) {
-      notify.error(err, 'No se pudo eliminar el elemento');
-    } finally {
-      setDeletingId(null);
+  /** Sube el archivo elegido a Cloudinary y setea la URL devuelta como imagen del banner. */
+  const handleImagenChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reseteamos el input para poder re-elegir el mismo archivo si falla.
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      notify.error(new Error('El archivo debe ser una imagen (JPG, PNG, WEBP, etc.)'));
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      notify.error(new Error('La imagen supera el tamaño máximo permitido (5 MB)'));
+      return;
+    }
+
+    try {
+      setSubiendoImagen(true);
+      const url = await catalogService.subirImagenBanner(file);
+      setBannerImgError(false);
+      setForm((prev) => ({ ...prev, imagenUrl: url }));
+      notify.success('Imagen subida correctamente');
+    } catch (err) {
+      notify.error(err, 'No se pudo subir la imagen');
+    } finally {
+      setSubiendoImagen(false);
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    confirm({
+      title: '¿Eliminar este elemento del catálogo?',
+      description: 'Esta acción no se puede deshacer.',
+      tone: 'danger',
+      confirmLabel: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          setDeletingId(id);
+          await catalogService.eliminarFiltro(id);
+          notify.success('Elemento eliminado correctamente');
+          await load();
+        } catch (err) {
+          notify.error(err, 'No se pudo eliminar el elemento');
+          return false;
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   const filteredItems = items.filter((item) => {
@@ -322,7 +385,9 @@ export const CatalogosTable: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => openEdit(item)}
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        aria-label={`Editar ${item.nombre}`}
+                        title="Editar"
+                        className="h-11 w-11 text-muted-foreground hover:text-foreground"
                       >
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                       </Button>
@@ -331,7 +396,9 @@ export const CatalogosTable: React.FC = () => {
                         size="sm"
                         disabled={deletingId === item.id}
                         onClick={() => handleDelete(item.id)}
-                        className="h-7 w-7 text-red-500 hover:bg-red-500/10"
+                        aria-label={`Eliminar ${item.nombre}`}
+                        title="Eliminar"
+                        className="h-11 w-11 text-red-500 hover:bg-red-500/10"
                       >
                         <span className="material-symbols-outlined text-[16px]">delete</span>
                       </Button>
@@ -355,7 +422,15 @@ export const CatalogosTable: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-600 rounded-xl px-4 py-2.5 text-xs font-semibold">
+              // Ítem 406: `role="alert"` hace que un lector de pantalla lo anuncie apenas
+              // aparece (se monta condicionalmente), sin depender de que el foco esté aquí.
+              // El id se referencia desde `aria-describedby` en los campos que puede señalar
+              // (nombre / valor), ya que es un único mensaje que cubre validaciones de ambos.
+              <div
+                id="catalogo-form-error"
+                role="alert"
+                className="bg-red-500/10 border border-red-500/20 text-red-600 rounded-xl px-4 py-2.5 text-xs font-semibold"
+              >
                 {error}
               </div>
             )}
@@ -386,6 +461,7 @@ export const CatalogosTable: React.FC = () => {
                 placeholder={form.tipo === 'BANNER' ? 'Ej. ¡Descuento de Temporada!' : 'Ej. WiFi de Alta Velocidad'}
                 value={form.nombre}
                 onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                aria-describedby={error ? 'catalogo-form-error' : undefined}
                 required
               />
             </div>
@@ -406,6 +482,90 @@ export const CatalogosTable: React.FC = () => {
               </div>
             )}
 
+            {form.tipo === 'BANNER' && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  Imagen del banner
+                </Label>
+
+                {/* Uploader real: sube el archivo a Cloudinary y setea la URL devuelta. */}
+                <label
+                  className={`flex items-center justify-center gap-2 h-11 w-full rounded-xl border border-dashed border-border bg-muted/40 px-3 text-xs font-semibold text-muted-foreground transition-colors ${
+                    subiendoImagen
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'cursor-pointer hover:border-primary/40 hover:text-foreground'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">
+                    {subiendoImagen ? 'progress_activity' : 'upload'}
+                  </span>
+                  {subiendoImagen ? 'Subiendo imagen…' : 'Subir imagen desde tu equipo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={subiendoImagen}
+                    onChange={handleImagenChange}
+                  />
+                </label>
+
+                <div className="flex items-center gap-2 py-0.5">
+                  <div className="h-px flex-1 bg-border/60" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">
+                    o pega una URL
+                  </span>
+                  <div className="h-px flex-1 bg-border/60" />
+                </div>
+
+                <Input
+                  id="item-imagen"
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://res.cloudinary.com/.../banner.jpg"
+                  value={form.imagenUrl || ''}
+                  onChange={(e) => {
+                    setBannerImgError(false);
+                    setForm((prev) => ({ ...prev, imagenUrl: e.target.value }));
+                  }}
+                  aria-describedby={[
+                    'item-imagen-ayuda',
+                    form.imagenUrl?.trim() && !pareceUrl(form.imagenUrl) ? 'item-imagen-formato-error' : null,
+                    bannerImgError ? 'item-imagen-carga-error' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-invalid={bannerImgError || (!!form.imagenUrl?.trim() && !pareceUrl(form.imagenUrl))}
+                />
+                <p id="item-imagen-ayuda" className="text-[9px] text-muted-foreground/60">
+                  Sube un archivo (se hospeda en Cloudinary) o pega un enlace directo a la imagen. Se usa como fondo del hero.
+                </p>
+
+                {form.imagenUrl && pareceUrl(form.imagenUrl) && !bannerImgError && (
+                  <div className="mt-1 overflow-hidden rounded-xl border border-border bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={form.imagenUrl.trim()}
+                      alt="Vista previa del banner"
+                      onError={() => setBannerImgError(true)}
+                      className="h-28 w-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {form.imagenUrl?.trim() && !pareceUrl(form.imagenUrl) && (
+                  <p id="item-imagen-formato-error" role="alert" className="text-[9px] font-semibold text-amber-600">
+                    El enlace debería empezar con http:// o https://
+                  </p>
+                )}
+
+                {bannerImgError && (
+                  <p id="item-imagen-carga-error" role="alert" className="text-[9px] font-semibold text-red-500">
+                    No se pudo cargar la imagen desde esa URL. Verifica el enlace.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="item-valor" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                 {form.tipo === 'BANNER' ? 'Ruta de redirección (Enlace)' : 'Código único (Valor)'}
@@ -422,10 +582,16 @@ export const CatalogosTable: React.FC = () => {
                       : e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
                   }))
                 }
+                aria-describedby={[
+                  form.tipo !== 'BANNER' ? 'item-valor-ayuda' : null,
+                  error ? 'catalogo-form-error' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined}
                 required
               />
               {form.tipo !== 'BANNER' && (
-                <p className="text-[9px] text-muted-foreground/60">
+                <p id="item-valor-ayuda" className="text-[9px] text-muted-foreground/60">
                   Se almacena en mayúsculas y sin espacios. Ej: `INCONVENIENTE_FECHAS`.
                 </p>
               )}
@@ -506,6 +672,7 @@ export const CatalogosTable: React.FC = () => {
           </form>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

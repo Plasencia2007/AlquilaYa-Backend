@@ -18,6 +18,10 @@ public class AuthResponse {
     // saber si ya hay sesión — con el token fuera del body, ese chequeo dejaría de servir
     // (tanto una sesión recién creada como una verificación aún pendiente tendrían token=null).
     private boolean autenticado;
+    // Item 229: cuando autenticado=false Y requiere2fa=true, las credenciales eran correctas
+    // pero falta el código TOTP — el frontend debe pedirlo y completar con
+    // POST /auth/2fa/login-verificar en vez de mostrar la pantalla de OTP de registro.
+    private boolean requiere2fa;
     private Long id; // ID del Usuario
     private String nombre;
     private String correo;

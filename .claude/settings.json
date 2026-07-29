@@ -5,5 +5,8 @@
   "teamateMode": "tmux",
   "workTreeCreate": false,
   "workTreeRemove": false,
-  "permissionMode": "auto"
+  "permissionMode": "auto",
+  "enabledPlugins": {
+    "commit-commands@claude-plugins-official": true
+  }
 }

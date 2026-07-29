@@ -9,9 +9,11 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { servicioAuth } from '@/services/auth-service';
 import { notify } from '@/lib/notify';
+import { applyServerErrors } from '@/lib/api-errors';
 
 const forgotPasswordSchema = z.object({
   correo: z.string().email('Ingresa un correo electrónico válido'),
@@ -22,6 +24,7 @@ type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 export function ForgotPasswordForm() {
   const { open: openAuthModal } = useAuthModal();
   const [enviado, setEnviado] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const form = useForm<ForgotPasswordFormData>({
     resolver: zodResolver(forgotPasswordSchema),
@@ -30,11 +33,13 @@ export function ForgotPasswordForm() {
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     try {
-      await servicioAuth.solicitarResetPassword(data.correo);
+      await servicioAuth.solicitarResetPassword(data.correo, turnstileToken ?? undefined);
       setEnviado(true);
       notify.success('Si el correo está registrado, recibirás un enlace de recuperación');
     } catch (err) {
-      notify.error(err, 'Error al procesar la solicitud');
+      if (!applyServerErrors(form.setError, err)) {
+        notify.error(err, 'Error al procesar la solicitud');
+      }
     }
   };
 
@@ -110,13 +115,18 @@ export function ForgotPasswordForm() {
             )}
           />
 
+          <TurnstileWidget
+            onVerify={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(null)}
+          />
+
           <Button
             type="submit"
             size="lg"
             className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
-            disabled={form.formState.isSubmitting}
+            loading={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Enviando…' : 'Enviar enlace'}
+            Enviar enlace
           </Button>
         </form>
       </Form>

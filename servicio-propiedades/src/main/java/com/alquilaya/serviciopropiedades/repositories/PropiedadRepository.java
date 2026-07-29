@@ -19,6 +19,58 @@ import java.util.Optional;
 public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
     List<Propiedad> findByArrendadorId(Long arrendadorId);
 
+    /**
+     * Ids distintos de arrendadores con al menos una propiedad publicada y visible — el
+     * universo acotado sobre el que se resuelve "solo verificados" (ítem 125): se consulta
+     * contra servicio-usuarios (única fuente de verdad de {@code Arrendador.verificado})
+     * en vez de denormalizar el flag aquí, así nunca queda desactualizado.
+     */
+    @Query("""
+            SELECT DISTINCT p.arrendadorId FROM Propiedad p
+            WHERE p.aprobadoPorAdmin = true AND p.estaDisponible = true
+            """)
+    List<Long> arrendadorIdsActivos();
+
+    /**
+     * Full-text search real (ítem 491): usa el {@code tsvector} generado + índice GIN
+     * (ver migración V5) en vez del {@code LIKE} pragmático anterior (full scan). Devuelve
+     * ids ordenados por relevancia ({@code ts_rank}), acotados a un tope generoso — se usan
+     * como filtro {@code p.id IN (:ids)} en {@link #buscar} / {@link #buscarPaginado} (JPQL),
+     * sin tocar su {@code Sort}/paginación dinámica (mezclar {@code Sort} con queries nativas
+     * no es seguro en Spring Data JPA). Solo propiedades aprobadas.
+     */
+    @Query(value = """
+            SELECT p.id FROM propiedades p
+            WHERE p.aprobado_por_admin = true
+              AND p.busqueda_tsv @@ plainto_tsquery('spanish', :q)
+            ORDER BY ts_rank(p.busqueda_tsv, plainto_tsquery('spanish', :q)) DESC
+            LIMIT :limite
+            """, nativeQuery = true)
+    List<Long> idsPorTextoLibre(@Param("q") String q, @Param("limite") int limite);
+
+    /** Propiedades aprobadas por admin (visibles en el catálogo público) — headline de escala (#86). */
+    long countByAprobadoPorAdminTrue();
+
+    /**
+     * Conteo de avisos por zona con el precio más bajo de cada una, para la sección "Zonas
+     * destacadas" de la home. Aplica EXACTAMENTE el mismo criterio de "publicada y visible"
+     * que la búsqueda pública {@code /buscar}: {@code aprobadoPorAdmin = true} (excluye
+     * borradores/pendientes) + {@code estaDisponible = true} (lo que la búsqueda usa por
+     * defecto). Excluye {@code zonaId = null} (avisos sin zona resuelta). Es una agregación
+     * en BD ({@code COUNT}/{@code MIN} + {@code GROUP BY}) que devuelve un DTO vía constructor
+     * expression — NO carga entidades ni el catálogo completo.
+     */
+    @Query("""
+            SELECT new com.alquilaya.serviciopropiedades.dto.ConteoZonaDTO(
+                       p.zonaId, COUNT(p), MIN(p.precio))
+            FROM Propiedad p
+            WHERE p.aprobadoPorAdmin = true
+              AND p.estaDisponible = true
+              AND p.zonaId IS NOT NULL
+            GROUP BY p.zonaId
+            """)
+    List<com.alquilaya.serviciopropiedades.dto.ConteoZonaDTO> conteoPorZona();
+
     List<Propiedad> findByArrendadorIdAndEstado(Long arrendadorId, EstadoPropiedad estado);
 
     List<Propiedad> findByArrendadorIdAndEstadoNot(Long arrendadorId, EstadoPropiedad estado);
@@ -39,6 +91,14 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                                   @Param("limite") java.time.LocalDateTime limite);
 
     List<Propiedad> findByEstadoOrderByFechaCreacionAsc(EstadoPropiedad estado);
+
+    /**
+     * Ítem 389: TODAS las propiedades sometidas a moderación (cualquier estado excepto
+     * {@code BORRADOR}, que son avisos sin publicar que el arrendador aún está editando y no
+     * corresponde mostrar en el mapa admin) — alimenta {@code GET /admin/propiedades} sin filtro,
+     * para el mapa de calor por estado del panel admin.
+     */
+    List<Propiedad> findByEstadoNotOrderByFechaCreacionAsc(EstadoPropiedad estado);
 
     // Lock pesimista para serializar creaciones de reserva concurrentes sobre la misma propiedad.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -98,6 +158,10 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
               AND (:zonaId IS NULL OR p.zonaId = :zonaId)
               AND (:capacidadMin IS NULL OR (p.capacidadPersonas IS NOT NULL AND p.capacidadPersonas >= :capacidadMin))
               AND (:dormitoriosMin IS NULL OR (p.numDormitorios IS NOT NULL AND p.numDormitorios >= :dormitoriosMin))
+              AND (:calificacionMin IS NULL OR (p.calificacion IS NOT NULL AND p.calificacion >= :calificacionMin))
+              AND (:qIds IS NULL OR p.id IN :qIds)
+              AND (:soloConFotos IS NULL OR SIZE(p.imagenes) > 0 OR p.imagenUrl IS NOT NULL)
+              AND (:arrendadoresVerificados IS NULL OR p.arrendadorId IN :arrendadoresVerificados)
             ORDER BY p.fechaCreacion DESC, p.id DESC
             """)
     List<Propiedad> buscar(
@@ -112,7 +176,11 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             @Param("universidadId") Long universidadId,
             @Param("zonaId") Long zonaId,
             @Param("capacidadMin") Integer capacidadMin,
-            @Param("dormitoriosMin") Integer dormitoriosMin
+            @Param("dormitoriosMin") Integer dormitoriosMin,
+            @Param("calificacionMin") Double calificacionMin,
+            @Param("qIds") List<Long> qIds,
+            @Param("soloConFotos") Boolean soloConFotos,
+            @Param("arrendadoresVerificados") List<Long> arrendadoresVerificados
     );
 
     /**
@@ -120,6 +188,13 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
      * query COUNT automáticamente a partir de esta misma JPQL). NO reemplaza `/buscar`
      * (que sigue devolviendo el array plano cacheado que ya consume el frontend) — es un
      * endpoint nuevo y aditivo para cuando el volumen de propiedades lo justifique.
+     *
+     * <p>El orden NO va fijo en la JPQL: lo aporta el {@code Sort} del {@link org.springframework.data.domain.Pageable}
+     * (lo arma el service según el parámetro {@code orden}: precio asc/desc, recientes, calificación).
+     * Como el {@code SELECT DISTINCT p} proyecta todas las columnas de {@code p}, PostgreSQL admite
+     * ordenar por cualquiera de ellas (precio/fechaCreacion/calificacion) aun con DISTINCT. El
+     * orden "distancia al campus" NO se resuelve aquí (es un cálculo Haversine cliente sobre
+     * coordenadas, no una columna directa) — se mantiene en el cliente.
      */
     @Query("""
             SELECT DISTINCT p FROM Propiedad p
@@ -137,7 +212,10 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
               AND (:zonaId IS NULL OR p.zonaId = :zonaId)
               AND (:capacidadMin IS NULL OR (p.capacidadPersonas IS NOT NULL AND p.capacidadPersonas >= :capacidadMin))
               AND (:dormitoriosMin IS NULL OR (p.numDormitorios IS NOT NULL AND p.numDormitorios >= :dormitoriosMin))
-            ORDER BY p.fechaCreacion DESC, p.id DESC
+              AND (:calificacionMin IS NULL OR (p.calificacion IS NOT NULL AND p.calificacion >= :calificacionMin))
+              AND (:qIds IS NULL OR p.id IN :qIds)
+              AND (:soloConFotos IS NULL OR SIZE(p.imagenes) > 0 OR p.imagenUrl IS NOT NULL)
+              AND (:arrendadoresVerificados IS NULL OR p.arrendadorId IN :arrendadoresVerificados)
             """)
     org.springframework.data.domain.Page<Propiedad> buscarPaginado(
             @Param("precioMin") BigDecimal precioMin,
@@ -152,6 +230,10 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             @Param("zonaId") Long zonaId,
             @Param("capacidadMin") Integer capacidadMin,
             @Param("dormitoriosMin") Integer dormitoriosMin,
+            @Param("calificacionMin") Double calificacionMin,
+            @Param("qIds") List<Long> qIds,
+            @Param("soloConFotos") Boolean soloConFotos,
+            @Param("arrendadoresVerificados") List<Long> arrendadoresVerificados,
             org.springframework.data.domain.Pageable pageable
     );
 
@@ -172,6 +254,13 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
      * <p>Los filtros opcionales van con {@code CAST(:param AS tipo)} para que PostgreSQL
      * pueda planificar el parámetro nulo (evita "could not determine data type of parameter").
      * Devuelve entidades ({@code SELECT p.*}); el service calcula la distancia en km para el DTO.
+     *
+     * <p><b>Paginación:</b> devuelve un {@link org.springframework.data.domain.Page}. El
+     * {@code ORDER BY} (distancia Haversine ascendente) vive en el SQL nativo; el {@link Pageable}
+     * se pasa SIN {@code Sort} (unsorted) para que Spring Data solo aplique {@code LIMIT/OFFSET}
+     * y NO intente reordenar. La {@code countQuery} replica exactamente el {@code WHERE} (bounding
+     * box + Haversine + filtros) para el total. El orden por distancia se garantiza ANTES de
+     * paginar (es parte de la propia query).
      */
     @Query(value = """
             SELECT p.* FROM propiedades p
@@ -190,6 +279,14 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                    OR (p.capacidad_personas IS NOT NULL AND p.capacidad_personas >= CAST(:capacidadMin AS integer)))
               AND (CAST(:dormitoriosMin AS integer) IS NULL
                    OR (p.num_dormitorios IS NOT NULL AND p.num_dormitorios >= CAST(:dormitoriosMin AS integer)))
+              AND (CAST(:calificacionMin AS double precision) IS NULL
+                   OR (p.calificacion IS NOT NULL AND p.calificacion >= CAST(:calificacionMin AS double precision)))
+              AND (CAST(:q AS text) IS NULL
+                   OR p.busqueda_tsv @@ plainto_tsquery('spanish', CAST(:q AS text)))
+              AND (CAST(:soloConFotos AS boolean) IS NULL
+                   OR EXISTS (SELECT 1 FROM propiedad_imagenes pi WHERE pi.propiedad_id = p.id)
+                   OR p.imagen_url IS NOT NULL)
+              AND (:soloVerificados = false OR p.arrendador_id IN (:arrendadoresVerificados))
               AND (6371 * acos( least(1.0, greatest(-1.0,
                     cos(radians(:lat)) * cos(radians(p.latitud)) * cos(radians(p.longitud) - radians(:lng))
                     + sin(radians(:lat)) * sin(radians(p.latitud))
@@ -198,8 +295,39 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
                     cos(radians(:lat)) * cos(radians(p.latitud)) * cos(radians(p.longitud) - radians(:lng))
                     + sin(radians(:lat)) * sin(radians(p.latitud))
                  )))) ASC, p.id ASC
-            """, nativeQuery = true)
-    List<Propiedad> buscarCerca(
+            """,
+            countQuery = """
+            SELECT count(*) FROM propiedades p
+            WHERE p.aprobado_por_admin = true
+              AND p.latitud IS NOT NULL AND p.longitud IS NOT NULL
+              AND (:soloDisponibles = false OR p.esta_disponible = true)
+              AND p.latitud BETWEEN :latMin AND :latMax
+              AND p.longitud BETWEEN :lngMin AND :lngMax
+              AND (CAST(:tipo AS text) IS NULL OR p.tipo_propiedad = CAST(:tipo AS text))
+              AND (CAST(:periodo AS text) IS NULL OR p.periodo_alquiler = CAST(:periodo AS text))
+              AND (CAST(:precioMin AS numeric) IS NULL OR p.precio >= CAST(:precioMin AS numeric))
+              AND (CAST(:precioMax AS numeric) IS NULL OR p.precio <= CAST(:precioMax AS numeric))
+              AND (CAST(:universidadId AS bigint) IS NULL OR p.universidad_id = CAST(:universidadId AS bigint))
+              AND (CAST(:zonaId AS bigint) IS NULL OR p.zona_id = CAST(:zonaId AS bigint))
+              AND (CAST(:capacidadMin AS integer) IS NULL
+                   OR (p.capacidad_personas IS NOT NULL AND p.capacidad_personas >= CAST(:capacidadMin AS integer)))
+              AND (CAST(:dormitoriosMin AS integer) IS NULL
+                   OR (p.num_dormitorios IS NOT NULL AND p.num_dormitorios >= CAST(:dormitoriosMin AS integer)))
+              AND (CAST(:calificacionMin AS double precision) IS NULL
+                   OR (p.calificacion IS NOT NULL AND p.calificacion >= CAST(:calificacionMin AS double precision)))
+              AND (CAST(:q AS text) IS NULL
+                   OR p.busqueda_tsv @@ plainto_tsquery('spanish', CAST(:q AS text)))
+              AND (CAST(:soloConFotos AS boolean) IS NULL
+                   OR EXISTS (SELECT 1 FROM propiedad_imagenes pi WHERE pi.propiedad_id = p.id)
+                   OR p.imagen_url IS NOT NULL)
+              AND (:soloVerificados = false OR p.arrendador_id IN (:arrendadoresVerificados))
+              AND (6371 * acos( least(1.0, greatest(-1.0,
+                    cos(radians(:lat)) * cos(radians(p.latitud)) * cos(radians(p.longitud) - radians(:lng))
+                    + sin(radians(:lat)) * sin(radians(p.latitud))
+                 )))) <= :radioKm
+            """,
+            nativeQuery = true)
+    org.springframework.data.domain.Page<Propiedad> buscarCercaPaginado(
             @Param("lat") double lat,
             @Param("lng") double lng,
             @Param("radioKm") double radioKm,
@@ -215,6 +343,12 @@ public interface PropiedadRepository extends JpaRepository<Propiedad, Long> {
             @Param("universidadId") Long universidadId,
             @Param("zonaId") Long zonaId,
             @Param("capacidadMin") Integer capacidadMin,
-            @Param("dormitoriosMin") Integer dormitoriosMin
+            @Param("dormitoriosMin") Integer dormitoriosMin,
+            @Param("calificacionMin") Double calificacionMin,
+            @Param("q") String q,
+            @Param("soloConFotos") Boolean soloConFotos,
+            @Param("soloVerificados") boolean soloVerificados,
+            @Param("arrendadoresVerificados") List<Long> arrendadoresVerificados,
+            org.springframework.data.domain.Pageable pageable
     );
 }

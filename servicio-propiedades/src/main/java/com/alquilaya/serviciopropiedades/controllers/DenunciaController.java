@@ -2,6 +2,7 @@ package com.alquilaya.serviciopropiedades.controllers;
 
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
 import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
+import com.alquilaya.serviciopropiedades.dto.DenunciaConteosDTO;
 import com.alquilaya.serviciopropiedades.dto.DenunciaDTO;
 import com.alquilaya.serviciopropiedades.dto.DenunciaRequest;
 import com.alquilaya.serviciopropiedades.enums.EstadoDenuncia;
@@ -52,6 +53,13 @@ public class DenunciaController {
     ) {
         EstadoDenuncia filtro = parseEstado(estado);
         return ResponseEntity.ok(denunciaService.listar(filtro, PageRequest.of(page, size)));
+    }
+
+    /** Conteo agregado por estado (ítem 376): alimenta la card "Por Revisar" del panel admin. */
+    @GetMapping("/admin/denuncias/conteos")
+    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_DENUNCIAS')")
+    public ResponseEntity<DenunciaConteosDTO> conteos() {
+        return ResponseEntity.ok(denunciaService.conteos());
     }
 
     @PatchMapping("/admin/denuncias/{denunciaId}")

@@ -6,6 +6,7 @@ import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
 import com.alquilaya.serviciopropiedades.dto.ResumenCategoriasDTO;
+import com.alquilaya.serviciopropiedades.dto.TestimonioDTO;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
 import com.alquilaya.serviciopropiedades.entities.ResenaEstudiante;
 import com.alquilaya.serviciopropiedades.entities.ResenaPropiedad;
@@ -25,6 +26,16 @@ import java.util.Map;
 public class ResenaController {
 
     private final ResenaService resenaService;
+
+    /**
+     * Reseñas destacadas (prueba social) para la home (#85). Público y privacy-safe:
+     * devuelve solo nombre parcial + carrera (si usuarios la resuelve), nunca PII.
+     */
+    @GetMapping("/destacadas")
+    public ResponseEntity<List<TestimonioDTO>> destacadas(
+            @RequestParam(defaultValue = "5") int limit) {
+        return ResponseEntity.ok(resenaService.listarDestacadas(limit));
+    }
 
     @PostMapping("/propiedad")
     @PreAuthorize("@permisoEnforcer.tienePermiso('RESENAR')")
@@ -101,10 +112,14 @@ public class ResenaController {
         return ResponseEntity.ok(resenaService.ocultar(id, tipo));
     }
 
-    /** Listado paginado de reseñas de propiedad (incl. ocultas) para el panel de moderación. */
+    /**
+     * Listado paginado de reseñas de propiedad (incl. ocultas) para el panel de moderación.
+     * Envuelve la {@code Page} con 2 agregados reales (#357: promedio + total sobre TODAS las
+     * reseñas, no solo la página actual) — ver {@link ResenaService.ResenaAdminPageDTO}.
+     */
     @GetMapping("/admin/propiedad")
     @PreAuthorize("@permisoEnforcer.tienePermiso('MODERAR_RESENAS')")
-    public ResponseEntity<org.springframework.data.domain.Page<ResenaResponseDTO>> listarPropiedadAdmin(
+    public ResponseEntity<ResenaService.ResenaAdminPageDTO> listarPropiedadAdmin(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(resenaService.listarPropiedadAdmin(page, size));

@@ -115,4 +115,88 @@ public class KafkaProducerService {
                     TOPIC_RESENAS, e.getMessage());
         }
     }
+
+    /**
+     * Notifica que una propiedad recibió una reseña nueva (#337). servicio-notificaciones
+     * consume {@code resenas-topic} y la traduce a un WhatsApp para el arrendador dueño.
+     * {@code arrendadorTelefono} viaja ya resuelto (Feign, best-effort) porque el consumidor
+     * de notificaciones no tiene forma propia de obtenerlo — mismo patrón que
+     * {@code ReservaService.enriquecerYEmitir} para los eventos de reserva.
+     */
+    public void enviarResenaCreada(Long propiedadId, Long arrendadorId, String propiedadTitulo,
+                                    Integer calificacion, String arrendadorTelefono) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("propiedadId", propiedadId);
+        payload.put("arrendadorId", arrendadorId);
+        payload.put("propiedadTitulo", propiedadTitulo);
+        payload.put("calificacion", calificacion);
+        payload.put("arrendadorTelefono", arrendadorTelefono);
+        try {
+            outboxPublisher.publicar(
+                    TOPIC_RESENAS,
+                    "RESENA_PROPIEDAD_CREADA",
+                    "Resena",
+                    String.valueOf(propiedadId),
+                    payload,
+                    MDC.get("correlationId"));
+            log.info("Reseña de propiedad {} (calificacion={}) persistida en outbox para notificar a arrendador {}",
+                    propiedadId, calificacion, arrendadorId);
+        } catch (Exception e) {
+            log.warn("No se pudo persistir evento RESENA_PROPIEDAD_CREADA en outbox ({}): {}",
+                    TOPIC_RESENAS, e.getMessage());
+        }
+    }
+
+    /**
+     * Notificaciones admin (gap #2/3, mismo PoC del ítem 378): una denuncia nueva sobre una
+     * propiedad debe alertar a TODOS los admins activos. Va al mismo {@code TOPIC_PROPIEDADES}
+     * que el resto de eventos de este agregado — servicio-mensajeria lo consume desde
+     * {@code PropiedadEventConsumer} sin necesidad de suscribirse a un topic nuevo.
+     */
+    public void enviarDenunciaCreada(Long denunciaId, Long propiedadId, String propiedadTitulo, String motivo) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("denunciaId", denunciaId);
+        payload.put("propiedadId", propiedadId);
+        payload.put("propiedadTitulo", propiedadTitulo);
+        payload.put("motivo", motivo);
+        try {
+            outboxPublisher.publicar(
+                    TOPIC_PROPIEDADES,
+                    "DENUNCIA_CREADA",
+                    "Denuncia",
+                    String.valueOf(denunciaId),
+                    payload,
+                    MDC.get("correlationId"));
+            log.info("Denuncia {} (propiedad={}, motivo={}) persistida en outbox para notificar admins",
+                    denunciaId, propiedadId, motivo);
+        } catch (Exception e) {
+            log.warn("No se pudo persistir evento DENUNCIA_CREADA en outbox ({}): {}",
+                    TOPIC_PROPIEDADES, e.getMessage());
+        }
+    }
+
+    /**
+     * Notificaciones admin (gap #2/3): una propiedad pasó a PENDIENTE (publicación de un
+     * borrador, o reenvío tras corregir un rechazo — #348) y necesita revisión. Alerta a
+     * TODOS los admins activos, igual que {@link #enviarDenunciaCreada}.
+     */
+    public void enviarPropiedadPendiente(Long propiedadId, String titulo, Long arrendadorId) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("propiedadId", propiedadId);
+        payload.put("titulo", titulo);
+        payload.put("arrendadorId", arrendadorId);
+        try {
+            outboxPublisher.publicar(
+                    TOPIC_PROPIEDADES,
+                    "PROPIEDAD_PENDIENTE",
+                    "Propiedad",
+                    String.valueOf(propiedadId),
+                    payload,
+                    MDC.get("correlationId"));
+            log.info("Propiedad {} pendiente de revisión persistida en outbox para notificar admins", propiedadId);
+        } catch (Exception e) {
+            log.warn("No se pudo persistir evento PROPIEDAD_PENDIENTE en outbox ({}): {}",
+                    TOPIC_PROPIEDADES, e.getMessage());
+        }
+    }
 }

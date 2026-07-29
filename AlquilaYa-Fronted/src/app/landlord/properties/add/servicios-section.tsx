@@ -6,6 +6,11 @@ import { type CatalogosActivos } from '@/services/catalogos-service';
 import { ChipsMultiselect, CustomItemInput, Section, SkeletonChips } from './property-form-primitives';
 import type { FormState } from './property-form-types';
 
+/** Nombre legible de un servicio (catálogo si existe, o su propia clave si es personalizado). */
+function nombreServicio(valor: string, catalogos: CatalogosActivos | null): string {
+  return catalogos?.SERVICIO?.find((c) => c.valor === valor)?.nombre ?? valor;
+}
+
 interface ServiciosSectionProps {
   cargandoCat: boolean;
   catalogos: CatalogosActivos | null;
@@ -94,16 +99,54 @@ export function ServiciosSection({
             onToggle={(valor) =>
               setForm((f) => {
                 const ya = f.serviciosAparte.includes(valor);
+                const montosServiciosAparte = { ...f.montosServiciosAparte };
+                if (ya) delete montosServiciosAparte[valor];
                 return {
                   ...f,
                   serviciosAparte: ya
                     ? f.serviciosAparte.filter((v) => v !== valor)
                     : [...f.serviciosAparte, valor],
                   serviciosIncluidos: f.serviciosIncluidos.filter((v) => v !== valor),
+                  montosServiciosAparte,
                 };
               })
             }
           />
+        )}
+
+        {form.serviciosAparte.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <p className="text-[11px] text-muted-foreground">
+              Indica cuánto cuesta cada uno (opcional) para que el estudiante vea un estimado mensual real.
+            </p>
+            {form.serviciosAparte.map((valor) => (
+              <div key={valor} className="flex items-center gap-2">
+                <span className="flex-1 truncate text-sm font-medium text-foreground">
+                  {nombreServicio(valor, catalogos)}
+                </span>
+                <div className="relative w-28 shrink-0">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                    S/
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={form.montosServiciosAparte[valor] ?? ''}
+                    onChange={(e) =>
+                      setField('montosServiciosAparte', {
+                        ...form.montosServiciosAparte,
+                        [valor]: e.target.value,
+                      })
+                    }
+                    placeholder="0"
+                    className="w-full rounded-lg border border-border bg-input py-1.5 pl-8 pr-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </Section>

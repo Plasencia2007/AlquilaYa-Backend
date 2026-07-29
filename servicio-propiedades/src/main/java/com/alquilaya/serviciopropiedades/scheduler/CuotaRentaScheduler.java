@@ -31,7 +31,7 @@ import java.util.List;
  *
  * <p>Configurable: cron ({@code app.renta.cuotas.cron}, default diario 01:00),
  * toggle ({@code app.renta.cuotas.enabled}, default true) y ventana de aviso
- * ({@code app.renta.cuotas.recordatorio-dias-antes}, default 5).
+ * ({@code app.renta.cuotas.recordatorio-dias-antes}, default 3 — #294).
  */
 @Slf4j
 @Component
@@ -43,7 +43,7 @@ public class CuotaRentaScheduler {
     @Value("${app.renta.cuotas.enabled:true}")
     private boolean enabled;
 
-    @Value("${app.renta.cuotas.recordatorio-dias-antes:5}")
+    @Value("${app.renta.cuotas.recordatorio-dias-antes:3}")
     private int recordatorioDiasAntes;
 
     @Scheduled(cron = "${app.renta.cuotas.cron:0 0 1 * * *}")
@@ -78,7 +78,7 @@ public class CuotaRentaScheduler {
         }
 
         // 3) Recordatorios de cuotas por vencer dentro de la ventana.
-        int dias = recordatorioDiasAntes >= 0 ? recordatorioDiasAntes : 5;
+        int dias = recordatorioDiasAntes >= 0 ? recordatorioDiasAntes : 3;
         LocalDate limite = hoy.plusDays(dias);
         int recordatorios = 0;
         List<CuotaRenta> porVencer = cuotaRentaService.cuotasPorRecordar(limite);

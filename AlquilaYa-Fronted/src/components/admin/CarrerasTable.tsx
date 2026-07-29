@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useConfirm } from '@/hooks/use-confirm';
+import { notify } from '@/lib/notify';
 
 type DialogState =
   | { mode: 'closed' }
@@ -31,6 +33,7 @@ export const CarrerasTable: React.FC = () => {
   const [form, setForm] = useState<CarreraInput>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     try {
@@ -91,11 +94,9 @@ export const CarrerasTable: React.FC = () => {
       }
       await load();
       closeDialog();
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'No se pudo guardar la carrera';
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg = e?.response?.data?.message || e?.message || 'No se pudo guardar la carrera';
       setError(msg);
     } finally {
       setSaving(false);
@@ -111,18 +112,27 @@ export const CarrerasTable: React.FC = () => {
       });
       await load();
     } catch (err) {
-      alert('No se pudo cambiar el estado de la carrera');
+      notify.error(err, 'No se pudo cambiar el estado de la carrera');
     }
   };
 
-  const handleDelete = async (carrera: Carrera) => {
-    if (!window.confirm(`¿Eliminar permanentemente "${carrera.nombre}"?`)) return;
-    try {
-      await carreraService.eliminar(carrera.id);
-      await load();
-    } catch (err) {
-      alert('No se pudo eliminar la carrera. Asegúrate de que no esté en uso.');
-    }
+  const handleDelete = (carrera: Carrera) => {
+    confirm({
+      title: `¿Eliminar "${carrera.nombre}"?`,
+      description: 'Esta acción no se puede deshacer.',
+      tone: 'danger',
+      confirmLabel: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await carreraService.eliminar(carrera.id);
+          notify.success('Carrera eliminada correctamente');
+          await load();
+        } catch (err) {
+          notify.error(err, 'No se pudo eliminar la carrera. Asegúrate de que no esté en uso.');
+          return false;
+        }
+      },
+    });
   };
 
   const filtered = carreras.filter((c) =>
@@ -203,8 +213,9 @@ export const CarrerasTable: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleActivo(carrera)}
-                        className="text-slate-300 hover:text-primary p-2 h-auto rounded-md"
+                        className="text-slate-300 hover:text-primary p-2 h-auto min-h-11 min-w-11 rounded-md"
                         title={carrera.activo ? 'Desactivar' : 'Activar'}
+                        aria-label={`${carrera.activo ? 'Desactivar' : 'Activar'} ${carrera.nombre}`}
                       >
                         <span className="material-symbols-outlined text-lg">
                           {carrera.activo ? 'toggle_on' : 'toggle_off'}
@@ -214,8 +225,9 @@ export const CarrerasTable: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => openEdit(carrera)}
-                        className="text-slate-300 hover:text-primary p-2 h-auto rounded-md"
+                        className="text-slate-300 hover:text-primary p-2 h-auto min-h-11 min-w-11 rounded-md"
                         title="Editar"
+                        aria-label={`Editar ${carrera.nombre}`}
                       >
                         <span className="material-symbols-outlined text-lg">edit</span>
                       </Button>
@@ -223,8 +235,9 @@ export const CarrerasTable: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(carrera)}
-                        className="text-slate-300 hover:text-red-600 p-2 h-auto rounded-md"
+                        className="text-slate-300 hover:text-red-600 p-2 h-auto min-h-11 min-w-11 rounded-md"
                         title="Eliminar"
+                        aria-label={`Eliminar ${carrera.nombre}`}
                       >
                         <span className="material-symbols-outlined text-lg">delete</span>
                       </Button>
@@ -252,6 +265,8 @@ export const CarrerasTable: React.FC = () => {
                 value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
                 placeholder="Ingeniería de Sistemas"
+                aria-describedby={error ? 'carrera-form-error' : undefined}
+                aria-invalid={!!error}
                 required
                 maxLength={150}
               />
@@ -280,7 +295,9 @@ export const CarrerasTable: React.FC = () => {
               />
             </div>
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              // Ítem 406: `role="alert"` lo anuncia apenas se monta; `id` lo linkea desde
+              // `aria-describedby` en el input que valida (nombre de la carrera).
+              <p id="carrera-form-error" role="alert" className="text-sm text-red-600">{error}</p>
             )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={closeDialog} disabled={saving}>
@@ -293,6 +310,7 @@ export const CarrerasTable: React.FC = () => {
           </form>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </>
   );
 };

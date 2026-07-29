@@ -33,6 +33,7 @@ public class PublicacionService {
     private final Validator validator;
     private final ZonaResolver zonaResolver;
     private final PropiedadService propiedadService;
+    private final KafkaProducerService kafkaProducerService;
 
     /**
      * Valida que un borrador sea publicable (campos obligatorios + distribución por tipo +
@@ -71,7 +72,11 @@ public class PublicacionService {
         validarPublicable(p);
         p.setEstado(EstadoPropiedad.PENDIENTE);
         p.setFechaPublicacionProgramada(null);
-        return propiedadRepository.save(p);
+        Propiedad guardada = propiedadRepository.save(p);
+        // Notif admin (gap #2/3): alerta a todos los admins activos que hay una propiedad
+        // nueva pendiente de revisión.
+        kafkaProducerService.enviarPropiedadPendiente(guardada.getId(), guardada.getTitulo(), guardada.getArrendadorId());
+        return guardada;
     }
 
     private void validarDistribucionPorTipo(Propiedad p) {

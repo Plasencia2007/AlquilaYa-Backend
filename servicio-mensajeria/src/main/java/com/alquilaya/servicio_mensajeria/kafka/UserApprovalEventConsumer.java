@@ -20,8 +20,14 @@ import java.util.Map;
  * usuario cuando sus documentos son aprobados o rechazados por el admin.
  *
  * Soporta dos formatos durante la transición (Olas 2-3):
- *  - Envelope nuevo: {@code eventType = "USER_APROBADO" | "USER_RECHAZADO"}.
+ *  - Envelope nuevo: {@code eventType = "USER_APROBADO" | "USER_RECHAZADO" | "DOCUMENTO_SUBIDO"}.
  *  - Legacy: JSON con {@code tipo: "APROBACION" | "RECHAZO"}.
+ *
+ * Ítem 378 (PoC de notificaciones admin): {@code DOCUMENTO_SUBIDO} es el único evento de
+ * este consumer que NO notifica al usuario dueño del recurso, sino a TODOS los admins
+ * activos (no existe aún el concepto de "notificar por rol" en {@code NotificacionService},
+ * así que se resuelve la lista de ids vía {@link AdminNotificador}, que a su vez llama a
+ * {@code UsuariosClient#obtenerAdminsActivos()}).
  */
 @Slf4j
 @Component
@@ -33,6 +39,7 @@ public class UserApprovalEventConsumer {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final NotificacionService notificacionService;
     private final IdempotencyService idempotencyService;
+    private final AdminNotificador adminNotificador;
 
     @KafkaListener(topics = "user-approval-events", groupId = "mensajeria-notif-group")
     @Transactional
@@ -99,8 +106,38 @@ public class UserApprovalEventConsumer {
                     "Documentos rechazados",
                     opt(payload.get("motivo"), "Necesitamos que vuelvas a subir tus documentos."),
                     perfilUrl, datos, true);
+            // Ítem 378 (PoC): a diferencia de los dos casos de arriba, este NO notifica al
+            // usuario dueño del documento (sigue PENDIENTE, nada nuevo que decirle) sino a
+            // todos los admins activos.
+            case "DOCUMENTO_SUBIDO" -> notificarAdmins(payload);
             default -> log.debug("[NOTIF] user-approval-events eventType desconocido: {}", eventType);
         }
+    }
+
+    /**
+     * Ítem 378: notifica a TODOS los admins activos (resueltos vía Feign) en vez de al
+     * usuario dueño del documento — invocado desde el caso {@code DOCUMENTO_SUBIDO} de
+     * {@link #manejarEnvelope}. La resolución de admins + fan-out vive en
+     * {@link AdminNotificador}, compartido con {@code PropiedadEventConsumer}.
+     */
+    private void notificarAdmins(Map<String, Object> payload) {
+        Long documentoId = toLong(payload.get("documentoId"));
+        String nombre = (String) payload.get("nombre");
+        String apellido = (String) payload.get("apellido");
+        String tipoDocumento = (String) payload.get("tipoDocumento");
+        String nombreCompleto = ((nombre != null ? nombre : "") + " " + (apellido != null ? apellido : "")).trim();
+
+        Map<String, Object> datos = new HashMap<>();
+        datos.put("documentoId", documentoId);
+        if (tipoDocumento != null) datos.put("tipoDocumento", tipoDocumento);
+
+        String mensaje = (nombreCompleto.isBlank() ? "Un usuario" : nombreCompleto) + " subió un documento"
+                + (tipoDocumento != null ? " (" + tipoDocumento.replace('_', ' ') + ")" : "")
+                + " pendiente de verificación.";
+
+        adminNotificador.notificarAdmins("DOCUMENTO_SUBIDO", TipoNotificacion.DOCUMENTO_NUEVO,
+                "Nuevo documento para revisar", mensaje,
+                "/admin-master/validations/providers?tab=documentos", datos);
     }
 
     /**

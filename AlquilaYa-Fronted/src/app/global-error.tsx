@@ -22,7 +22,7 @@ export default function GlobalError({ error, unstable_retry }: GlobalErrorProps)
       <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
         <ErrorState
           title="Algo salió muy mal"
-          description="Ocurrió un error grave en la aplicación. Recargá la página."
+          description="Ocurrió un error grave en la aplicación. Recarga la página."
           retryLabel="Reintentar"
           onRetry={unstable_retry}
         />

@@ -26,6 +26,12 @@ public class PropiedadPublicoDTO {
     private BigDecimal precio;
     /** Precio antes de la última rebaja (para tachado en UI). Null si no hubo rebaja. */
     private BigDecimal precioAnterior;
+    /**
+     * Depósito de garantía (S/), adicional a la renta. Null si la propiedad no lo tiene
+     * cargado. Junto con {@code precio} y los {@code servicios} en estado APARTE (con su
+     * {@code monto}) alimenta el "Costo mensual total estimado" de la ficha pública.
+     */
+    private BigDecimal deposito;
     /** Precios por temporada/ciclo (solo se cargan en la ficha, no en el listado). */
     private List<PrecioTemporadaDTO> temporadas;
     /** Enlace de video (YouTube/Vimeo/.mp4). Null si no tiene. */

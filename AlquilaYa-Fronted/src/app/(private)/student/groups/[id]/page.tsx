@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Check, Copy, Crown, Trash2, UserPlus } from 'lucide-react';
+import { Check, Crown, MessageCircle, Share2, Trash2, UserPlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/ui/copy-button';
 import { Progress } from '@/components/ui/progress';
 import { CenteredSpinner } from '@/components/shared/centered-spinner';
+import { ErrorState } from '@/components/shared/error-state';
 import { PageBreadcrumb } from '@/components/shared/page-breadcrumb';
 import { formatPEN } from '@/lib/money';
 import { cn } from '@/lib/cn';
@@ -16,6 +18,9 @@ import { RoommateCard } from '@/components/student/roommate-card';
 import { grupoService, type CuotaPago, type GrupoRoommate } from '@/services/grupo-service';
 import { pagoService } from '@/services/pago-service';
 import { roommateService, type PerfilConvivencia } from '@/services/roommate-service';
+
+/** Regex de link de grupo de WhatsApp (mismo patrón que valida el backend, ítem 221). */
+const LINK_WHATSAPP_RE = /^https:\/\/chat\.whatsapp\.com\/.+$/;
 
 export default function GrupoDetallePage() {
   const params = useParams<{ id: string }>();
@@ -29,18 +34,34 @@ export default function GrupoDetallePage() {
   const [cuotas, setCuotas] = useState<CuotaPago[]>([]);
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [cargando, setCargando] = useState(true);
+  const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-encontrado' | 'error'>('cargando');
   const [accion, setAccion] = useState(false);
-  const [copiado, setCopiado] = useState(false);
+  const [linkWhatsappInput, setLinkWhatsappInput] = useState('');
+  // true una vez que YA se cargó el grupo con éxito alguna vez: distingue el fallo inicial
+  // (pantalla en blanco, ítem 218) de un refresh en segundo plano (tras aprobar/salir/etc.),
+  // que debe seguir mostrando el toast de siempre en vez de tapar la página ya cargada.
+  const cargadoRef = useRef(false);
 
   const cargar = useCallback(async () => {
     if (!id) return;
+    let g: GrupoRoommate;
     try {
-      const [g, mi] = await Promise.all([
-        grupoService.obtener(id),
-        roommateService.miConvivencia().catch(() => null),
-      ]);
-      setGrupo(g);
+      g = await grupoService.obtener(id);
+    } catch (err) {
+      if (!cargadoRef.current) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        setEstado(status === 404 ? 'no-encontrado' : 'error');
+      } else {
+        notify.error(err, 'No se pudo actualizar el grupo.');
+      }
+      return;
+    }
+    cargadoRef.current = true;
+    setGrupo(g);
+    setLinkWhatsappInput(g.linkWhatsapp ?? '');
+    setEstado('ok');
+    try {
+      const mi = await roommateService.miConvivencia().catch(() => null);
       setMiId(mi?.estudianteId ?? null);
       const entradas = await Promise.all(
         g.miembros.map(async (m) => {
@@ -59,10 +80,13 @@ export default function GrupoDetallePage() {
       }
     } catch (err) {
       notify.error(err, 'No se pudo cargar el grupo.');
-    } finally {
-      setCargando(false);
     }
   }, [id]);
+
+  const reintentar = () => {
+    setEstado('cargando');
+    void cargar();
+  };
 
   useEffect(() => {
     void cargar();
@@ -97,10 +121,37 @@ export default function GrupoDetallePage() {
     }
   };
 
-  if (cargando) {
+  if (estado === 'cargando') {
     return <CenteredSpinner className="py-24" />;
   }
-  if (!grupo) return null;
+
+  if (estado === 'no-encontrado') {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
+        <ErrorState
+          title="Grupo no encontrado"
+          description="Es posible que el grupo ya no exista o el enlace sea incorrecto."
+          retryLabel="Volver a mis grupos"
+          onRetry={() => {
+            window.location.href = '/student/groups';
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (estado === 'error' || !grupo) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
+        <ErrorState
+          title="No pudimos cargar el grupo"
+          description="Ocurrió un problema de conexión. Inténtalo de nuevo."
+          retryLabel="Reintentar"
+          onRetry={reintentar}
+        />
+      </div>
+    );
+  }
 
   const miMembresia = grupo.miembros.find((m) => m.estudianteId === miId);
   const soyCreador = grupo.creadorEstudianteId === miId;
@@ -113,16 +164,20 @@ export default function GrupoDetallePage() {
     typeof window !== 'undefined'
       ? `${window.location.origin}/student/groups/${grupo.id}?codigo=${grupo.codigoInvitacion}`
       : '';
+  const inviteText = `Únete a mi grupo para alquilar en AlquilaYa: ${inviteUrl}`;
+  const whatsappInviteUrl = `https://wa.me/?text=${encodeURIComponent(inviteText)}`;
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const copiar = async () => {
+  const compartirInvitacion = async () => {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 1800);
+      await navigator.share({ title: 'Invitación a grupo AlquilaYa', text: inviteText, url: inviteUrl });
     } catch {
-      notify.error(null, 'No se pudo copiar el link.');
+      // usuario canceló el share nativo -> se ignora
     }
   };
+
+  const linkWhatsappValido =
+    linkWhatsappInput.trim() === '' || LINK_WHATSAPP_RE.test(linkWhatsappInput.trim());
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
@@ -276,11 +331,82 @@ export default function GrupoDetallePage() {
           <p className="mb-2 text-sm font-bold text-foreground">Invita a tus amigos</p>
           <div className="flex items-center gap-2">
             <input readOnly value={inviteUrl} className="flex-1 truncate rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs" />
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={copiar}>
-              {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
-              {copiado ? 'Copiado' : 'Copiar'}
-            </Button>
+            <CopyButton value={inviteUrl} errorMessage="No se pudo copiar el link." />
           </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a
+              href={whatsappInviteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary"
+            >
+              <MessageCircle className="size-3.5" /> WhatsApp
+            </a>
+            {canShare && (
+              <button
+                type="button"
+                onClick={compartirInvitacion}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Share2 className="size-3.5" /> Compartir
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grupo de WhatsApp para coordinar (ítem 221, alternativa de bajo costo al chat grupal:
+          servicio-mensajeria solo soporta conversaciones 1-a-1). Solo el creador lo edita; el
+          resto de miembros solo ve el botón si ya hay un link guardado. */}
+      {soyMiembro && (grupo.linkWhatsapp || soyCreador) && (
+        <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+          <p className="mb-2 text-sm font-bold text-foreground">Grupo de WhatsApp</p>
+          {grupo.linkWhatsapp && (
+            <a
+              href={grupo.linkWhatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full bg-success-light px-3 py-1.5 text-xs font-bold text-success transition-colors hover:opacity-90"
+            >
+              <MessageCircle className="size-3.5" /> Abrir grupo de WhatsApp
+            </a>
+          )}
+          {soyCreador && (
+            <>
+              <div className={cn('flex items-center gap-2', grupo.linkWhatsapp && 'mt-3')}>
+                <input
+                  value={linkWhatsappInput}
+                  onChange={(e) => setLinkWhatsappInput(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/..."
+                  className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                />
+                <Button
+                  size="sm"
+                  disabled={
+                    accion ||
+                    !linkWhatsappValido ||
+                    linkWhatsappInput.trim() === (grupo.linkWhatsapp ?? '')
+                  }
+                  onClick={() =>
+                    run(
+                      () => grupoService.actualizarWhatsapp(grupo.id, linkWhatsappInput.trim()),
+                      'Link de WhatsApp guardado',
+                    )
+                  }
+                >
+                  Guardar
+                </Button>
+              </div>
+              {!linkWhatsappValido && (
+                <p className="mt-1 text-[11px] text-destructive">
+                  El link debe empezar con https://chat.whatsapp.com/
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Crea el grupo en tu app de WhatsApp y pega aquí el link de invitación.
+              </p>
+            </>
+          )}
         </div>
       )}
 

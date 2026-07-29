@@ -1,14 +1,18 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mail } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Label } from '@/components/ui/label';
 import { SuccessScreen } from '@/components/shared/success-screen';
 import { servicioAuth } from '@/services/auth-service';
 import { useAuthModal } from '@/stores/auth-modal-store';
+import { useResendCooldown } from '@/hooks/use-resend-cooldown';
 import { notify } from '@/lib/notify';
 
 function VerifyEmailContent() {
@@ -20,23 +24,41 @@ function VerifyEmailContent() {
   const [codigo, setCodigo] = useState('');
   const [verificando, setVerificando] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
   const [exito, setExito] = useState(false);
+  // Ítem 179: si la URL trae ?token=, hay una verificación de un click en camino — arranca ya
+  // en "verificando" para no mostrar un parpadeo del formulario manual antes de que el efecto
+  // de abajo dispare la llamada real.
+  const [verificandoToken, setVerificandoToken] = useState(() => Boolean(searchParams.get('token')));
+
+  const { segundosRestantes, puedeReenviar, iniciarCooldown } = useResendCooldown(60);
+
+  // Único lugar que llama a la API del token. El useEffect de abajo SOLO invoca esta función
+  // (nunca setea estado directo en su propio cuerpo — react-hooks/set-state-in-effect).
+  const verificarConToken = useCallback(async (token: string) => {
+    setVerificandoToken(true);
+    try {
+      await servicioAuth.verificarEmailToken(token);
+      setExito(true);
+      notify.success('Correo verificado');
+    } catch (err) {
+      notify.error(err, 'El enlace de verificación es inválido o expiró. Ingresa el código manualmente.');
+    } finally {
+      setVerificandoToken(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (cooldown > 0) {
-      const t = setTimeout(() => setCooldown(cooldown - 1), 1000);
-      return () => clearTimeout(t);
-    }
-  }, [cooldown]);
+    const token = searchParams.get('token');
+    if (token) verificarConToken(token);
+  }, [searchParams, verificarConToken]);
 
   const enviarCodigo = async () => {
-    if (!correo.trim() || enviando || cooldown > 0) return;
+    if (!correo.trim() || enviando || !puedeReenviar) return;
     setEnviando(true);
     try {
       const msg = await servicioAuth.reenviarVerificacionEmail(correo.trim());
       notify.success('Código enviado', msg);
-      setCooldown(60);
+      iniciarCooldown();
     } catch (err) {
       notify.error(err, 'No se pudo enviar el código');
     } finally {
@@ -75,6 +97,18 @@ function VerifyEmailContent() {
     );
   }
 
+  // Ítem 179: mientras el enlace de un click está en vuelo no se muestra el formulario manual,
+  // solo un estado de carga — evita que el usuario alcance a tipear un código mientras el
+  // backend ya está validando el token.
+  if (verificandoToken) {
+    return (
+      <main className="flex min-h-[80vh] flex-col items-center justify-center gap-4 p-4 text-center animate-in fade-in duration-500">
+        <Loader2 className="size-10 animate-spin text-primary" aria-hidden />
+        <p className="text-sm text-muted-foreground">Verificando tu correo…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-[80vh] items-center justify-center p-4 animate-in fade-in duration-500">
       <div className="w-full max-w-md space-y-6 rounded-3xl bg-card p-6 shadow-2xl border border-border/50 md:p-8">
@@ -93,30 +127,49 @@ function VerifyEmailContent() {
         </header>
 
         <div className="space-y-3">
-          <Input
-            type="email"
-            value={correo}
-            onChange={(e) => setCorreo(e.target.value)}
-            placeholder="Tu correo"
-            className="h-12 rounded-xl bg-input text-sm"
-          />
-          <Input
-            inputMode="numeric"
-            maxLength={6}
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
-            placeholder="000000"
-            autoComplete="one-time-code"
-            className="h-14 rounded-xl bg-input text-center text-2xl font-black tracking-[0.5em]"
-          />
+          <div className="space-y-1.5">
+            <Label htmlFor="correo" className="text-xs font-bold uppercase tracking-wider">
+              Correo electrónico
+            </Label>
+            <Input
+              id="correo"
+              type="email"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+              placeholder="Tu correo"
+              className="h-12 rounded-xl bg-input text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="codigo" className="text-xs font-bold uppercase tracking-wider">
+              Código de verificación
+            </Label>
+            <InputOTP
+              id="codigo"
+              maxLength={6}
+              inputMode="numeric"
+              pattern={REGEXP_ONLY_DIGITS}
+              autoComplete="one-time-code"
+              value={codigo}
+              onChange={setCodigo}
+              disabled={verificando}
+              containerClassName="justify-center"
+            >
+              <InputOTPGroup>
+                {Array.from({ length: 6 }, (_, i) => (
+                  <InputOTPSlot key={i} index={i} />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
 
           <Button
             onClick={verificar}
-            disabled={verificando}
+            loading={verificando}
             size="lg"
             className="h-12 w-full rounded-full text-sm font-bold tracking-wide shadow-lg shadow-primary/20"
           >
-            {verificando ? 'Verificando…' : 'Confirmar código'}
+            Confirmar código
           </Button>
 
           <p className="text-center text-[11px] text-muted-foreground">
@@ -124,10 +177,14 @@ function VerifyEmailContent() {
             <button
               type="button"
               onClick={enviarCodigo}
-              disabled={enviando || cooldown > 0}
+              disabled={enviando || !puedeReenviar}
               className="font-bold text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
             >
-              {enviando ? 'Enviando…' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Enviar código'}
+              {enviando
+                ? 'Enviando…'
+                : !puedeReenviar
+                  ? `Reenviar en ${segundosRestantes}s`
+                  : 'Enviar código'}
             </button>
           </p>
         </div>

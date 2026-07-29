@@ -48,6 +48,15 @@ public class GrupoRoommate {
     @Column(name = "codigo_invitacion", unique = true, nullable = false)
     private String codigoInvitacion;
 
+    /**
+     * Link de un grupo de WhatsApp (creado externamente por el creador en la app de WhatsApp),
+     * alternativa de bajo costo al chat grupal real (#221): el modelo de conversación de
+     * servicio-mensajeria es estrictamente 1-a-1, así que en vez de un chat grupal nuevo,
+     * el creador comparte aquí el link para que el resto del grupo se una y coordine ahí.
+     */
+    @Column(name = "link_whatsapp", length = 500)
+    private String linkWhatsapp;
+
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
 

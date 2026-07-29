@@ -34,7 +34,7 @@ spring:
 
 mercadopago:
   access-token: ${MP_ACCESS_TOKEN:PLACEHOLDER_SET_ENV_VAR}
-  public-key: ${MP_PUBLIC_KEY:APP_USR-8864dcdc-7880-4cfd-b41e-f5d5b09c5e41}
+  public-key: ${MP_PUBLIC_KEY:PLACEHOLDER_SET_ENV_VAR}
   webhook-secret: ${MP_WEBHOOK_SECRET:}
   webhook:
     # En producción la firma HMAC del webhook es OBLIGATORIA.
@@ -45,7 +45,7 @@ mercadopago:
     success: ${MP_BACK_URL_SUCCESS:http://localhost:3000/pago/exito}
     failure: ${MP_BACK_URL_FAILURE:http://localhost:3000/pago/fallo}
     pending: ${MP_BACK_URL_PENDING:http://localhost:3000/pago/pendiente}
-  notification-url: ${MP_NOTIFICATION_URL:https://plop-sabotage-roamer.ngrok-free.dev/api/v1/pagos/webhook}
+  notification-url: ${MP_NOTIFICATION_URL:PLACEHOLDER_SET_ENV_VAR}
 
 server:
   port: 8084

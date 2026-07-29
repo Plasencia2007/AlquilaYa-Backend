@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.config;
 
+import com.alquilaya.serviciousuarios.util.ClientIpResolver;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.FilterChain;
@@ -7,7 +8,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
@@ -40,7 +40,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             Map.entry("/api/v1/usuarios/auth/verify-otp",               limit(10, Duration.ofMinutes(1))),
             Map.entry("/api/v1/usuarios/auth/verify-email",             limit(10, Duration.ofMinutes(1))),
             Map.entry("/api/v1/usuarios/auth/forgot-password",          limit(3,  Duration.ofMinutes(5))),
-            Map.entry("/api/v1/usuarios/auth/resend-email-verification", limit(3,  Duration.ofMinutes(5)))
+            Map.entry("/api/v1/usuarios/auth/resend-email-verification", limit(3,  Duration.ofMinutes(5))),
+            // Alta de alerta de nuevas propiedades (#99/#492): público y dispara correo de
+            // confirmación → límite estricto por IP contra email-bombing (además del límite
+            // por correo en Redis dentro de SuscripcionAlertaService).
+            Map.entry("/api/v1/usuarios/alertas",                       limit(3,  Duration.ofMinutes(5))),
+            // Ingesta de telemetría de analítica CLIENTE (ítem 455): público y persiste en BD.
+            // Límite más laxo que los anteriores (no dispara correo ni es dato sensible) pero
+            // igual necesita anti-abuso: el frontend manda a lo sumo un batch cada ~10s por
+            // pestaña, así que 20/min por IP da margen a varias pestañas sin abrir la puerta a
+            // un flood que infle la tabla eventos_analytics.
+            Map.entry("/api/v1/usuarios/analytics/eventos",             limit(20, Duration.ofMinutes(1)))
     );
 
     private static Bandwidth limit(long capacity, Duration refillPeriod) {
@@ -55,13 +65,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // Clave = "path|clientIp". Buckets viven en memoria mientras la JVM corra.
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-    /**
-     * Nº de proxies de confianza delante de este servicio que anexan a X-Forwarded-For (S8).
-     * Default 0 → usa la IP del socket (no falsificable). En prod usuarios sólo es accesible
-     * vía el gateway (red interna), así que el vector de spoofing externo real es el gateway.
-     */
-    @Value("${rate-limit.trusted-hops:0}")
-    private int trustedProxyHops;
+    // S8: misma resolución de IP (respeta rate-limit.trusted-hops) que usa AuthController
+    // para registrar LoginAttempt/alertas — un único lugar evita que se desincronicen.
+    private final ClientIpResolver clientIpResolver;
+
+    public RateLimitFilter(ClientIpResolver clientIpResolver) {
+        this.clientIpResolver = clientIpResolver;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -84,7 +94,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String clientIp = resolveClientIp(request);
+        String clientIp = clientIpResolver.resolve(request);
         String key = matched + "|" + clientIp;
         Bucket bucket = buckets.computeIfAbsent(key, k ->
                 Bucket.builder().addLimit(LIMITS.get(matched)).build());
@@ -99,25 +109,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.getWriter().write(
                     "{\"error\":\"Demasiadas solicitudes. Intenta nuevamente en un minuto.\"}");
         }
-    }
-
-    // S8: resistente a X-Forwarded-For falsificado. Cuenta desde la DERECHA saltando los
-    // proxies de confianza; las entradas falsas del atacante quedan a la izquierda y nunca se
-    // eligen. Cadena corta (dev / spoof directo) → cae a getRemoteAddr() (IP del socket).
-    private String resolveClientIp(HttpServletRequest request) {
-        if (trustedProxyHops > 0) {
-            String xff = request.getHeader("X-Forwarded-For");
-            if (xff != null && !xff.isBlank()) {
-                String[] parts = xff.split(",");
-                int idx = parts.length - 1 - trustedProxyHops;
-                if (idx >= 0) {
-                    String ip = parts[idx].trim();
-                    if (!ip.isBlank()) {
-                        return ip;
-                    }
-                }
-            }
-        }
-        return request.getRemoteAddr();
     }
 }

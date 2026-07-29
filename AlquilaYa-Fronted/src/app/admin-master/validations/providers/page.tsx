@@ -1,31 +1,67 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import Zoom from 'react-medium-image-zoom';
+import 'react-medium-image-zoom/dist/styles.css';
 
 import {
   ShieldAlert, CheckCircle, XCircle, ExternalLink, X,
-  Star, Home, Calendar, AlertTriangle, Trash2, Shield,
-  Clock, ChevronRight,
+  Star, Calendar, AlertTriangle, Trash2, Shield,
+  Clock, ChevronRight, FileText, ZoomIn,
 } from 'lucide-react';
 import { adminModerationService, DocumentoAdmin } from '@/services/admin-moderation-service';
 import { usuarioMasterService, UsuarioMaster } from '@/services/admin-user-service';
+import { auditLogService, AuditLogEntry } from '@/services/audit-log-service';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { esImagenExterna } from '@/lib/img';
+import { useHasMounted } from '@/hooks/use-has-mounted';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useTabParam } from '@/hooks/use-tab-param';
+import { UserDirectoryTable } from '@/components/admin/UserDirectoryTable';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+// `react-pdf`/`pdfjs-dist` usan `canvas` (no existe en Node) → solo cliente (ssr:false),
+// mismo patrón que `components/student/contract-actions.tsx` (worker pineado por CDN a la
+// versión exacta que trae `pdfjs-dist`, recomendado por el propio `react-pdf`).
+const PdfDocument = dynamic(
+  () =>
+    import('react-pdf').then((mod) => {
+      mod.pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${mod.pdfjs.version}/build/pdf.worker.min.mjs`;
+      return mod.Document;
+    }),
+  { ssr: false, loading: () => <Skeleton className="h-72 w-full rounded-lg" /> },
+);
+const PdfPage = dynamic(() => import('react-pdf').then((mod) => mod.Page), { ssr: false });
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
-type Tab = 'gestion' | 'documentos' | 'historial';
+type Tab = 'directorio' | 'gestion' | 'documentos' | 'historial';
 type EstadoFiltro = 'ALL' | 'ACTIVE' | 'PENDING' | 'BANNED';
 
-interface ToastItem { id: number; message: string; type: 'success' | 'error'; }
-interface HistorialEntry {
-  id: number;
-  accion: string;
-  proveedor: string;
-  timestamp: string;
+const TAB_VALUES: readonly Tab[] = ['directorio', 'gestion', 'documentos', 'historial'];
+
+/** ítem 364: acciones de auditoría relevantes para ESTE módulo (arrendadores). `AuditLog` no
+ *  guarda el rol del usuario afectado, así que se filtra client-side por las acciones que las
+ *  tabs Gestión/Documentos de esta pantalla efectivamente disparan (ver `UsuarioController` y
+ *  `DocumentoController` en servicio-usuarios). */
+const ACCIONES_PROVEEDORES = ['VERIFICAR_DOCUMENTO', 'CAMBIO_ESTADO_USUARIO', 'ELIMINAR_USUARIO'];
+
+/** Traducción legible de `AuditLog.accion` para el tab Historial. */
+const ACCION_LABEL: Record<string, string> = {
+  VERIFICAR_DOCUMENTO: 'Verificó un documento',
+  CAMBIO_ESTADO_USUARIO: 'Cambió el estado de una cuenta',
+  ELIMINAR_USUARIO: 'Eliminó una cuenta',
+};
+
+/** true si la URL apunta a un PDF (por extensión o querystring, p.ej. Cloudinary `.../doc.pdf`). */
+function esPdf(url: string): boolean {
+  return /\.pdf($|\?)/i.test(url);
 }
+
+interface ToastItem { id: number; message: string; type: 'success' | 'error'; }
 interface ConfirmActionState {
   type: 'ban' | 'activate' | 'delete';
   user: UsuarioMaster;
@@ -77,23 +113,30 @@ function ConfirmModal({
   variant: 'danger' | 'warning';
   onConfirm: () => void; onCancel: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  // Ítem 396: focus trap básico — este modal es un `createPortal` a mano, no un
+  // `Dialog` de Radix, así que no atrapa foco por su cuenta.
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400"
+      >
         <div className={cn(
           'w-12 h-12 rounded-2xl flex items-center justify-center mb-4',
           variant === 'danger' ? 'bg-red-50' : 'bg-orange-50'
         )}>
           <AlertTriangle size={22} className={variant === 'danger' ? 'text-red-500' : 'text-orange-500'} />
         </div>
-        <h3 className="text-base font-black text-slate-900 tracking-tight mb-1">{title}</h3>
+        <h3 id="confirm-modal-title" className="text-base font-black text-slate-900 tracking-tight mb-1">{title}</h3>
         <p className="text-sm text-slate-500 mb-6 leading-relaxed">{message}</p>
         <div className="flex gap-3">
           <button
@@ -121,20 +164,25 @@ function ConfirmModal({
 // ─── Reject modal ──────────────────────────────────────────────────────────────
 function RejectModal({ onConfirm, onCancel }: { onConfirm: (motivo: string) => void; onCancel: () => void }) {
   const [motivo, setMotivo] = useState('');
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-400"
+      >
         <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
           <XCircle size={22} className="text-red-500" />
         </div>
-        <h3 className="text-base font-black text-slate-900 tracking-tight mb-1">Rechazar documento</h3>
+        <h3 id="reject-modal-title" className="text-base font-black text-slate-900 tracking-tight mb-1">Rechazar documento</h3>
         <p className="text-sm text-slate-500 mb-4">Indica el motivo para que el usuario pueda corregirlo.</p>
         <textarea
           value={motivo}
@@ -202,12 +250,16 @@ function Avatar({ user, size = 'sm' }: { user: UsuarioMaster; size?: 'sm' | 'lg'
   const cls = size === 'lg'
     ? 'w-20 h-20 rounded-full border-2 border-white/10 shadow-xl text-2xl font-black'
     : 'w-9 h-9 rounded-xl text-[11px] font-black';
+  const px = size === 'lg' ? 80 : 36;
 
   if (user.fotoUrl) {
     return (
-      <img
+      <Image
         src={user.fotoUrl}
         alt={`${user.nombre} ${user.apellido}`}
+        width={px}
+        height={px}
+        unoptimized={esImagenExterna(user.fotoUrl)}
         className={cn(cls, 'object-cover')}
       />
     );
@@ -237,16 +289,16 @@ function ProveedorDrawer({
   onDelete: (user: UsuarioMaster) => void;
 }) {
   const [propCount, setPropCount] = useState<PropiedadCount | null>(null);
-  const [loadingProps, setLoadingProps] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Arranca en `true` cuando ya sabemos que el efecto va a lanzar el fetch (evita
+  // tener que poner setLoadingProps(true) síncrono dentro del efecto, que viola
+  // react-hooks/set-state-in-effect). El drawer se remonta por `key={user.id}`
+  // en el padre, así este estado inicial siempre corresponde al `user` correcto.
+  const [loadingProps, setLoadingProps] = useState(() => !!user.perfilArrendadorId);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   useEffect(() => {
     if (!user.perfilArrendadorId) return;
-    setLoadingProps(true);
     api.get<{ id: number; estado: string }[]>(`propiedades/arrendador/${user.perfilArrendadorId}`)
       .then(res => {
         const all = Array.isArray(res.data) ? res.data : [];
@@ -269,11 +321,18 @@ function ProveedorDrawer({
   return createPortal(
     <>
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-in fade-in slide-in-from-bottom-2 duration-400" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-[380px] bg-[#0f172a] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-in fade-in slide-in-from-right duration-300 overflow-y-auto">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="proveedor-drawer-title"
+        tabIndex={-1}
+        className="fixed right-0 top-0 h-full w-[380px] bg-[#0f172a] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-in fade-in slide-in-from-right duration-300 overflow-y-auto"
+      >
         {/* Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
-          <h2 className="text-white font-black tracking-tight text-sm">Detalle del proveedor</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/50 hover:text-white transition-all">
+          <h2 id="proveedor-drawer-title" className="text-white font-black tracking-tight text-sm">Detalle del proveedor</h2>
+          <button onClick={onClose} aria-label="Cerrar detalle del proveedor" className="w-11 h-11 rounded-lg bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/50 hover:text-white transition-all">
             <X size={15} />
           </button>
         </div>
@@ -409,7 +468,7 @@ function ProveedorDrawer({
 }
 
 // ─── Tab Gestión ──────────────────────────────────────────────────────────────
-function TabGestion({ onHistorial }: { onHistorial: (entry: Omit<HistorialEntry, 'id'>) => void }) {
+function TabGestion() {
   const [users, setUsers] = useState<UsuarioMaster[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -442,15 +501,12 @@ function TabGestion({ onHistorial }: { onHistorial: (entry: Omit<HistorialEntry,
       if (type === 'ban') {
         await usuarioMasterService.banearUsuario(user.id);
         addToast(`${nombre} fue baneado`, 'success');
-        onHistorial({ accion: `Baneó a ${nombre}`, proveedor: nombre, timestamp: new Date().toISOString() });
       } else if (type === 'activate') {
         await usuarioMasterService.activarUsuario(user.id);
         addToast(`Acceso restaurado a ${nombre}`, 'success');
-        onHistorial({ accion: `Restauró acceso a ${nombre}`, proveedor: nombre, timestamp: new Date().toISOString() });
       } else if (type === 'delete') {
         await usuarioMasterService.eliminarUsuario(user.id);
         addToast(`${nombre} fue eliminado`, 'success');
-        onHistorial({ accion: `Eliminó la cuenta de ${nombre}`, proveedor: nombre, timestamp: new Date().toISOString() });
       }
       cargar();
     } catch {
@@ -638,6 +694,7 @@ function TabGestion({ onHistorial }: { onHistorial: (entry: Omit<HistorialEntry,
 
       {selectedUser && (
         <ProveedorDrawer
+          key={selectedUser.id}
           user={selectedUser}
           onClose={() => setSelectedUser(null)}
           onBan={user => { setSelectedUser(null); setConfirmAction({ type: 'ban', user }); }}
@@ -649,12 +706,123 @@ function TabGestion({ onHistorial }: { onHistorial: (entry: Omit<HistorialEntry,
   );
 }
 
+// ─── Preview de documento KYC (ítem 388) ───────────────────────────────────────
+/**
+ * Lightbox del documento subido, lado a lado con los datos declarados por el usuario para
+ * que el admin pueda compararlos visualmente antes de aprobar/rechazar. Imágenes usan zoom
+ * (`react-medium-image-zoom`); PDFs se paginan con `react-pdf` (mismo patrón que
+ * `components/student/contract-actions.tsx`).
+ */
+function DocumentoPreviewModal({ doc, onClose }: { doc: DocumentoAdmin; onClose: () => void }) {
+  const mounted = useHasMounted();
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const pdf = doc.urlDocumento ? esPdf(doc.urlDocumento) : false;
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Documento: ${doc.tipoDocumento} de ${doc.nombreUsuario}`}
+        tabIndex={-1}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in fade-in slide-in-from-bottom-2 duration-300"
+      >
+        {/* Documento */}
+        <div className="flex-1 min-w-0 bg-slate-50 overflow-auto flex items-center justify-center p-4 md:p-6">
+          {!doc.urlDocumento ? (
+            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">Sin archivo</span>
+          ) : pdf ? (
+            <PdfDocument
+              file={doc.urlDocumento}
+              loading={<Skeleton className="h-72 w-full rounded-lg" />}
+              error={<p className="p-6 text-center text-sm text-red-500">No se pudo mostrar el PDF.</p>}
+              onLoadSuccess={(pdfDoc) => setNumPages(pdfDoc.numPages)}
+            >
+              {Array.from({ length: numPages ?? 0 }, (_, i) => (
+                <PdfPage
+                  key={i + 1}
+                  pageNumber={i + 1}
+                  width={520}
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                  className="mb-3 shadow last:mb-0"
+                />
+              ))}
+            </PdfDocument>
+          ) : (
+            <Zoom>
+              {/* eslint-disable-next-line @next/next/no-img-element -- react-medium-image-zoom clona un <img> nativo */}
+              <img
+                src={doc.urlDocumento}
+                alt={`${doc.tipoDocumento} de ${doc.nombreUsuario}`}
+                className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain"
+              />
+            </Zoom>
+          )}
+        </div>
+
+        {/* Datos declarados por el usuario, para comparar contra el documento */}
+        <div className="flex w-full shrink-0 flex-col border-t border-slate-200 p-6 md:w-72 md:border-l md:border-t-0">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="text-sm font-black tracking-tight text-slate-900">Datos declarados</h3>
+            <button
+              onClick={onClose}
+              aria-label="Cerrar visor de documento"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-all hover:bg-slate-200"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <dl className="flex-1 space-y-4 text-sm">
+            <div>
+              <dt className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre</dt>
+              <dd className="mt-0.5 font-bold text-slate-800">{doc.nombreUsuario} {doc.apellidoUsuario}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-black uppercase tracking-widest text-slate-400">Correo</dt>
+              <dd className="mt-0.5 break-all font-bold text-slate-800">{doc.correoUsuario}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo de documento</dt>
+              <dd className="mt-0.5 font-bold text-slate-800">{doc.tipoDocumento.replace(/_/g, ' ')}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviado</dt>
+              <dd className="mt-0.5 font-bold text-slate-800">
+                {doc.fechaSubida
+                  ? new Date(doc.fechaSubida).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '---'}
+              </dd>
+            </div>
+          </dl>
+          {doc.urlDocumento && (
+            <a
+              href={doc.urlDocumento}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-slate-500 transition-colors hover:text-slate-800"
+            >
+              <ExternalLink size={12} /> Abrir original en pestaña nueva
+            </a>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── Tab Documentos ───────────────────────────────────────────────────────────
-function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEntry, 'id'>) => void }) {
+function TabDocumentos() {
   const [documentos, setDocumentos] = useState<DocumentoAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
   const [verificandoId, setVerificandoId] = useState<number | null>(null);
   const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentoAdmin | null>(null);
   const { toasts, addToast, removeToast } = useToasts();
 
   const cargar = async () => {
@@ -680,10 +848,8 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
       setDocumentos(prev => prev.filter(d => d.id !== id));
       if (estado === 'APROBADO') {
         addToast(`Documento de ${nombreUsuario} aprobado`, 'success');
-        onHistorial({ accion: `Aprobó documento de ${nombreUsuario}`, proveedor: nombreUsuario, timestamp: new Date().toISOString() });
       } else {
         addToast(`Documento de ${nombreUsuario} rechazado`, 'success');
-        onHistorial({ accion: `Rechazó documento de ${nombreUsuario}: "${comentario}"`, proveedor: nombreUsuario, timestamp: new Date().toISOString() });
       }
     } catch {
       addToast('Error al verificar el documento', 'error');
@@ -708,6 +874,10 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
           onConfirm={motivo => handleVerify(rejectTargetId, 'RECHAZADO', motivo)}
           onCancel={() => setRejectTargetId(null)}
         />
+      )}
+
+      {previewDoc && (
+        <DocumentoPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
       )}
 
       {documentos.length === 0 ? (
@@ -737,25 +907,34 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
                 <h3 className="text-slate-900 font-black truncate">{doc.nombreUsuario} {doc.apellidoUsuario}</h3>
                 <p className="text-slate-400 text-xs mb-4">{doc.correoUsuario}</p>
 
-                {/* Previsualización del documento (clic para ampliar). */}
+                {/* Previsualización del documento (clic abre el visor con zoom/PDF, ítem 388). */}
                 {doc.urlDocumento ? (
-                  <a
-                    href={doc.urlDocumento}
-                    target="_blank" rel="noopener noreferrer"
-                    className="group/img relative block mb-4 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-[16/10]"
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc(doc)}
+                    className="group/img relative mb-4 block aspect-[16/10] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
                   >
-                    <img
-                      src={doc.urlDocumento}
-                      alt={`${doc.tipoDocumento} de ${doc.nombreUsuario}`}
-                      loading="lazy"
-                      className="w-full h-full object-contain transition-transform group-hover/img:scale-105"
-                    />
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/20 transition-all">
-                      <span className="opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded-md">
-                        <ExternalLink size={11} /> Ampliar
+                    {esPdf(doc.urlDocumento) ? (
+                      <span className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText size={32} className="text-slate-300" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Documento PDF</span>
+                      </span>
+                    ) : (
+                      <Image
+                        src={doc.urlDocumento}
+                        alt={`${doc.tipoDocumento} de ${doc.nombreUsuario}`}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 400px"
+                        unoptimized={esImagenExterna(doc.urlDocumento)}
+                        className="object-contain transition-transform group-hover/img:scale-105"
+                      />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all group-hover/img:bg-black/20">
+                      <span className="flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover/img:opacity-100">
+                        <ZoomIn size={11} /> Ver documento
                       </span>
                     </span>
-                  </a>
+                  </button>
                 ) : (
                   <div className="mb-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 aspect-[16/10] flex items-center justify-center">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Sin imagen</span>
@@ -774,13 +953,13 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
                 </div>
                 <div className="mt-5 flex flex-col gap-2">
                   {doc.urlDocumento && (
-                    <a
-                      href={doc.urlDocumento}
-                      target="_blank" rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc(doc)}
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl hover:bg-black transition-all"
                     >
-                      <ExternalLink size={13} /> Ver documento original
-                    </a>
+                      <ZoomIn size={13} /> Ver documento
+                    </button>
                   )}
                   <div className="flex gap-2">
                     <button
@@ -809,7 +988,69 @@ function TabDocumentos({ onHistorial }: { onHistorial: (entry: Omit<HistorialEnt
 }
 
 // ─── Tab Historial ─────────────────────────────────────────────────────────────
-function TabHistorial({ entries }: { entries: HistorialEntry[] }) {
+/**
+ * Ítem 364: historial persistente — reemplaza el estado en memoria (que se perdía al
+ * recargar) por un fetch paginado a `AuditLogController` (el mismo endpoint que consume
+ * system/audit para la vista general, ítem 365). `AuditLog` no guarda el rol del usuario
+ * afectado, así que se filtra client-side a las acciones que ESTE módulo dispara sobre
+ * arrendadores (ver `ACCIONES_PROVEEDORES`) en vez de un filtro server-side por entidad.
+ */
+function TabHistorial() {
+  const [entries, setEntries] = useState<AuditLogEntry[]>([]);
+  const [page, setPage] = useState(0);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [error, setError] = useState(false);
+
+  const cargarPagina = useCallback(async (pagina: number) => {
+    const data = await auditLogService.buscar({ page: pagina, size: 50 });
+    setHayMas(pagina < data.totalPages - 1);
+    return data.content.filter(e => ACCIONES_PROVEEDORES.includes(e.accion));
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(false);
+    cargarPagina(0)
+      .then(filtradas => {
+        if (cancelado) return;
+        setEntries(filtradas);
+        setPage(0);
+      })
+      .catch(() => { if (!cancelado) setError(true); })
+      .finally(() => { if (!cancelado) setCargando(false); });
+    return () => { cancelado = true; };
+  }, [cargarPagina]);
+
+  const cargarMas = async () => {
+    setCargandoMas(true);
+    try {
+      const siguiente = page + 1;
+      const filtradas = await cargarPagina(siguiente);
+      setEntries(prev => [...prev, ...filtradas]);
+      setPage(siguiente);
+    } catch {
+      // Silencioso: el botón sigue disponible para reintentar.
+    } finally {
+      setCargandoMas(false);
+    }
+  };
+
+  if (cargando) return (
+    <div className="py-20 text-center">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 animate-pulse">Cargando historial...</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="py-24 text-center bg-white border border-dashed border-red-200 rounded-[2rem]">
+      <AlertTriangle size={32} className="mx-auto text-red-300 mb-4" />
+      <p className="text-slate-500 font-bold text-sm">No se pudo cargar el historial. Intenta recargar la página.</p>
+    </div>
+  );
+
   if (entries.length === 0) return (
     <div className="py-24 text-center bg-white border border-dashed border-slate-200 rounded-[2rem]">
       <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-5 mx-auto">
@@ -817,54 +1058,72 @@ function TabHistorial({ entries }: { entries: HistorialEntry[] }) {
       </div>
       <h2 className="text-xl font-black text-slate-700 tracking-tighter mb-2">Sin actividad aún</h2>
       <p className="text-slate-400 font-medium max-w-sm mx-auto text-sm">
-        Las acciones que realices en esta sesión (baneos, aprobaciones, rechazos) aparecerán aquí.
+        Las acciones sobre arrendadores (baneos, altas, bajas, aprobación/rechazo de
+        documentos) quedan registradas aquí de forma permanente.
       </p>
     </div>
   );
 
   return (
-    <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
-      <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/40">
-        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{entries.length} acción{entries.length !== 1 ? 'es' : ''} en esta sesión</p>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {[...entries].reverse().map(entry => (
-          <div key={entry.id} className="px-6 py-4 flex items-start gap-4 hover:bg-slate-50/60 transition-colors">
-            <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
-              <ChevronRight size={14} className="text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-800 leading-snug">{entry.accion}</p>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {new Date(entry.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-                <span className="text-[10px] text-slate-300">·</span>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {new Date(entry.timestamp).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}
-                </span>
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/40">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            {entries.length} acción{entries.length !== 1 ? 'es' : ''} registrada{entries.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {entries.map(entry => (
+            <div key={entry.id} className="px-6 py-4 flex items-start gap-4 hover:bg-slate-50/60 transition-colors">
+              <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ChevronRight size={14} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 leading-snug">
+                  {ACCION_LABEL[entry.accion] ?? entry.accion}
+                </p>
+                {entry.detalle && (
+                  <p className="text-xs text-slate-500 mt-0.5 break-words">{entry.detalle}</p>
+                )}
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  {entry.actorCorreo && (
+                    <span className="text-[10px] text-slate-400 font-medium">{entry.actorCorreo}</span>
+                  )}
+                  <span className="text-[10px] text-slate-300">·</span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {new Date(entry.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
+                    {new Date(entry.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+      {hayMas && (
+        <div className="text-center">
+          <button
+            onClick={cargarMas}
+            disabled={cargandoMas}
+            className="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-black hover:bg-slate-50 transition-all disabled:opacity-40"
+          >
+            {cargandoMas ? 'Cargando...' : 'Cargar más'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Página principal ─────────────────────────────────────────────────────────
-export default function AdminProveedoresPage() {
-  const [tab, setTab] = useState<Tab>('gestion');
-  const [historial, setHistorial] = useState<HistorialEntry[]>([]);
+function AdminProveedoresContent() {
+  const [tab, setTab] = useTabParam({ values: TAB_VALUES, defaultValue: 'gestion' });
 
-  const addHistorial = useCallback((entry: Omit<HistorialEntry, 'id'>) => {
-    setHistorial(prev => [...prev, { ...entry, id: Date.now() }]);
-  }, []);
-
-  const TABS: { id: Tab; label: string; icon: string; badge?: number }[] = [
+  const TABS: { id: Tab; label: string; icon: string }[] = [
+    { id: 'directorio', label: 'Directorio', icon: 'badge' },
     { id: 'gestion', label: 'Gestión', icon: 'manage_accounts' },
     { id: 'documentos', label: 'Documentos', icon: 'pending_actions' },
-    { id: 'historial', label: 'Historial', icon: 'history', badge: historial.length || undefined },
+    { id: 'historial', label: 'Historial', icon: 'history' },
   ];
 
   return (
@@ -889,19 +1148,29 @@ export default function AdminProveedoresPage() {
           >
             <span className="material-symbols-outlined text-[17px]">{t.icon}</span>
             {t.label}
-            {t.badge ? (
-              <span className="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center">
-                {t.badge > 9 ? '9+' : t.badge}
-              </span>
-            ) : null}
           </button>
         ))}
       </div>
 
       {/* Contenido */}
-      {tab === 'gestion' && <TabGestion onHistorial={addHistorial} />}
-      {tab === 'documentos' && <TabDocumentos onHistorial={addHistorial} />}
-      {tab === 'historial' && <TabHistorial entries={historial} />}
+      {tab === 'directorio' && (
+        <UserDirectoryTable
+          rol="ARRENDADOR"
+          title="Arrendadores — Directorio"
+          description="Consulta rápida de perfiles de arrendadores registrados en la plataforma."
+        />
+      )}
+      {tab === 'gestion' && <TabGestion />}
+      {tab === 'documentos' && <TabDocumentos />}
+      {tab === 'historial' && <TabHistorial />}
     </div>
+  );
+}
+
+export default function AdminProveedoresPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminProveedoresContent />
+    </Suspense>
   );
 }

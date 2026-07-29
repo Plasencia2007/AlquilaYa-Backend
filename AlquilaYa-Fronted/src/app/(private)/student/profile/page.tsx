@@ -1,15 +1,21 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { GraduationCap, Heart, Lock, Mail, ShieldCheck, Star, User, Users } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { GraduationCap, Lock, Mail, ShieldCheck, Star, User, Users } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { UserAvatar } from '@/components/ui/user-avatar';
+import { ReputationBadge } from '@/components/shared/reputation-badge';
 import VerificationPanel from '@/components/auth/verification-panel';
 import { EmailVerificationBanner } from '@/components/auth/email-verification-banner';
 import { useAuth } from '@/hooks/use-auth';
 import { useFavoritesStore } from '@/stores/favorites-store';
 import { useVerificationStatus } from '@/hooks/use-verification-status';
+import { useTabParam } from '@/hooks/use-tab-param';
+import { studentProfileService, type EstudianteInfo } from '@/services/student-profile-service';
+import { roommateService, type PerfilConvivencia } from '@/services/roommate-service';
 
 import { AcademicTab }    from './academic-tab';
 import { PersonalTab }    from './personal-tab';
@@ -24,13 +30,101 @@ const TABS = [
   { value: 'verificacion', label: 'Verificación',  icon: ShieldCheck },
 ] as const;
 
+export const TAB_VALUES = TABS.map((t) => t.value);
+export type TabValue = (typeof TAB_VALUES)[number];
+
+interface CompletitudPendiente {
+  label: string;
+  tab: TabValue;
+}
+
+/**
+ * Score 0-100 de completitud GLOBAL del perfil (ítem 228): combina datos
+ * personales, académicos, convivencia y verificación. Ponderación aproximada
+ * (no hace falta una fórmula exacta): personal 20, académico 20, convivencia
+ * 30, verificación 30 — se pesa más fuerte lo que más confianza genera para
+ * roommates/arrendadores (convivencia + verificación).
+ */
+function calcularCompletitudGlobal(params: {
+  info: EstudianteInfo | null;
+  perfilConvivencia: PerfilConvivencia | null;
+  verificado: boolean;
+}): { score: number; pendientes: CompletitudPendiente[] } {
+  const { info, perfilConvivencia, verificado } = params;
+  const pendientes: CompletitudPendiente[] = [];
+  let score = 0;
+
+  // Datos personales: foto + teléfono (20 pts)
+  const tieneFoto = !!info?.fotoUrl;
+  const tieneTelefono = !!info?.telefono;
+  score += (tieneFoto ? 10 : 0) + (tieneTelefono ? 10 : 0);
+  if (!tieneFoto) pendientes.push({ label: 'Sube tu foto de perfil', tab: 'personal' });
+  if (!tieneTelefono) pendientes.push({ label: 'Agrega tu teléfono', tab: 'personal' });
+
+  // Datos académicos: carrera + código + ciclo (20 pts)
+  const camposAcademicos = [info?.carrera, info?.codigoEstudiante, info?.ciclo];
+  const academicosCompletos = camposAcademicos.filter((v) => v !== undefined && v !== null && v !== '').length;
+  score += Math.round((academicosCompletos / camposAcademicos.length) * 20);
+  if (academicosCompletos < camposAcademicos.length) {
+    pendientes.push({ label: 'Completa tus datos académicos', tab: 'academico' });
+  }
+
+  // Perfil de convivencia (30 pts) — reusa su propio % de completitud
+  const completitudConvivencia = perfilConvivencia?.completitud ?? 0;
+  score += Math.round((completitudConvivencia / 100) * 30);
+  if (completitudConvivencia < 100) {
+    pendientes.push({ label: 'Completa tu perfil de convivencia', tab: 'convivencia' });
+  }
+
+  // Verificación de identidad (30 pts)
+  score += verificado ? 30 : 0;
+  if (!verificado) pendientes.push({ label: 'Verifica tu identidad', tab: 'verificacion' });
+
+  return { score: Math.min(100, Math.max(0, score)), pendientes };
+}
+
 /* ── Hero de perfil ── */
 function ProfileHero() {
   const { usuario } = useAuth();
   const { verificado } = useVerificationStatus();
   const totalFavoritos = useFavoritesStore((s) => s.ids.size);
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const inicial = usuario?.nombre.charAt(0).toUpperCase() ?? '?';
+  const perfilId = usuario?.perfilId;
+  const [info, setInfo] = useState<EstudianteInfo | null>(null);
+  const [perfilConvivencia, setPerfilConvivencia] = useState<PerfilConvivencia | null>(null);
+
+  // Trae score/nivel de reputación + datos personales/académicos ya guardados
+  // (ítems 224 y 228) — mismo endpoint que ya usa personal-tab/academic-tab.
+  useEffect(() => {
+    if (!perfilId) return;
+    studentProfileService
+      .obtenerInfo(perfilId)
+      .then((data) => setInfo(data))
+      .catch(() => {
+        /* sin datos aún: el hero degrada mostrando placeholders */
+      });
+  }, [perfilId]);
+
+  // Completitud del perfil de convivencia (ítem 228) — mismo fetch que usa
+  // el badge "Buscando roomie" en personal-tab.tsx.
+  useEffect(() => {
+    roommateService
+      .miConvivencia()
+      .then((p) => setPerfilConvivencia(p))
+      .catch(() => {
+        /* sin perfil de convivencia creado aún */
+      });
+  }, []);
+
+  const irATab = (tab: TabValue) => router.push(`${pathname}?tab=${tab}`, { scroll: false });
+
+  const { score: completitud, pendientes } = calcularCompletitudGlobal({
+    info,
+    perfilConvivencia,
+    verificado,
+  });
 
   return (
     <div className="relative mb-8 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -43,18 +137,12 @@ function ProfileHero() {
       {/* Contenido en una sola fila */}
       <div className="relative flex items-center gap-5 px-8 py-5">
         {/* Avatar */}
-        {usuario?.avatar ? (
-          <img
-            src={usuario.avatar}
-            alt={usuario?.nombre ?? 'Avatar'}
-            referrerPolicy="no-referrer"
-            className="size-14 shrink-0 rounded-full object-cover shadow-md ring-2 ring-primary/20"
-          />
-        ) : (
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-black text-primary-foreground shadow-md ring-2 ring-primary/20">
-            {inicial}
-          </span>
-        )}
+        <UserAvatar
+          src={usuario?.avatar}
+          nombre={usuario?.nombre ?? 'Avatar'}
+          size="lg"
+          className="shadow-md ring-2 ring-primary/20"
+        />
 
         {/* Nombre + correo + badge */}
         <div className="min-w-0 flex-1">
@@ -79,10 +167,39 @@ function ProfileHero() {
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Favoritos</p>
           </div>
           <div className="px-5 text-center">
-            <Star className="mx-auto size-5 fill-warning text-warning" />
+            <div className="flex justify-center">
+              {info?.nivelReputacion ? (
+                <ReputationBadge nivel={info.nivelReputacion} score={info.score} size="lg" />
+              ) : (
+                <Star className="mx-auto size-5 text-muted-foreground/40" />
+              )}
+            </div>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reputación</p>
           </div>
         </div>
+      </div>
+
+      {/* Completitud global del perfil (ítem 228) */}
+      <div className="relative border-t border-border px-8 py-4">
+        <div className="mb-1.5 flex items-center justify-between text-xs font-bold">
+          <span className="text-muted-foreground">Perfil completo</span>
+          <span className="text-primary">{completitud}%</span>
+        </div>
+        <Progress value={completitud} label={`Perfil global ${completitud}% completo`} />
+        {pendientes.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {pendientes.map((p) => (
+              <button
+                key={p.tab + p.label}
+                type="button"
+                onClick={() => irATab(p.tab)}
+                className="rounded-full border border-dashed border-primary/40 px-2.5 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/5"
+              >
+                Te falta: {p.label} →
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -90,18 +207,10 @@ function ProfileHero() {
 
 /* ── Tabs ── */
 function ProfileTabs() {
-  const searchParams = useSearchParams();
-  const initial = searchParams?.get('tab') ?? 'personal';
-  const [tab, setTab] = useState(initial);
-
-  useEffect(() => {
-    const next = searchParams?.get('tab');
-    if (next && next !== tab) setTab(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  const [tab, setTab] = useTabParam({ values: TAB_VALUES, defaultValue: 'personal' });
 
   return (
-    <Tabs value={tab} onValueChange={setTab}>
+    <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
       {/* Tab bar underline */}
       <div className="mb-6 border-b border-border">
         <TabsList className="h-auto w-full justify-start gap-0 rounded-none bg-transparent p-0">

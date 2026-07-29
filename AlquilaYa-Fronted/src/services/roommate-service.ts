@@ -16,6 +16,8 @@ export interface PerfilConvivencia {
   completitud: number;
   compatibilidadScore?: number;
   compatibilidadNivel?: 'Alta' | 'Media' | 'Baja';
+  /** Desglose por dimensión (ítem 215), calculado por el backend junto al score. */
+  compatibilidadDesglose?: DesgloseCompatItem[];
   bio?: string;
   instagram?: string;
   fuma?: string;
@@ -99,10 +101,29 @@ export function labelOpcion(campo: keyof typeof OPCIONES, valor?: string): strin
   return OPCIONES[campo].find((o) => o.v === valor)?.l ?? valor;
 }
 
+/** Ítem del desglose de compatibilidad entre dos perfiles (ítem 215). */
+export interface DesgloseCompatItem {
+  campo: string;
+  label: string;
+  coincide: boolean;
+}
+
+/** Página de resultados tal como la serializa Spring `Page<T>` (ítem 216). */
+export interface PaginaRoommates {
+  content: PerfilConvivencia[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
 
 export const roommateService = {
-  listarRoommates: async (): Promise<PerfilConvivencia[]> => {
-    const { data } = await api.get<PerfilConvivencia[]>('/usuarios/roommates');
+  /** Board paginado (ítem 216). `size` grande por defecto: los filtros (ítem 214) se aplican
+   *  en el cliente sobre la lista completa, así que se trae de una sola vez. */
+  listarRoommates: async (params?: { page?: number; size?: number }): Promise<PaginaRoommates> => {
+    const { data } = await api.get<PaginaRoommates>('/usuarios/roommates', {
+      params: { page: params?.page ?? 0, size: params?.size ?? 500 },
+    });
     return data;
   },
   miConvivencia: async (): Promise<PerfilConvivencia> => {

@@ -1,9 +1,12 @@
 # AlquilaYa — CLAUDE.md
 
 ## Proyecto
+
 Sistema de alquiler de cuartos para estudiantes de **UPeU Lima**. Tres roles: `ESTUDIANTE`, `ARRENDADOR`, `ADMIN`.
+SI LEES ESTO, TODO LO QUE HAGAS DEBE ESTAR EN ESPAÑOL LATINOamericano (PERUANO). ME REFIERO A LA EXTENSION DE CLAUDE CODE.
 
 ## Stack
+
 - **Backend:** Java 21, Spring Boot 3.5, Spring Cloud 2025, Maven
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Zustand, Zod, Axios
 - **Infraestructura:** Docker Compose — PostgreSQL 15 (:5433), MySQL 8 (:3307), Kafka (:9092), ngrok
@@ -11,17 +14,17 @@ Sistema de alquiler de cuartos para estudiantes de **UPeU Lima**. Tres roles: `E
 
 ## Servicios y puertos
 
-| Servicio               | Puerto  | BD                          | Función principal                                    |
-|------------------------|---------|-----------------------------|------------------------------------------------------|
-| discovery-server       | 8761    | —                           | Eureka registry                                      |
-| config-server          | 8888    | —                           | Config centralizada (`config-server/.../config/*.yml`) |
-| api-gateway            | 8080    | —                           | Entrada única, rutas `lb://`, CORS                   |
-| servicio-usuarios      | random  | PostgreSQL `postgres`       | JWT, OTP, Google OAuth, documentos, permisos         |
-| servicio-propiedades   | 8082    | PostgreSQL `alquilaya_propiedades` | Propiedades, reservas, favoritos, reseñas, Cloudinary |
-| servicio-pagos         | 8084    | PostgreSQL `alquilaya_pagos` | MercadoPago, webhook, Kafka producer                 |
-| servicio-catalogos     | 8085    | MySQL `alquilaya_catalogos` | Tipos, períodos, servicios, reglas, zonas            |
-| servicio-mensajeria    | 8086    | PostgreSQL `alquilaya_mensajeria` | Chat REST + WebSocket STOMP directo (no gateway)   |
-| servicio-notificaciones | 8081   | —                           | Node.js, WhatsApp vía whatsapp-web.js, Kafka consumer |
+| Servicio                | Puerto | BD                                 | Función principal                                      |
+| ----------------------- | ------ | ---------------------------------- | ------------------------------------------------------ |
+| discovery-server        | 8761   | —                                  | Eureka registry                                        |
+| config-server           | 8888   | —                                  | Config centralizada (`config-server/.../config/*.yml`) |
+| api-gateway             | 8080   | —                                  | Entrada única, rutas `lb://`, CORS                     |
+| servicio-usuarios       | random | PostgreSQL `postgres`              | JWT, OTP, Google OAuth, documentos, permisos           |
+| servicio-propiedades    | 8082   | PostgreSQL `alquilaya_propiedades` | Propiedades, reservas, favoritos, reseñas, Cloudinary  |
+| servicio-pagos          | 8084   | PostgreSQL `alquilaya_pagos`       | MercadoPago, webhook, Kafka producer                   |
+| servicio-catalogos      | 8085   | MySQL `alquilaya_catalogos`        | Tipos, períodos, servicios, reglas, zonas              |
+| servicio-mensajeria     | 8086   | PostgreSQL `alquilaya_mensajeria`  | Chat REST + WebSocket STOMP directo (no gateway)       |
+| servicio-notificaciones | 8081   | —                                  | Node.js, WhatsApp vía whatsapp-web.js, Kafka consumer  |
 
 ## Orden de arranque
 
@@ -66,13 +69,13 @@ Frontend :3000
 
 ## Rutas del gateway (`/api/v1/...`)
 
-| Path                          | Destino               |
-|-------------------------------|-----------------------|
-| `/usuarios/**`, `/auth/**`    | servicio-usuarios     |
+| Path                                                                                       | Destino              |
+| ------------------------------------------------------------------------------------------ | -------------------- |
+| `/usuarios/**`, `/auth/**`                                                                 | servicio-usuarios    |
 | `/propiedades/**`, `/reservas/**`, `/favoritos/**`, `/resenas/**`, `/admin/propiedades/**` | servicio-propiedades |
-| `/catalogos/**`               | servicio-catalogos    |
-| `/pagos/**`                   | servicio-pagos        |
-| `/mensajeria/**`, `/admin/mensajeria/**` | servicio-mensajeria |
+| `/catalogos/**`                                                                            | servicio-catalogos   |
+| `/pagos/**`                                                                                | servicio-pagos       |
+| `/mensajeria/**`, `/admin/mensajeria/**`                                                   | servicio-mensajeria  |
 
 ## Estructura del frontend (`AlquilaYa-Fronted/src/`)
 
@@ -99,23 +102,24 @@ Dev only: `POST /pagos/simular-exito/{reservaId}` (omite MercadoPago)
 
 ## Documentación de APIs (Swagger / OpenAPI)
 
-Cada microservicio expone su doc vía **springdoc-openapi** (`springdoc-openapi-starter-webmvc-ui` 2.8.9). UI en `/swagger-ui.html`, spec JSON en `/v3/api-docs`. Incluye esquema de seguridad **Bearer JWT** (botón *Authorize* en la UI) configurado en `OpenApiConfig` de cada servicio.
+Cada microservicio expone su doc vía **springdoc-openapi** (`springdoc-openapi-starter-webmvc-ui` 2.8.9). UI en `/swagger-ui.html`, spec JSON en `/v3/api-docs`. Incluye esquema de seguridad **Bearer JWT** (botón _Authorize_ en la UI) configurado en `OpenApiConfig` de cada servicio.
 
 > Como el gateway es la variante Servlet MVC, **no agrega** las specs: cada Swagger se accede **directo en el puerto del servicio**, no por el `:8080`.
 
-| Servicio | Swagger UI |
-|----------|-----------|
+| Servicio             | Swagger UI                            |
+| -------------------- | ------------------------------------- |
 | servicio-propiedades | http://localhost:8082/swagger-ui.html |
 | servicio-pagos       | http://localhost:8084/swagger-ui.html |
 | servicio-catalogos   | http://localhost:8085/swagger-ui.html |
 | servicio-mensajeria  | http://localhost:8086/swagger-ui.html |
-| servicio-usuarios    | puerto aleatorio → ver Eureka :8761 |
+| servicio-usuarios    | puerto aleatorio → ver Eureka :8761   |
 
 Las rutas `/swagger-ui/**` y `/v3/api-docs/**` están en `permitAll()` dentro del `SecurityConfig` de cada servicio.
 
 ## Trazabilidad distribuida (Micrometer Tracing + Zipkin)
 
 Gateway y los 5 servicios de dominio incluyen `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave`. Cada log lleva `[servicio, traceId, spanId]` (patrón auto-configurado por Spring Boot), y el **traceId se propaga** automáticamente por:
+
 - **REST/Feign** entre servicios (cabecera de propagación B3)
 - **Kafka** (`spring.kafka.listener.observation-enabled` y `template.observation-enabled` en `application.yml`; el factory custom de usuarios lo activa en `KafkaConsumerConfig`)
 
@@ -133,14 +137,14 @@ FKs entre esquemas no están enforced en BD; se mantienen vía Feign y Kafka.
 
 ## Problemas comunes
 
-| Síntoma | Causa probable |
-|---------|---------------|
-| Gateway 503 | Servicio no registrado en Eureka → revisar http://localhost:8761 |
-| `Connection refused` al arrancar | config-server no está UP; levantar discovery→config primero |
-| Reserva no pasa a PAGADA | Kafka caído o servicio-propiedades no consume `pagos-topic` |
-| Webhook MP no llega | ngrok no corre, o `NGROK_DOMAIN` ≠ `MP_NOTIFICATION_URL` |
-| QR WhatsApp expiró | Reiniciar servicio-notificaciones; si persiste, borrar `.wwebjs_auth/` |
-| 401/403 en subida de imagen | Faltan vars `CLOUDINARY_*` en `.env` o no se envía el JWT |
+| Síntoma                          | Causa probable                                                         |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| Gateway 503                      | Servicio no registrado en Eureka → revisar http://localhost:8761       |
+| `Connection refused` al arrancar | config-server no está UP; levantar discovery→config primero            |
+| Reserva no pasa a PAGADA         | Kafka caído o servicio-propiedades no consume `pagos-topic`            |
+| Webhook MP no llega              | ngrok no corre, o `NGROK_DOMAIN` ≠ `MP_NOTIFICATION_URL`               |
+| QR WhatsApp expiró               | Reiniciar servicio-notificaciones; si persiste, borrar `.wwebjs_auth/` |
+| 401/403 en subida de imagen      | Faltan vars `CLOUDINARY_*` en `.env` o no se envía el JWT              |
 
 ## Pendientes para producción
 

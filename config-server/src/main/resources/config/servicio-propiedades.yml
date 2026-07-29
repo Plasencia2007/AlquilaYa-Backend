@@ -44,8 +44,8 @@ server:
 
 # Configuración de Cloudinary (Fase 3 - Real)
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:ddiyaoxkt}
-  api-key: ${CLOUDINARY_API_KEY:387589685746197}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
+  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
   api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 feign:
@@ -161,6 +161,12 @@ jwt:
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
   expiration: ${JWT_EXPIRATION:7200000}
 
+# Secreto compartido entre servicios internos: se envía en la cabecera X-Internal-Key al pedir a
+# catalogos las zonas activas con comisión (/zonas/activas/interno). Debe coincidir con el valor
+# configurado en servicio-catalogos. Se inyecta por env (.env en dev, .env.prod en prod).
+internal:
+  api-key: ${INTERNAL_API_KEY:PLACEHOLDER_SET_ENV_VAR}
+
 # Reglas de negocio de reservas
 app:
   reserva:
@@ -186,5 +192,5 @@ app:
       # Cron del job (genera cuotas, marca vencidas, emite recordatorios).
       # Default: diario a la 01:00.
       cron: ${RENTA_CUOTAS_CRON:0 0 1 * * *}
-      # Días de anticipación con que se emite el recordatorio "cuota por vencer".
-      recordatorio-dias-antes: ${RENTA_CUOTAS_RECORDATORIO_DIAS:5}
+      # Días de anticipación con que se emite el recordatorio "cuota por vencer" (#294).
+      recordatorio-dias-antes: ${RENTA_CUOTAS_RECORDATORIO_DIAS:3}

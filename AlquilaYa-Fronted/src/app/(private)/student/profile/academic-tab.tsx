@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Form,
   FormControl,
@@ -18,6 +19,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { studentProfileService } from '@/services/student-profile-service';
 import { carreraService, type Carrera } from '@/services/carrera-service';
+import { universidadService, type Universidad } from '@/services/universidad-service';
 import { notify } from '@/lib/notify';
 import {
   datosAcademicosSchema,
@@ -33,25 +35,49 @@ export function AcademicTab() {
   const { usuario } = useAuth();
   const perfilId = usuario?.perfilId;
   const [carreras, setCarreras] = useState<Carrera[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [loadingCarreras, setLoadingCarreras] = useState(true);
+  const [errorCarreras, setErrorCarreras] = useState(false);
+
+  // Ítem 226: catálogo de universidades (Fase 2 multi-universidad) para el selector real.
+  const [universidades, setUniversidades] = useState<Universidad[]>([]);
+  const [loadingUniversidades, setLoadingUniversidades] = useState(true);
+  const [errorUniversidades, setErrorUniversidades] = useState(false);
 
   const form = useForm<DatosAcademicosData>({
     resolver: zodResolver(datosAcademicosSchema),
     defaultValues: {
       universidad:      'Universidad Peruana Unión',
+      universidadId:    undefined,
       codigoEstudiante: '',
       carrera:          '',
       ciclo:            '',
     },
   });
 
-  // Lista de carreras disponibles
+  // Lista de carreras disponibles (ítem 227: ya no falla en silencio — ver errorCarreras abajo).
   useEffect(() => {
     carreraService
       .listarActivas()
       .then((data) => setCarreras(Array.isArray(data) ? data : []))
-      .catch(() => setCarreras([]))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        setCarreras([]);
+        setErrorCarreras(true);
+        notify.error(null, 'No pudimos cargar la lista de carreras. Puedes escribirla manualmente.');
+      })
+      .finally(() => setLoadingCarreras(false));
+  }, []);
+
+  // Lista de universidades disponibles (ítem 226).
+  useEffect(() => {
+    universidadService
+      .listarActivas()
+      .then((data) => setUniversidades(Array.isArray(data) ? data : []))
+      .catch(() => {
+        setUniversidades([]);
+        setErrorUniversidades(true);
+        notify.error(null, 'No pudimos cargar la lista de universidades. Puedes escribirla manualmente.');
+      })
+      .finally(() => setLoadingUniversidades(false));
   }, []);
 
   // Datos académicos ya guardados → precargar el formulario
@@ -62,6 +88,7 @@ export function AcademicTab() {
       .then((info) => {
         form.reset({
           universidad:      info.universidad || 'Universidad Peruana Unión',
+          universidadId:    info.universidadId ?? undefined,
           codigoEstudiante: info.codigoEstudiante ?? '',
           carrera:          info.carrera ?? '',
           ciclo:            info.ciclo != null ? String(info.ciclo) : '',
@@ -87,7 +114,7 @@ export function AcademicTab() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-          {/* Universidad (solo lectura) */}
+          {/* Universidad (ítem 226: selector real sobre el catálogo multi-universidad) */}
           <FormField
             control={form.control}
             name="universidad"
@@ -97,7 +124,32 @@ export function AcademicTab() {
                   Universidad
                 </Label>
                 <FormControl>
-                  <Input {...field} readOnly className="h-11 rounded-xl bg-muted/50 cursor-default" />
+                  {universidades.length > 0 ? (
+                    <Combobox
+                      options={universidades.map((u) => ({ value: String(u.id), label: u.nombre }))}
+                      value={form.watch('universidadId') != null ? String(form.watch('universidadId')) : undefined}
+                      onChange={(val) => {
+                        const u = universidades.find((x) => String(x.id) === val);
+                        form.setValue('universidadId', u ? u.id : undefined, { shouldDirty: true });
+                        field.onChange(u ? u.nombre : '');
+                      }}
+                      disabled={loadingUniversidades}
+                      placeholder="Selecciona tu universidad"
+                      searchPlaceholder="Buscar universidad…"
+                      emptyText="No encontramos esa universidad."
+                    />
+                  ) : loadingUniversidades ? (
+                    <Skeleton className="h-11 w-full rounded-xl" />
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Input {...field} placeholder="Universidad Peruana Unión" className="h-11 rounded-xl" />
+                      {errorUniversidades && (
+                        <p className="text-xs text-warning">
+                          No pudimos cargar las universidades — escríbela manualmente.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </FormControl>
                 <FormMessage className="text-xs" />
               </FormItem>
@@ -161,18 +213,22 @@ export function AcademicTab() {
                       options={carreras.map((c) => ({ value: c.nombre, label: c.nombre }))}
                       value={field.value}
                       onChange={field.onChange}
-                      disabled={loading}
+                      disabled={loadingCarreras}
                       placeholder="Selecciona tu carrera"
                       searchPlaceholder="Buscar carrera…"
                       emptyText="No encontramos esa carrera."
                     />
+                  ) : loadingCarreras ? (
+                    <Skeleton className="h-11 w-full rounded-xl" />
                   ) : (
-                    <Input
-                      {...field}
-                      placeholder={loading ? 'Cargando carreras…' : 'Ingeniería de Sistemas'}
-                      disabled={loading}
-                      className="h-11 rounded-xl"
-                    />
+                    <div className="space-y-1.5">
+                      <Input {...field} placeholder="Ingeniería de Sistemas" className="h-11 rounded-xl" />
+                      {errorCarreras && (
+                        <p className="text-xs text-warning">
+                          No pudimos cargar las carreras — escríbela manualmente.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </FormControl>
                 <FormMessage className="text-xs" />

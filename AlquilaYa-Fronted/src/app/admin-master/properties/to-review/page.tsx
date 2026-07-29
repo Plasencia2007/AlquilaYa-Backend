@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { adminPropertyService, type PropiedadAdminDTO } from '@/services/admin-property-service';
+import {
+  adminPropertyService,
+  type HistorialStatsDTO,
+  type PropiedadAdminDTO,
+} from '@/services/admin-property-service';
 import { ConfianzaSection } from '@/components/admin/confianza-section';
 import { catalogosService } from '@/services/catalogos-service';
 import { catalogService, type ItemCatalogoInput } from '@/services/catalog-service';
+import { useHasMounted } from '@/hooks/use-has-mounted';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/cn';
+import { notify } from '@/lib/notify';
 import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
 import type { PoliticaCancelacion } from '@/types/propiedad';
 
@@ -59,6 +66,7 @@ function ItemChip({ value, isCustom, onPromote }: ItemChipProps) {
             type="button"
             onClick={onPromote}
             title="Promover al catálogo oficial"
+            aria-label={`Promover "${value}" al catálogo oficial`}
             className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:text-amber-900"
           >
             <span className="material-symbols-outlined text-[12px]">upload</span>
@@ -97,23 +105,27 @@ function PromoteDialog({ itemValue, tipo, onConfirm, onCancel, loading }: Promot
       .replace(/[^A-Z0-9_]/g, ''),
   );
   const [icono, setIcono] = useState('');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="promote-dialog-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8"
+      >
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-50 shrink-0">
             <span className="material-symbols-outlined text-[20px] text-amber-500">upload</span>
           </div>
           <div>
-            <h3 className="text-base font-black text-slate-900 tracking-tight">
+            <h3 id="promote-dialog-title" className="text-base font-black text-slate-900 tracking-tight">
               Promover al catálogo
             </h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -207,6 +219,82 @@ function PromoteDialog({ itemValue, tipo, onConfirm, onCancel, loading }: Promot
 }
 
 // =============================================================================
+// RejectModal (ítem 359: pedir motivo al rechazar)
+// =============================================================================
+
+interface RejectModalProps {
+  propTitulo: string;
+  loading: boolean;
+  onConfirm: (motivo: string) => void;
+  onCancel: () => void;
+}
+
+function RejectModal({ propTitulo, loading, onConfirm, onCancel }: RejectModalProps) {
+  const [motivo, setMotivo] = useState('');
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-property-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8"
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[20px] text-red-500">close</span>
+          </div>
+          <div className="min-w-0">
+            <h3 id="reject-property-modal-title" className="text-base font-black text-slate-900 tracking-tight">Rechazar propiedad</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+              {propTitulo}
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          Indica el motivo para que el arrendador sepa qué corregir antes de reenviar la publicación.
+        </p>
+        <textarea
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          placeholder="Ej: Las fotos no corresponden a la dirección indicada..."
+          rows={3}
+          maxLength={300}
+          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-red-300 resize-none mb-1"
+        />
+        <p className="text-[10px] text-slate-300 text-right mb-4">{motivo.length}/300</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 h-10 rounded-xl border border-slate-200 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => motivo.trim() && onConfirm(motivo.trim())}
+            disabled={loading || !motivo.trim()}
+            className="flex-1 h-10 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[11px] font-black uppercase tracking-widest transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            {loading && (
+              <span className="material-symbols-outlined text-[15px] animate-spin">autorenew</span>
+            )}
+            {loading ? 'Rechazando…' : 'Rechazar'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// =============================================================================
 // PropertyReviewPanel
 // =============================================================================
 
@@ -235,10 +323,8 @@ function PropertyReviewPanel({
   onPromote,
   onCambiarPolitica,
 }: PropertyReviewPanelProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   const servicios = resolveItemStatus(prop.serviciosIncluidos ?? [], catalogoServicios);
   const reglas = resolveItemStatus(prop.reglas ?? [], catalogoReglas);
@@ -254,12 +340,19 @@ function PropertyReviewPanel({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white h-full w-full max-w-xl shadow-2xl flex flex-col overflow-hidden">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="property-review-panel-title"
+        tabIndex={-1}
+        className="relative bg-white h-full w-full max-w-xl shadow-2xl flex flex-col overflow-hidden"
+      >
 
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between shrink-0">
           <div className="min-w-0 flex-1 pr-4">
-            <h3 className="text-base font-black text-slate-900 tracking-tight truncate">
+            <h3 id="property-review-panel-title" className="text-base font-black text-slate-900 tracking-tight truncate">
               {prop.titulo}
             </h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
@@ -270,7 +363,8 @@ function PropertyReviewPanel({
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 text-slate-300 hover:text-slate-600 transition-colors"
+            aria-label="Cerrar panel de revisión"
+            className="shrink-0 min-h-11 min-w-11 flex items-center justify-center text-slate-300 hover:text-slate-600 transition-colors"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
@@ -581,6 +675,10 @@ export default function AdminPropiedadesRevisionPage() {
   const [catalogoReglas, setCatalogoReglas] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [customFilter, setCustomFilter] = useState<'ALL' | 'CUSTOM_ONLY' | 'STANDARD_ONLY'>('ALL');
+  // Ítem 359: propiedad para la que se pide el motivo de rechazo antes de confirmar.
+  const [rejectTarget, setRejectTarget] = useState<PropiedadAdminDTO | null>(null);
+  // Ítem 356: conteos reales sobre el historial de decisiones (#366), reemplazan los mocks.
+  const [stats, setStats] = useState<HistorialStatsDTO>({ aprobadasHoy: 0, rechazadasSemana: 0 });
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -604,6 +702,14 @@ export default function AdminPropiedadesRevisionPage() {
       } finally {
         if (!cancelled) setLoading(false);
       }
+      // Ítem 356: las tarjetas de stats no deben bloquear la carga principal; si fallan,
+      // simplemente quedan en 0 (mejor que reventar la página completa).
+      try {
+        const historialStats = await adminPropertyService.historialStats();
+        if (!cancelled) setStats(historialStats);
+      } catch {
+        // silencioso: las tarjetas quedan en 0
+      }
     };
     init();
     return () => { cancelled = true; };
@@ -611,29 +717,48 @@ export default function AdminPropiedadesRevisionPage() {
 
   const handleAprobar = async () => {
     if (!selected) return;
-    setActionLoading(selected.id);
+    const prop = selected;
+    setActionLoading(prop.id);
+    const promesa = adminPropertyService.aprobar(prop.id);
+    notify.promise(promesa, {
+      loading: `Aprobando "${prop.titulo}"…`,
+      success: `"${prop.titulo}" aprobada`,
+      error: 'Error al aprobar la propiedad',
+    });
     try {
-      await adminPropertyService.aprobar(selected.id);
-      setPropiedades((prev) => prev.filter((p) => p.id !== selected.id));
-      showToast(`"${selected.titulo}" aprobada`, 'success');
+      await promesa;
+      setPropiedades((prev) => prev.filter((p) => p.id !== prop.id));
       setSelected(null);
     } catch {
-      showToast('Error al aprobar la propiedad', 'error');
+      // el toast de notify.promise ya informó el error
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleRechazar = async () => {
+  /** Ítem 359: abre el modal de motivo en vez de rechazar directo. */
+  const openRejectModal = () => {
     if (!selected) return;
-    setActionLoading(selected.id);
+    setRejectTarget(selected);
+  };
+
+  const handleRechazar = async (motivo: string) => {
+    if (!rejectTarget) return;
+    const prop = rejectTarget;
+    setActionLoading(prop.id);
+    const promesa = adminPropertyService.rechazar(prop.id, motivo);
+    notify.promise(promesa, {
+      loading: `Rechazando "${prop.titulo}"…`,
+      success: `"${prop.titulo}" rechazada`,
+      error: 'Error al rechazar la propiedad',
+    });
     try {
-      await adminPropertyService.rechazar(selected.id);
-      setPropiedades((prev) => prev.filter((p) => p.id !== selected.id));
-      showToast(`"${selected.titulo}" rechazada`, 'success');
+      await promesa;
+      setPropiedades((prev) => prev.filter((p) => p.id !== prop.id));
+      setRejectTarget(null);
       setSelected(null);
     } catch {
-      showToast('Error al rechazar la propiedad', 'error');
+      // el toast de notify.promise ya informó el error
     } finally {
       setActionLoading(null);
     }
@@ -685,8 +810,8 @@ export default function AdminPropiedadesRevisionPage() {
   // Stats calculations
   const totalPendientes = propiedades.length;
   const sugeridasCount = propiedades.filter(p => hasCustomItems(p, catalogoServicios, catalogoReglas)).length;
-  const aprobadasHoy = 18; // Mock value for visual context
-  const rechazadasSemana = 5; // Mock value for visual context
+  // Ítem 356: conteos reales sobre el historial de decisiones (#366), ya no mock.
+  const { aprobadasHoy, rechazadasSemana } = stats;
 
   // Filter properties
   const filteredPropiedades = propiedades.filter((prop) => {
@@ -898,7 +1023,7 @@ export default function AdminPropiedadesRevisionPage() {
           </div>
           <h4 className="text-sm font-black text-slate-800 tracking-tight uppercase">Sin resultados</h4>
           <p className="text-xs text-slate-400 max-w-xs mt-2 leading-relaxed">
-            No encontramos ningún inmueble que coincida con "{searchQuery}" o con el filtro seleccionado.
+            No encontramos ningún inmueble que coincida con &quot;{searchQuery}&quot; o con el filtro seleccionado.
           </p>
           <button
             onClick={() => {
@@ -1000,7 +1125,7 @@ export default function AdminPropiedadesRevisionPage() {
           politicaLoading={politicaLoading}
           onClose={() => setSelected(null)}
           onAprobar={handleAprobar}
-          onRechazar={handleRechazar}
+          onRechazar={openRejectModal}
           onPromote={(value, tipo) => setPromoteTarget({ value, tipo })}
           onCambiarPolitica={handleCambiarPolitica}
         />
@@ -1014,6 +1139,16 @@ export default function AdminPropiedadesRevisionPage() {
           loading={promoteLoading}
           onConfirm={handlePromote}
           onCancel={() => setPromoteTarget(null)}
+        />
+      )}
+
+      {/* Modal de motivo de rechazo (ítem 359) */}
+      {rejectTarget && (
+        <RejectModal
+          propTitulo={rejectTarget.titulo}
+          loading={actionLoading === rejectTarget.id}
+          onConfirm={handleRechazar}
+          onCancel={() => setRejectTarget(null)}
         />
       )}
     </div>

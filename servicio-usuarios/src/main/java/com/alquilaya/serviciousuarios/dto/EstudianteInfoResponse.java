@@ -15,6 +15,7 @@ public class EstudianteInfoResponse {
     private String fotoUrl;
     private java.time.LocalDate fechaNacimiento;
     private String universidad;
+    private Long universidadId;
     private String codigoEstudiante;
     private String carrera;
     private Integer ciclo;

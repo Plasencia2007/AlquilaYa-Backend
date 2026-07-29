@@ -4,11 +4,22 @@ import { useEffect, useState } from 'react';
 import { permisoService, Permiso } from '@/services/admin-permission-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { CustomRolesManager } from '@/components/admin/CustomRolesManager';
+import { useConfirm } from '@/hooks/use-confirm';
+import { notify } from '@/lib/notify';
+
+/**
+ * Funcionalidades cuya desactivación puede dejar el sistema sin acceso administrativo.
+ * El backend (`PermisoService.actualizarEstado`) es la autoridad real: rechaza con 409 si
+ * esta sería la última fuente activa de la funcionalidad (rol base o personalizado). Aquí
+ * solo decidimos cuándo pedir confirmación extra antes de intentarlo.
+ */
+const FUNCIONALIDADES_CRITICAS = new Set(['ADMIN_PANEL']);
 
 export default function RolesPermissionsPage() {
   const [permisos, setPermisos] = useState<Permiso[]>([]);
   const [loading, setLoading] = useState(true);
   const { usuario } = useAuthStore();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     cargarPermisos();
@@ -19,7 +30,7 @@ export default function RolesPermissionsPage() {
       const data = await permisoService.obtenerTodos();
       setPermisos(data);
     } catch (error) {
-      console.error('Error cargando la matriz:', error);
+      notify.error(error, 'No pudimos cargar la matriz de permisos');
     } finally {
       setLoading(false);
     }
@@ -29,8 +40,26 @@ export default function RolesPermissionsPage() {
     try {
       await permisoService.actualizarEstado(id, !estadoActual);
       setPermisos(prev => prev.map(p => p.id === id ? { ...p, habilitado: !estadoActual } : p));
+      notify.success('Permiso actualizado');
     } catch (error) {
-      alert('Error al actualizar permiso. Verifica tu conexión.');
+      notify.error(error, 'No se pudo actualizar el permiso');
+    }
+  };
+
+  const solicitarToggle = (permiso: Permiso) => {
+    // Solo pedimos confirmación extra al DESACTIVAR una funcionalidad crítica; activar
+    // permisos nunca puede dejar el sistema sin acceso, así que no interrumpe el flujo.
+    if (permiso.habilitado && FUNCIONALIDADES_CRITICAS.has(permiso.funcionalidad)) {
+      confirm({
+        title: `¿Desactivar "${permiso.funcionalidad.replace(/_/g, ' ')}" para ${permiso.rol}?`,
+        description:
+          'Es una funcionalidad crítica del panel administrativo. Si ningún otro rol (base o personalizado) la mantiene activa, el sistema se quedaría sin acceso admin y el backend rechazará el cambio.',
+        confirmLabel: 'Desactivar',
+        tone: 'danger',
+        onConfirm: () => togglePermiso(permiso.id, permiso.habilitado),
+      });
+    } else {
+      togglePermiso(permiso.id, permiso.habilitado);
     }
   };
 
@@ -57,8 +86,9 @@ export default function RolesPermissionsPage() {
           </div>
         </div>
         <p className="text-slate-500 font-medium max-w-2xl leading-relaxed">
-          Configura y audita los niveles de acceso para cada tipo de usuario en la plataforma. 
-          Los cambios realizados aquí se sincronizan instantáneamente con todos los microservicios core.
+          Configura y audita los niveles de acceso para cada tipo de usuario en la plataforma.
+          Cada cambio se guarda en la base de permisos y aplica desde la siguiente petición que
+          haga un usuario con ese rol.
         </p>
       </header>
 
@@ -96,18 +126,14 @@ export default function RolesPermissionsPage() {
                   {roles.map(rol => {
                     const permiso = permisos.find(p => p.rol === rol && p.funcionalidad === func);
                     if (!permiso) return <td key={rol} className="p-8 text-center text-slate-200">-</td>;
-                    
-                    const canToggle = !(rol === 'ADMIN' && func === 'ADMIN_PANEL');
 
                     return (
                       <td key={rol} className="p-8 text-center">
                         <button
-                          onClick={() => canToggle && togglePermiso(permiso.id, permiso.habilitado)}
-                          disabled={!canToggle}
+                          onClick={() => solicitarToggle(permiso)}
                           className={`
-                            relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-500 shadow-inner
+                            relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-500 shadow-inner cursor-pointer hover:shadow-lg hover:scale-105 active:scale-95
                             ${permiso.habilitado ? 'bg-primary' : 'bg-slate-200'}
-                            ${canToggle ? 'cursor-pointer hover:shadow-lg hover:scale-105 active:scale-95' : 'opacity-30 cursor-not-allowed'}
                           `}
                         >
                           <span
@@ -130,12 +156,14 @@ export default function RolesPermissionsPage() {
       <div className="mt-8 p-6 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 flex items-center gap-4">
         <span className="material-symbols-outlined text-primary">gpp_maybe</span>
         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-          Nota de Seguridad: El rol <span className="text-primary font-black">ADMIN</span> mantiene acceso total por defecto para prevenir fallos críticos de gestión local.
+          Nota de Seguridad: desactivar <span className="text-primary font-black">ADMIN_PANEL</span> pide confirmación y el servidor la rechaza si sería la última fuente activa (rol base o personalizado), para evitar dejar la plataforma sin acceso administrativo.
         </p>
       </div>
 
       {/* RBAC dinámico (#32): roles personalizados de staff + asignación a usuarios. */}
       <CustomRolesManager />
+
+      {ConfirmDialog}
     </div>
   );
 }

@@ -391,21 +391,22 @@
     background: var(--muted-foreground);
   }
 
-  /* react-phone-number-input — estilos del campo telefónico */
+  /* react-phone-number-input — mapeado a los tokens de Input shadcn
+     (mismo --radius-xl y anillo de foco que el resto de inputs del form). */
   .alquilaya-phone-input {
     display: flex;
     align-items: center;
     background: var(--input);
-    border-radius: 0.75rem;
-    padding: 0 0.875rem;
+    border-radius: var(--radius-xl);
+    padding: 0 0.75rem;
     height: 2.75rem;
-    border: 1px solid transparent;
-    transition: all 0.2s ease;
+    border: 1px solid var(--input);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
     min-width: 0;
   }
   .alquilaya-phone-input:focus-within {
     border-color: var(--ring);
-    background: var(--card);
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
   }
   .alquilaya-phone-input .PhoneInputInput {
     border: none;
@@ -455,5 +456,54 @@
   }
   .auth-modal-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Ken Burns — zoom lento y alternado sobre la imagen del hero (MEJORAS.md #94).
+   Se define SOLO dentro de prefers-reduced-motion: no-preference: con "reducir
+   movimiento" activo, la clase no existe y la imagen queda estática (sin animación).
+   ───────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes ken-burns {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(1.06);
+    }
+  }
+
+  .animate-ken-burns {
+    animation: ken-burns 20s ease-in-out infinite alternate;
+    transform-origin: center;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Accordion (Radix) — ui/accordion.tsx referencia animate-accordion-up/down.
+   En Tailwind v4 (config CSS-first) estos keyframes no vienen de un plugin,
+   hay que declararlos aquí. La altura la publica Radix como custom property.
+   ───────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --animate-accordion-down: accordion-down 0.2s var(--ease-out-expo);
+  --animate-accordion-up: accordion-up 0.2s var(--ease-out-expo);
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
   }
 }

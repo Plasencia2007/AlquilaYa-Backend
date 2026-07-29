@@ -29,6 +29,10 @@ public class ActualizarUsuarioRequest {
 
     private EstadoUsuario estado;
 
+    /** Motivo del cambio de estado (hoy solo se usa/persiste cuando {@code estado} es BANNED). */
+    @Size(max = 500, message = "El motivo no puede superar los 500 caracteres")
+    private String motivo;
+
     @Valid
     private DetallesArrendadorRequest detallesArrendador;
 

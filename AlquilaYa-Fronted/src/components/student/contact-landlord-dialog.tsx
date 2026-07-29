@@ -24,17 +24,19 @@ import type { Propiedad } from '@/types/propiedad';
 interface Props {
   propiedad: Propiedad;
   trigger: ReactNode;
+  /** Mensaje inicial del textarea. Por defecto, el saludo genérico de siempre. */
+  presetMensaje?: string;
 }
 
 const PRESET = '¡Hola! Soy estudiante UPeU, me interesa tu cuarto. ¿Sigue disponible?';
 
-export function ContactLandlordDialog({ propiedad, trigger }: Props) {
+export function ContactLandlordDialog({ propiedad, trigger, presetMensaje }: Props) {
   const router = useRouter();
   const { estaAutenticado, usuario } = useAuth();
   const { open: abrirAuth } = useAuthModal();
 
   const [open, setOpen] = useState(false);
-  const [mensaje, setMensaje] = useState(PRESET);
+  const [mensaje, setMensaje] = useState(presetMensaje ?? PRESET);
   const [enviando, setEnviando] = useState(false);
 
   const handleTrigger = (e: React.MouseEvent) => {

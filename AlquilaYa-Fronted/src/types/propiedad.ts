@@ -84,6 +84,8 @@ export interface CrearPropiedadRequest {
   videoUrl?: string;
   /** Política de cancelación (default FLEXIBLE). */
   politicaCancelacion?: PoliticaCancelacion;
+  /** Depósito de garantía (S/), adicional a la renta. Opcional. */
+  deposito?: number;
   arrendadorId: number;
 }
 
@@ -104,6 +106,12 @@ export interface Propiedad {
   precio: number;
   /** Precio antes de la última rebaja (para tachado). Solo se muestra si hay badge REBAJA. */
   precioAnterior?: number;
+  /**
+   * Depósito de garantía (S/), adicional a la renta mensual. Undefined si la propiedad
+   * no lo tiene cargado. Se suma a `precio` y a los `monto` de `serviciosEstado` en
+   * estado APARTE para el "Costo mensual total estimado" de la ficha.
+   */
+  deposito?: number;
   /** Enlace de video (YouTube/Vimeo/.mp4). */
   videoUrl?: string;
   /** Política de cancelación (default FLEXIBLE). */
@@ -202,6 +210,8 @@ export interface PropiedadBackend {
   precio: number;
   /** Precio antes de la última rebaja (para tachado). */
   precioAnterior?: number;
+  /** Depósito de garantía (S/), adicional a la renta. Undefined si no está cargado. */
+  deposito?: number;
   /** Enlace de video (YouTube/Vimeo/.mp4). */
   videoUrl?: string;
   /** Política de cancelación (default FLEXIBLE). */
@@ -242,6 +252,9 @@ export interface PropiedadBackend {
   fechaUltimaConfirmacion?: string;
   fechaCreacion?: string;
   fechaActualizacion?: string;
+  /** Motivo indicado por el admin al rechazar la propiedad (#348). Null si nunca fue rechazada
+   *  o si el admin no escribió un motivo. Solo relevante cuando `estado === 'RECHAZADO'`. */
+  motivoRechazo?: string | null;
 
   // ----- Campos premium (rediseño card) — todos opcionales -----
   /** URL del avatar del arrendador (catálogo público). */
@@ -266,6 +279,8 @@ export interface PropiedadCompleta {
   precio: number;
   /** Precio antes de la última rebaja (para tachado). */
   precioAnterior?: number;
+  /** Depósito de garantía (S/), adicional a la renta. Undefined si no está cargado. */
+  deposito?: number;
   /** Enlace de video (YouTube/Vimeo/.mp4). */
   videoUrl?: string;
   /** Política de cancelación (default FLEXIBLE). */
@@ -323,6 +338,8 @@ export interface PropiedadUpdate {
   titulo?: string;
   descripcion?: string;
   precio?: number;
+  /** Depósito de garantía (S/), adicional a la renta. */
+  deposito?: number;
   direccion?: string;
   ubicacionGps?: string;
   tipoPropiedad?: string;
@@ -382,6 +399,8 @@ export type EstadoServicio = 'INCLUIDO' | 'APARTE' | 'NO_DISPONIBLE';
 export interface ServicioConEstado {
   servicio: string;
   estado: EstadoServicio;
+  /** Monto mensual (S/) cuando `estado` es APARTE. Undefined para INCLUIDO/NO_DISPONIBLE. */
+  monto?: number;
 }
 
 export type EstadoHabitacion = 'LIBRE' | 'RESERVADA' | 'OCUPADA' | 'MANTENIMIENTO';
@@ -408,6 +427,7 @@ export interface Habitacion {
   descripcion?: string | null;
   orden?: number;
   ocupante?: OcupanteInfo | null;
+  imagenes?: string[];
 }
 
 /** Payload de alta/edición de una habitación. */

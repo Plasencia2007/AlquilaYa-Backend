@@ -21,6 +21,10 @@ public class ActualizarPerfilAcademicoRequest {
     @Size(max = 150)
     private String universidad;
 
+    /** Id del catálogo de universidades (servicio-catalogos) — ítem 226. Opcional: null si
+     *  el usuario cae al input de texto libre (universidad fuera del catálogo o catálogo caído). */
+    private Long universidadId;
+
     @NotBlank(message = "El código de estudiante es obligatorio")
     @Size(max = 50)
     private String codigoEstudiante;

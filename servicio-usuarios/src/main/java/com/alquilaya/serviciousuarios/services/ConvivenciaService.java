@@ -1,6 +1,7 @@
 package com.alquilaya.serviciousuarios.services;
 
 import com.alquilaya.serviciousuarios.dto.ActualizarConvivenciaRequest;
+import com.alquilaya.serviciousuarios.dto.CompatibilidadItemDTO;
 import com.alquilaya.serviciousuarios.dto.PerfilConvivenciaDTO;
 import com.alquilaya.serviciousuarios.dto.ReputacionResumen;
 import com.alquilaya.serviciousuarios.entities.Estudiante;
@@ -9,9 +10,13 @@ import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.repositories.EstudianteRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
@@ -31,14 +36,20 @@ public class ConvivenciaService {
         return toDTO(e);
     }
 
-    /** Board de matchmaking: estudiantes que buscan compañeros, excluyendo al usuario actual. */
+    /**
+     * Board de matchmaking: estudiantes que buscan compañeros, excluyendo al usuario actual,
+     * ordenados por compatibilidad descendente y paginados (ítem 216).
+     *
+     * <p>La compatibilidad depende de quién pregunta, así que no se puede paginar/ordenar a nivel
+     * de SQL: se calcula en memoria para todos los candidatos y luego se recorta la página pedida.
+     */
     @Transactional(readOnly = true)
-    public List<PerfilConvivenciaDTO> listarBuscando(String correoActual) {
+    public Page<PerfilConvivenciaDTO> listarBuscando(String correoActual, Pageable pageable) {
         Usuario miUsuario = usuarioRepository.findByCorreo(correoActual).orElse(null);
         Estudiante miPerfil = miUsuario != null ? miUsuario.getEstudiante() : null;
         Long miId = miPerfil != null ? miPerfil.getId() : null;
 
-        return estudianteRepository.findByBuscaCompanerosTrue().stream()
+        List<PerfilConvivenciaDTO> todos = estudianteRepository.findByBuscaCompanerosTrue().stream()
                 .filter(e -> !e.getId().equals(miId))
                 .map(e -> toDTOWithCompat(e, miPerfil))
                 .sorted((a, b) -> {
@@ -47,6 +58,14 @@ public class ConvivenciaService {
                     return Integer.compare(scoreB, scoreA); // Descendente
                 })
                 .toList();
+
+        int total = todos.size();
+        int start = (int) pageable.getOffset();
+        if (start >= total) {
+            return new PageImpl<>(List.of(), pageable, total);
+        }
+        int end = Math.min(start + pageable.getPageSize(), total);
+        return new PageImpl<>(todos.subList(start, end), pageable, total);
     }
 
     @Transactional(readOnly = true)
@@ -100,9 +119,12 @@ public class ConvivenciaService {
 
         Integer compatScore = null;
         String compatNivel = null;
+        List<CompatibilidadItemDTO> compatDesglose = null;
 
         if (miPerfil != null) {
-            compatScore = calcularCompatibilidad(miPerfil, e);
+            ResultadoCompat resultado = calcularCompatibilidad(miPerfil, e);
+            compatScore = resultado.score();
+            compatDesglose = resultado.desglose();
             if (compatScore != null) {
                 compatNivel = compatScore >= 75 ? "Alta" : compatScore >= 45 ? "Media" : "Baja";
             }
@@ -123,6 +145,7 @@ public class ConvivenciaService {
                 .completitud(completitud(e))
                 .compatibilidadScore(compatScore)
                 .compatibilidadNivel(compatNivel)
+                .compatibilidadDesglose(compatDesglose)
                 .bio(e.getBio())
                 .instagram(e.getInstagram())
                 .fuma(e.getFuma())
@@ -144,53 +167,35 @@ public class ConvivenciaService {
                 .build();
     }
 
-    private Integer calcularCompatibilidad(Estudiante mi, Estudiante otro) {
+    /** Score + desglose por dimensión de una comparación de compatibilidad (ítem 215). */
+    private record ResultadoCompat(Integer score, List<CompatibilidadItemDTO> desglose) {}
+
+    /** Una dimensión de hábito comparable directo (igual/distinto) por texto. */
+    private record Dimension(String campo, String label, String valorMi, String valorOtro) {}
+
+    private ResultadoCompat calcularCompatibilidad(Estudiante mi, Estudiante otro) {
         if (mi == null || otro == null) {
-            return null;
+            return new ResultadoCompat(null, null);
         }
         int comparables = 0;
         int coinciden = 0;
+        List<CompatibilidadItemDTO> desglose = new ArrayList<>();
 
-        if (notBlank(mi.getFuma()) && notBlank(otro.getFuma())) {
-            comparables++;
-            if (mi.getFuma().equalsIgnoreCase(otro.getFuma())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getHorario()) && notBlank(otro.getHorario())) {
-            comparables++;
-            if (mi.getHorario().equalsIgnoreCase(otro.getHorario())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getOrden()) && notBlank(otro.getOrden())) {
-            comparables++;
-            if (mi.getOrden().equalsIgnoreCase(otro.getOrden())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getRuido()) && notBlank(otro.getRuido())) {
-            comparables++;
-            if (mi.getRuido().equalsIgnoreCase(otro.getRuido())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getSociabilidad()) && notBlank(otro.getSociabilidad())) {
-            comparables++;
-            if (mi.getSociabilidad().equalsIgnoreCase(otro.getSociabilidad())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getMascotas()) && notBlank(otro.getMascotas())) {
-            comparables++;
-            if (mi.getMascotas().equalsIgnoreCase(otro.getMascotas())) {
-                coinciden++;
-            }
-        }
-        if (notBlank(mi.getInvitados()) && notBlank(otro.getInvitados())) {
-            comparables++;
-            if (mi.getInvitados().equalsIgnoreCase(otro.getInvitados())) {
-                coinciden++;
+        List<Dimension> dimensiones = List.of(
+                new Dimension("fuma", "Fumar", mi.getFuma(), otro.getFuma()),
+                new Dimension("horario", "Horario", mi.getHorario(), otro.getHorario()),
+                new Dimension("orden", "Orden y limpieza", mi.getOrden(), otro.getOrden()),
+                new Dimension("ruido", "Ruido", mi.getRuido(), otro.getRuido()),
+                new Dimension("sociabilidad", "Sociabilidad", mi.getSociabilidad(), otro.getSociabilidad()),
+                new Dimension("mascotas", "Mascotas", mi.getMascotas(), otro.getMascotas()),
+                new Dimension("invitados", "Invitados", mi.getInvitados(), otro.getInvitados()));
+
+        for (Dimension d : dimensiones) {
+            if (notBlank(d.valorMi()) && notBlank(d.valorOtro())) {
+                comparables++;
+                boolean coincide = d.valorMi().equalsIgnoreCase(d.valorOtro());
+                if (coincide) coinciden++;
+                desglose.add(new CompatibilidadItemDTO(d.campo(), d.label(), coincide));
             }
         }
 
@@ -199,15 +204,12 @@ public class ConvivenciaService {
             int miMin = mi.getPresupuestoMin() != null ? mi.getPresupuestoMin() : 0;
             int otroMin = otro.getPresupuestoMin() != null ? otro.getPresupuestoMin() : 0;
             boolean solapan = Math.max(miMin, otroMin) <= Math.min(mi.getPresupuestoMax(), otro.getPresupuestoMax());
-            if (solapan) {
-                coinciden++;
-            }
+            if (solapan) coinciden++;
+            desglose.add(new CompatibilidadItemDTO("presupuesto", "Presupuesto", solapan));
         }
 
-        if (comparables == 0) {
-            return 0;
-        }
-        return (int) Math.round((double) coinciden / comparables * 100);
+        int score = comparables == 0 ? 0 : (int) Math.round((double) coinciden / comparables * 100);
+        return new ResultadoCompat(score, desglose);
     }
 
     /** % de completitud del perfil de convivencia (14 campos clave). */

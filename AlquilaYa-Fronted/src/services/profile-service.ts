@@ -31,6 +31,7 @@ interface UsuarioBackend {
     longitud?: number;
     esEmpresa?: boolean;
     calificacion?: number;
+    verificado?: boolean;
   } | null;
   estudiante?: {
     id: number;
@@ -63,6 +64,7 @@ function fromBackend(u: UsuarioBackend): Perfil {
           longitud: u.arrendador.longitud,
           esEmpresa: u.arrendador.esEmpresa,
           calificacion: u.arrendador.calificacion,
+          verificado: u.arrendador.verificado,
         }
       : undefined,
     detallesEstudiante: u.estudiante

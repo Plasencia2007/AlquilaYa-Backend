@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Monitor, Smartphone, Loader2 } from 'lucide-react';
+import { UAParser } from 'ua-parser-js';
 
 import { servicioAuth, type SesionDispositivo } from '@/services/auth-service';
 import { notify } from '@/lib/notify';
@@ -19,7 +20,23 @@ function hace(creado: number | null): string {
   return `hace ${d} día${d === 1 ? '' : 's'}`;
 }
 
-const esMovil = (d: string) => /android|ios|iphone|móvil|movil/i.test(d);
+/**
+ * Parsea el user-agent crudo de una sesión (`s.dispositivo`) a un formato legible tipo
+ * "Chrome · Windows · Lima, Peru" (ítem 188). La ciudad la resuelve el backend por IP
+ * (`IpGeolocationService`, hallazgo de backend) y llega en `s.ciudad`, `null` si no se pudo
+ * geolocalizar (IP privada/local, o el servicio externo falló).
+ * `device.type` de ua-parser-js (mobile/tablet vs. undefined=desktop) es más confiable que el
+ * regex anterior, así que reemplaza a `esMovil()` en vez de reusarla en paralelo.
+ */
+function formatearDispositivo(ua: string, ciudad: string | null): { etiqueta: string; esMovil: boolean } {
+  if (!ua) return { etiqueta: 'Dispositivo desconocido', esMovil: false };
+  const { browser, os, device } = new UAParser(ua).getResult();
+  const partes = [browser.name, os.name, ciudad ?? undefined].filter((v): v is string => Boolean(v));
+  return {
+    etiqueta: partes.length > 0 ? partes.join(' · ') : ua,
+    esMovil: device.type === 'mobile' || device.type === 'tablet',
+  };
+}
 
 /** Lista de sesiones/dispositivos activos con cierre remoto (#10). Reusable en perfiles. */
 export function ActiveSessions() {
@@ -100,7 +117,8 @@ export function ActiveSessions() {
       ) : (
         <ul className="mt-4 space-y-2">
           {sesiones.map((s) => {
-            const Icon = esMovil(s.dispositivo) ? Smartphone : Monitor;
+            const { etiqueta, esMovil } = formatearDispositivo(s.dispositivo, s.ciudad);
+            const Icon = esMovil ? Smartphone : Monitor;
             return (
               <li
                 key={s.jti}
@@ -114,7 +132,7 @@ export function ActiveSessions() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    {s.dispositivo}
+                    {etiqueta}
                     {s.actual && (
                       <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
                         Este dispositivo

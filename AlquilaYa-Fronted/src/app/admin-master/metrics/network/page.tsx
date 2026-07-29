@@ -1,15 +1,25 @@
 'use client';
 
-export default function AdminPlaceholderPage() {
+import NetworkMetricsDashboard from '@/components/admin/NetworkMetricsDashboard';
+
+/**
+ * Ítem 352: `NetworkMetricsDashboard` ahora consulta datos reales vía
+ * `/api/admin/network-metrics` (proxy server-side a Prometheus, `/actuator/prometheus` de cada
+ * microservicio). El componente maneja sus 3 estados (cargando / disponible / Prometheus no
+ * disponible) internamente con su propio banner — no hace falta un aviso de mock acá.
+ */
+export default function AdminNetworkMetricsPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
-      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
-        <span className="material-symbols-outlined text-primary text-3xl">construction</span>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+      <div className="mb-8">
+        <span className="text-primary font-bold tracking-wider uppercase text-[10px] mb-2 block">Torre de Control</span>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight leading-none">Métricas de Red</h1>
+        <p className="text-slate-400 font-semibold text-xs mt-2">
+          Latencia, tráfico y códigos de respuesta de los microservicios (vía Prometheus).
+        </p>
       </div>
-      <h1 className="text-3xl font-black text-foreground tracking-tighter mb-2">Sección en Construcción</h1>
-      <p className="text-muted-foreground font-medium opacity-70 max-w-md">
-        Estamos preparando esta vista para que tengas el control total de la Torre de Control.
-      </p>
+
+      <NetworkMetricsDashboard />
     </div>
   );
 }

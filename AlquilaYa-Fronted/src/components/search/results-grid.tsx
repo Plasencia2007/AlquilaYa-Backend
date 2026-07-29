@@ -12,6 +12,8 @@ import { Stagger } from '@/components/motion';
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll';
 import { cn } from '@/lib/cn';
 import { useHiddenPropertiesStore } from '@/stores/hidden-properties-store';
+import type { SugerenciaRelajacion } from '@/lib/relax-filters';
+import type { Filtros } from '@/schemas/search-schema';
 import type { Propiedad } from '@/types/propiedad';
 
 interface Props {
@@ -29,6 +31,12 @@ interface Props {
   /** id resaltado (hover desde el mapa) + callback de hover (para sincronizar con el mapa). */
   activeId?: string | null;
   onHover?: (id: string | null) => void;
+  /**
+   * Sugerencia de relajación de filtros para el empty state inteligente (ítem 124),
+   * pre-calculada por el hook. `onAplicarSugerencia` aplica su `patch` a los filtros.
+   */
+  sugerencia?: SugerenciaRelajacion | null;
+  onAplicarSugerencia?: (patch: Partial<Filtros>) => void;
 }
 
 const GRID_DEFAULT = 'grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3';
@@ -46,11 +54,23 @@ export function ResultsGrid({
   gridClassName = GRID_DEFAULT,
   activeId,
   onHover,
+  sugerencia,
+  onAplicarSugerencia,
 }: Props) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   useInfiniteScroll(sentinelRef, onCargarMas, {
     enabled: hasMore && !cargando && !cargandoMas && !error,
   });
+
+  // Sincronía marcador → card (ítem 117): cuando el hover viene del mapa, traemos la
+  // card correspondiente a la vista. `block: 'nearest'` la deja quieta si ya se ve (p.ej.
+  // cuando el hover se originó en la propia card), así que no "salta" al pasar el cursor
+  // por la lista. Scroll es sincronización con el DOM, no setState — no infringe el lint.
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  useEffect(() => {
+    if (!activeId) return;
+    cardRefs.current.get(activeId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeId]);
 
   // Hidratación + filtro de propiedades ocultas
   const hiddenIds = useHiddenPropertiesStore((s) => s.hiddenIds);
@@ -90,6 +110,32 @@ export function ResultsGrid({
   }
 
   if (items.length === 0) {
+    // Empty state inteligente (ítem 124): si el hook pre-calculó una relajación con
+    // conteo real > 0, la ofrecemos con un click; si no, empty state normal.
+    if (sugerencia) {
+      return (
+        <div className="flex flex-col items-center gap-4">
+          <EmptyState
+            illustration={EmptySearchIllustration}
+            title="Ningún cuarto coincide con tus filtros"
+            description={sugerencia.mensaje}
+            action={{
+              type: 'button',
+              label: 'Aplicar sugerencia',
+              onClick: () => onAplicarSugerencia?.(sugerencia.patch),
+            }}
+          />
+          <button
+            type="button"
+            onClick={onLimpiarFiltros}
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            O limpiar todos los filtros
+          </button>
+        </div>
+      );
+    }
+
     return (
       <EmptyState
         illustration={EmptySearchIllustration}
@@ -106,9 +152,17 @@ export function ResultsGrid({
         {visible.map((p) => (
           <div
             key={p.id}
+            ref={(el) => {
+              if (el) cardRefs.current.set(p.id, el);
+              else cardRefs.current.delete(p.id);
+            }}
             onMouseEnter={() => onHover?.(p.id)}
             onMouseLeave={() => onHover?.(null)}
-            className="flex h-full flex-col rounded-2xl"
+            className={cn(
+              'flex h-full flex-col rounded-2xl transition-shadow',
+              // Resaltado cuando el marcador del mapa correspondiente está en hover (ítem 117).
+              activeId === p.id && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+            )}
           >
             <PropertyCard propiedad={p} variant="full" />
           </div>

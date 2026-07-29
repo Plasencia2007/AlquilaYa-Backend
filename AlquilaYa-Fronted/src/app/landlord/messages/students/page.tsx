@@ -3,16 +3,35 @@
 import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import Linkify from 'linkify-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import type { EmojiClickData, Theme as EmojiTheme } from 'emoji-picker-react';
 
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ReportConversationDialog } from '@/components/landlord/report-conversation-dialog';
+import { PropertyShareCard } from '@/components/shared/property-share-card';
+import { useInfiniteScroll } from '@/hooks/use-infinite-scroll';
 import { cn } from '@/lib/cn';
+import { extraerPropiedadCompartida } from '@/lib/chat-links';
+import { esImagenExterna } from '@/lib/img';
 import { notify } from '@/lib/notify';
 import { conversationService } from '@/services/conversation-service';
 import { stompClient } from '@/services/stomp-client';
 import { useAuthStore } from '@/stores/auth-store';
+import { useThemeStore } from '@/stores/theme-store';
 import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
 import type { ConversacionResumen, Mensaje } from '@/types/chat';
 import type { RolUsuario } from '@/types/auth';
+
+// Ítem 259: el picker pesa ~300KB — se carga solo cuando el usuario lo abre, nunca en el bundle inicial.
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
+
+const LINKIFY_OPTIONS = { target: '_blank', rel: 'noopener noreferrer nofollow' };
+
+// Ítem 260: chips de respuesta rápida, visibles solo en conversaciones sin mensajes aún.
+const RESPUESTAS_RAPIDAS = ['Sí, está disponible', '¿Cuándo puedes venir?', 'Claro, te paso más detalles'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +93,13 @@ function esMensajeMio(
   return miPerfilId === null || msg.emisorPerfilId === miPerfilId;
 }
 
+// Ítem 342: item de la lista virtualizada de mensajes — `key` es estable por id real (no por
+// índice), necesario para que `useVirtualizer` no confunda mediciones de altura al anteponer
+// mensajes antiguos (ver `mensajesConSeps`/`rowVirtualizer` más abajo).
+type ItemMensajeLista =
+  | { type: 'sep'; label: string; key: string }
+  | { type: 'msg'; msg: Mensaje; key: string };
+
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
 function TypingDots() {
@@ -101,9 +127,11 @@ function FechaSeparador({ label }: { label: string }) {
 interface BurbujaMensajeProps {
   msg: Mensaje;
   mio: boolean;
+  autor: string;
   onReply: () => void;
+  onRetry: () => void;
 }
-function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
+function BurbujaMensaje({ msg, mio, autor, onReply, onRetry }: BurbujaMensajeProps) {
   const [hover, setHover] = useState(false);
 
   let quoteText: string | null = null;
@@ -115,12 +143,17 @@ function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
   }
 
   const leido = msg.estado === 'LEIDO' || !!msg.fechaLectura;
+  const hora = horaMsg(msg.fechaEnvio);
+  const esImagen = msg.tipo === 'IMAGEN' && !!msg.urlAdjunto;
+  // Ítem 255: propiedad compartida como mini-card (detección por texto, sin cambio de backend).
+  const propiedadCompartidaId = esImagen ? null : extraerPropiedadCompartida(mainText);
 
   const botonReply = (
     <button
       onClick={onReply}
-      className="mb-2 p-1 text-gray-400 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity"
+      className="mb-2 p-1 min-h-11 min-w-11 flex items-center justify-center text-gray-400 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity"
       title="Responder"
+      aria-label="Responder a este mensaje"
     >
       <span className="material-symbols-outlined text-[18px]">reply</span>
     </button>
@@ -134,13 +167,17 @@ function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
     >
       {!mio && hover && botonReply}
 
-      <div className={cn(
-        // Estilo WhatsApp: verde claro para mis mensajes, blanco para los del otro.
-        'relative max-w-[65%] rounded-lg px-2.5 py-1.5 shadow-sm text-gray-800',
-        mio
-          ? 'bg-[#d9fdd3] rounded-tr-none'
-          : 'bg-white rounded-tl-none',
-      )}>
+      <div
+        role="group"
+        aria-label={`Mensaje de ${autor} a las ${hora}`}
+        className={cn(
+          // Estilo WhatsApp: tono suave sobre primary para mis mensajes, blanco para los del otro.
+          'relative max-w-[65%] rounded-lg shadow-sm text-gray-800',
+          esImagen ? 'overflow-hidden p-1' : 'px-2.5 py-1.5',
+          mio
+            ? 'bg-primary/10 rounded-tr-none'
+            : 'bg-white rounded-tl-none',
+        )}>
         {quoteText && (
           <div className={cn(
             'border-l-4 pl-2 mb-1 text-[11px] rounded-r py-1 pr-2 max-w-full truncate',
@@ -149,16 +186,67 @@ function BurbujaMensaje({ msg, mio, onReply }: BurbujaMensajeProps) {
             {quoteText}
           </div>
         )}
-        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{mainText}</p>
-        <div className="flex items-center justify-end gap-0.5 mt-0.5">
+        {esImagen ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <button type="button" aria-label="Ver imagen ampliada" className="block w-full overflow-hidden rounded-md">
+                <Image
+                  src={msg.urlAdjunto as string}
+                  alt="Imagen adjunta en el chat"
+                  width={280}
+                  height={280}
+                  unoptimized={esImagenExterna(msg.urlAdjunto as string)}
+                  className="h-auto max-h-72 w-full object-cover"
+                />
+              </button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
+              <DialogTitle className="sr-only">Imagen adjunta</DialogTitle>
+              <Image
+                src={msg.urlAdjunto as string}
+                alt="Imagen adjunta en el chat"
+                width={1200}
+                height={1200}
+                unoptimized={esImagenExterna(msg.urlAdjunto as string)}
+                className="h-auto max-h-[85vh] w-full rounded-lg object-contain"
+              />
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+              <Linkify options={LINKIFY_OPTIONS}>{mainText}</Linkify>
+            </p>
+            {propiedadCompartidaId && <PropertyShareCard propiedadId={propiedadCompartidaId} />}
+          </>
+        )}
+        <div className={cn('flex items-center justify-end gap-0.5 mt-0.5', esImagen && 'px-1.5 pb-0.5')}>
           <span className="text-[10px] text-gray-500">
-            {horaMsg(msg.fechaEnvio)}
+            {hora}
           </span>
-          {mio && (
-            <span className={cn('text-[12px] ml-0.5 leading-none', leido ? 'text-sky-500' : 'text-gray-400')}>
+          {mio && msg.estadoEnvio === 'fallido' && esImagen ? (
+            <span className="flex items-center gap-0.5 text-[11px] font-bold text-red-600 ml-1">
+              <span aria-hidden="true">⚠</span> No se pudo enviar
+            </span>
+          ) : mio && msg.estadoEnvio === 'fallido' ? (
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-0.5 text-[11px] font-bold text-red-600 hover:underline ml-1"
+            >
+              <span aria-hidden="true">⚠</span> Reintentar
+            </button>
+          ) : mio && msg.estadoEnvio === 'enviando' ? (
+            <span className="text-[10px] text-gray-400 ml-0.5" aria-label="Enviando">
+              enviando…
+            </span>
+          ) : mio ? (
+            <span
+              className={cn('text-[12px] ml-0.5 leading-none', leido ? 'text-sky-500' : 'text-gray-400')}
+              aria-label={leido ? 'Leído' : 'Enviado'}
+            >
               {leido ? '✓✓' : '✓'}
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -186,20 +274,33 @@ export default function LandlordMessagesStudentsPage() {
   const [quoteado, setQuoteado]             = useState<Mensaje | null>(null);
   const [mostrarEmojis, setMostrarEmojis]   = useState(false);
   const [mostrarMenuConv, setMostrarMenuConv] = useState(false);
-  const [eliminando, setEliminando]         = useState(false);
+  const [mostrarReportar, setMostrarReportar] = useState(false);
+  const [archivando, setArchivando]         = useState(false);
   const [stompConectado, setStompConectado] = useState(stompClient.isConnected());
   const [vistaMovil, setVistaMovil]         = useState<'lista' | 'chat'>('lista');
+  const [mensajesNoVistos, setMensajesNoVistos] = useState(0);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  // Ítem 264: la lista sigue trayendo TODAS las conversaciones de una (necesario para
+  // suscribirse por WS a cada una y no perderse mensajes nuevos de las que no están
+  // visibles aún), pero el DOM solo pinta de a 20 y crece con el scroll — así se cumple
+  // el "infinite scroll en la lista" del ítem sin dejar de recibir notificaciones en vivo.
+  const [visibleCount, setVisibleCount]     = useState(20);
 
   const scrollRef        = useRef<HTMLDivElement>(null);
+  const listSentinelRef  = useRef<HTMLDivElement>(null);
   const inputRef         = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef    = useRef<HTMLInputElement>(null);
   const emojiRef         = useRef<HTMLDivElement>(null);
   const menuConvRef      = useRef<HTMLDivElement>(null);
   const seleccionadaRef  = useRef<ConversacionResumen | null>(null);
   const typingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingState  = useRef(false);
+  const cercaDelFondoRef = useRef(true);
+  const tempIdRef        = useRef(-1);
 
   const { perfilId: miPerfilId, rol: miRol } = useMemo(() => obtenerMiIdentidad(), []);
   const setTotal   = useUnreadMessagesStore((s) => s.setTotal);
+  const temaChat   = useThemeStore((s) => s.resolved);
 
   // Mantener ref sincronizada para evitar closures rancios en callbacks de STOMP
   useEffect(() => { seleccionadaRef.current = seleccionada; }, [seleccionada]);
@@ -245,6 +346,15 @@ export default function LandlordMessagesStudentsPage() {
             // Conversación activa: agregar al chat
             setMensajes((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
             if (!esMio) conversationService.marcarLeida(conv.id).catch(() => {});
+            // Ítem 267: solo autoscrollear si ya estaba cerca del fondo; si no, sumar al contador
+            // del botón flotante para no secuestrar el scroll de quien lee mensajes viejos.
+            if (cercaDelFondoRef.current) {
+              requestAnimationFrame(() => {
+                if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+              });
+            } else {
+              setMensajesNoVistos((n) => n + 1);
+            }
           } else if (!esMio) {
             // Otra conversación: toast + actualizar badge
             notify.info(conv.contraparteNombre, msg.contenido.substring(0, 70));
@@ -324,6 +434,11 @@ export default function LandlordMessagesStudentsPage() {
         setMensajes(pagina.content);
         setPaginaActual(ultimaPag);
         setHayMasAntiguos(ultimaPag > 0);
+        cercaDelFondoRef.current = true;
+        setMensajesNoVistos(0);
+        requestAnimationFrame(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        });
 
         // Marcar como leída + resetear badge en lista
         conversationService.marcarLeida(id).catch(() => {});
@@ -346,11 +461,28 @@ export default function LandlordMessagesStudentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seleccionada?.id]);
 
-  // Auto-scroll al fondo cuando llegan mensajes nuevos
+  // Ítem 267: el indicador "escribiendo…" solo empuja el scroll si ya se estaba cerca del
+  // fondo. El caso "llegó un mensaje nuevo" se maneja donde se agrega el mensaje (arriba y en
+  // enviarMensaje), que es donde sabemos si hay que autoscrollear o sumar al contador.
   useEffect(() => {
-    if (cargandoMensajes || !scrollRef.current) return;
+    if (cargandoMensajes || !scrollRef.current || !cercaDelFondoRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [mensajes.length, otroEscribiendo, cargandoMensajes]);
+  }, [otroEscribiendo, cargandoMensajes]);
+
+  const onScrollMensajes = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distancia = el.scrollHeight - el.scrollTop - el.clientHeight;
+    cercaDelFondoRef.current = distancia < 100;
+    if (cercaDelFondoRef.current) setMensajesNoVistos(0);
+  };
+
+  const irAlFondo = () => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    cercaDelFondoRef.current = true;
+    setMensajesNoVistos(0);
+  };
 
   // Cerrar emoji picker al hacer clic afuera
   useEffect(() => {
@@ -374,15 +506,17 @@ export default function LandlordMessagesStudentsPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [mostrarMenuConv]);
 
-  // ── Eliminar (soft-delete) conversación ─────────────────────────────────────
-  const eliminarConversacion = useCallback(async () => {
+  // ── Archivar (soft-delete) conversación ──────────────────────────────────────
+  // Ítem 262: mismo DELETE de siempre — solo cambia el copy, que antes prometía un borrado
+  // definitivo que nunca fue tal (la conversación reaparece si la contraparte vuelve a escribir).
+  const archivarConversacion = useCallback(async () => {
     const conv = seleccionadaRef.current;
-    if (!conv || eliminando) return;
+    if (!conv || archivando) return;
     const ok = window.confirm(
-      `¿Borrar tu copia de la conversación con ${conv.contraparteNombre || 'este estudiante'}?\n\nNo se eliminará para el estudiante. Si te escribe de nuevo, la conversación reaparecerá.`,
+      `¿Archivar esta conversación? Volverá a aparecer si ${conv.contraparteNombre || 'el estudiante'} te escribe de nuevo.`,
     );
     if (!ok) return;
-    setEliminando(true);
+    setArchivando(true);
     setMostrarMenuConv(false);
     try {
       await conversationService.eliminar(conv.id);
@@ -394,13 +528,13 @@ export default function LandlordMessagesStudentsPage() {
       setSeleccionada(null);
       setVistaMovil('lista');
       setMensajes([]);
-      notify.info('Conversación borrada', 'Se quitó de tu lista. Reaparecerá si el estudiante te escribe.');
+      notify.info('Conversación archivada', 'Se quitó de tu lista. Reaparecerá si el estudiante te escribe.');
     } catch (err) {
-      notify.error(err, 'No se pudo borrar la conversación');
+      notify.error(err, 'No se pudo archivar la conversación');
     } finally {
-      setEliminando(false);
+      setArchivando(false);
     }
-  }, [eliminando, setTotal]);
+  }, [archivando, setTotal]);
 
   // ── Cargar mensajes anteriores ───────────────────────────────────────────────
   const cargarAntiguos = async () => {
@@ -442,9 +576,94 @@ export default function LandlordMessagesStudentsPage() {
     }, 2500);
   }, []);
 
+  // Ítem 268: intenta enviar `contenido` y resuelve el mensaje optimista (`tempId`) con la
+  // respuesta real, o lo marca "fallido" en su lugar — comparte código entre el primer envío
+  // y el reintento manual desde la burbuja.
+  const intentarEnviar = useCallback(async (conv: ConversacionResumen, tempId: number, contenido: string) => {
+    try {
+      const nuevo = await conversationService.enviarMensaje(conv.id, contenido);
+      setMensajes((prev) => prev.map((m) => m.id === tempId ? nuevo : m));
+      setConversaciones((prev) =>
+        prev.map((c) =>
+          c.id === conv.id
+            ? { ...c, ultimoMensajePreview: contenido, fechaUltimaActividad: new Date().toISOString() }
+            : c,
+        ).sort((a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime()),
+      );
+    } catch (err) {
+      notify.error(err, 'No se pudo enviar el mensaje');
+      setMensajes((prev) => prev.map((m) => m.id === tempId ? { ...m, estadoEnvio: 'fallido' as const } : m));
+    }
+  }, []);
+
+  // Ítem 254: adjuntar imagen. Mismo patrón optimista que `intentarEnviar` (mensaje temporal
+  // con preview local vía blob URL), pero sin botón "Reintentar" si falla — reintentar
+  // reenviaría el `File` original, que esta función no conserva tras el primer intento.
+  const enviarImagenAdjunta = useCallback(async (file: File) => {
+    const conv = seleccionadaRef.current;
+    if (!conv) return;
+    const tempId = tempIdRef.current--;
+    const previewUrl = URL.createObjectURL(file);
+    setMensajes((prev) => [...prev, {
+      id: tempId,
+      conversacionId: conv.id,
+      emisorPerfilId: miPerfilId ?? 0,
+      emisorRol: 'ARRENDADOR' as const,
+      contenido: '📷 Imagen',
+      estado: 'ENVIADO' as const,
+      fechaEnvio: new Date().toISOString(),
+      estadoEnvio: 'enviando' as const,
+      tipo: 'IMAGEN' as const,
+      urlAdjunto: previewUrl,
+    }]);
+    cercaDelFondoRef.current = true;
+    setMensajesNoVistos(0);
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
+    try {
+      const { url } = await conversationService.subirImagenChat(conv.id, file);
+      const nuevo = await conversationService.enviarImagen(conv.id, url);
+      setMensajes((prev) => prev.map((m) => m.id === tempId ? nuevo : m));
+      setConversaciones((prev) =>
+        prev.map((c) =>
+          c.id === conv.id
+            ? { ...c, ultimoMensajePreview: nuevo.contenido, fechaUltimaActividad: new Date().toISOString() }
+            : c,
+        ).sort((a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime()),
+      );
+      URL.revokeObjectURL(previewUrl);
+    } catch (err) {
+      notify.error(err, 'No se pudo enviar la imagen');
+      setMensajes((prev) => prev.map((m) => m.id === tempId ? { ...m, estadoEnvio: 'fallido' as const } : m));
+    }
+  }, [miPerfilId]);
+
+  const handleAdjuntarImagen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      notify.error(null, 'Solo se aceptan imágenes JPG, PNG o WEBP.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      notify.error(null, 'La imagen no puede pesar más de 10MB.');
+      return;
+    }
+    setSubiendoImagen(true);
+    try {
+      await enviarImagenAdjunta(file);
+    } finally {
+      setSubiendoImagen(false);
+    }
+  };
+
   // ── Enviar mensaje ────────────────────────────────────────────────────────────
-  const enviarMensaje = useCallback(async () => {
-    const txt = borrador.trim();
+  // `textoOverride` lo usan las respuestas rápidas (ítem 260) para enviar directo sin pasar
+  // por el borrador del textarea.
+  const enviarMensaje = useCallback((textoOverride?: string) => {
+    const txt = (textoOverride ?? borrador).trim();
     if (!txt || !seleccionadaRef.current) return;
 
     const conv = seleccionadaRef.current;
@@ -452,28 +671,43 @@ export default function LandlordMessagesStudentsPage() {
       ? `> ${quoteado.contenido.slice(0, 120)}\n\n${txt}`
       : txt;
 
-    setBorrador('');
+    if (textoOverride === undefined) {
+      setBorrador('');
+      if (inputRef.current) { inputRef.current.style.height = 'auto'; }
+    }
     setQuoteado(null);
-    if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     lastTypingState.current = false;
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     stompClient.publish(`/app/chat.typing/${conv.id}`, { escribiendo: false });
 
-    try {
-      const nuevo = await conversationService.enviarMensaje(conv.id, contenido);
-      setMensajes((prev) => prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]);
-      setConversaciones((prev) =>
-        prev.map((c) =>
-          c.id === conv.id
-            ? { ...c, ultimoMensajePreview: txt, fechaUltimaActividad: new Date().toISOString() }
-            : c,
-        ).sort((a, b) => new Date(b.fechaUltimaActividad).getTime() - new Date(a.fechaUltimaActividad).getTime()),
-      );
-    } catch (err) {
-      notify.error(err, 'No se pudo enviar el mensaje');
-      setBorrador(txt);
-    }
-  }, [borrador, quoteado]);
+    // Ítem 268: mensaje optimista con id temporal negativo — se reemplaza por el real al
+    // confirmar el backend, o se marca "fallido" (con botón Reintentar en la burbuja).
+    const tempId = tempIdRef.current--;
+    setMensajes((prev) => [...prev, {
+      id: tempId,
+      conversacionId: conv.id,
+      emisorPerfilId: miPerfilId ?? 0,
+      emisorRol: 'ARRENDADOR' as const,
+      contenido,
+      estado: 'ENVIADO' as const,
+      fechaEnvio: new Date().toISOString(),
+      estadoEnvio: 'enviando' as const,
+    }]);
+    cercaDelFondoRef.current = true;
+    setMensajesNoVistos(0);
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
+
+    intentarEnviar(conv, tempId, contenido);
+  }, [borrador, quoteado, miPerfilId, intentarEnviar]);
+
+  const reintentarEnvio = useCallback((msg: Mensaje) => {
+    const conv = seleccionadaRef.current;
+    if (!conv) return;
+    setMensajes((prev) => prev.map((m) => m.id === msg.id ? { ...m, estadoEnvio: 'enviando' as const } : m));
+    intentarEnviar(conv, msg.id, msg.contenido);
+  }, [intentarEnviar]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); }
@@ -493,19 +727,34 @@ export default function LandlordMessagesStudentsPage() {
     setBorrador('');
     setQuoteado(null);
     setMostrarEmojis(false);
+    cercaDelFondoRef.current = true;
+    setMensajesNoVistos(0);
   };
 
   // ── Computed: conversaciones filtradas ────────────────────────────────────────
-  const filtradas = conversaciones.filter((c) =>
-    c.contraparteNombre.toLowerCase().includes(busqueda.toLowerCase()),
-  );
+  // Ítem 263: la búsqueda matchea tanto el nombre de la contraparte como el título de la propiedad.
+  const buscandoConv = busqueda.trim().length > 0;
+  const filtradas = conversaciones.filter((c) => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.contraparteNombre.toLowerCase().includes(q) ||
+      (c.propiedadTitulo ?? '').toLowerCase().includes(q)
+    );
+  });
+  // Ítem 264: mientras no se esté buscando, la lista solo pinta una ventana que
+  // crece con el scroll; al buscar se muestran todos los resultados de una vez
+  // (cortar los resultados de búsqueda sería confuso — "no aparece" ≠ "no cargó aún").
+  const filtradasVisibles = buscandoConv ? filtradas : filtradas.slice(0, visibleCount);
+  const hayMasEnLista = !buscandoConv && filtradas.length > visibleCount;
+
+  useInfiniteScroll(listSentinelRef, () => setVisibleCount((n) => n + 20), {
+    enabled: hayMasEnLista,
+  });
 
   // ── Computed: mensajes con separadores de fecha ───────────────────────────────
   const mensajesConSeps = useMemo(() => {
-    type Item =
-      | { type: 'sep'; label: string; key: string }
-      | { type: 'msg'; msg: Mensaje };
-    const result: Item[] = [];
+    const result: ItemMensajeLista[] = [];
     let lastLabel = '';
     for (const msg of mensajes) {
       const label = grupoFechaMsg(msg.fechaEnvio);
@@ -513,18 +762,33 @@ export default function LandlordMessagesStudentsPage() {
         result.push({ type: 'sep', label, key: `sep-${msg.id}` });
         lastLabel = label;
       }
-      result.push({ type: 'msg', msg });
+      result.push({ type: 'msg', msg, key: `msg-${msg.id}` });
     }
     return result;
   }, [mensajes]);
+
+  // Ítem 342: virtualiza el RENDER de `mensajesConSeps` (windowing) — la lógica de carga
+  // (`cargarAntiguos`, el botón "Ver mensajes anteriores", el spinner inicial) no cambia, sigue
+  // operando sobre `mensajes`/`paginaActual` como antes. `getItemKey` usa el id real del mensaje
+  // (no el índice) para que las mediciones de altura no se desordenen al anteponer mensajes
+  // antiguos, que corre todos los índices existentes hacia abajo.
+  const rowVirtualizer = useVirtualizer({
+    count: mensajesConSeps.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => (mensajesConSeps[index]?.type === 'sep' ? 32 : 64),
+    overscan: 8,
+    getItemKey: (index) => mensajesConSeps[index]?.key ?? index,
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   //  RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     // En desktop ocupa el área a la derecha del sidebar (280px); en móvil va a pantalla
-    // completa dejando visible la barra superior (h-14) para poder abrir el menú.
-    <div className="fixed top-14 lg:top-0 right-0 bottom-0 left-0 lg:left-[280px] flex overflow-hidden z-10">
+    // completa dejando visible la barra superior (h-14) para poder abrir el menú. Ítem 349:
+    // `bottom-16` en vez de `bottom-0` bajo `lg` deja espacio para `LandlordBottomNav` (fixed,
+    // h-16, montado en `layout.tsx`) — si no, el nav quedaría encima del input del chat.
+    <div className="fixed top-14 lg:top-0 right-0 bottom-16 lg:bottom-0 left-0 lg:left-[280px] flex overflow-hidden z-10">
 
       {/* ══ Panel izquierdo: lista de conversaciones ══ */}
       <aside className={cn(
@@ -570,7 +834,7 @@ export default function LandlordMessagesStudentsPage() {
             </div>
           )}
 
-          {filtradas.map((conv) => {
+          {filtradasVisibles.map((conv) => {
             const activa   = seleccionada?.id === conv.id;
             const inicial  = (conv.contraparteNombre || '?').charAt(0).toUpperCase();
             const color    = avatarColor(conv.contraparteNombre || '');
@@ -614,7 +878,7 @@ export default function LandlordMessagesStudentsPage() {
                     </p>
                     {conv.noLeidos > 0 && !activa && (
                       <span className="shrink-0 min-w-[20px] h-5 bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5">
-                        {conv.noLeidos > 99 ? '99+' : conv.noLeidos}
+                        {conv.noLeidos > 9 ? '9+' : conv.noLeidos}
                       </span>
                     )}
                   </div>
@@ -626,12 +890,15 @@ export default function LandlordMessagesStudentsPage() {
               </button>
             );
           })}
+
+          {/* Ítem 264: sentinel de scroll infinito de la lista (solo fuera de una búsqueda) */}
+          {hayMasEnLista && <div ref={listSentinelRef} className="h-4" />}
         </div>
       </aside>
 
       {/* ══ Panel derecho: área de chat ══ */}
       <main className={cn(
-        'flex-1 flex flex-col min-w-0 bg-[#efeae2]',
+        'flex-1 flex flex-col min-w-0 bg-muted',
         vistaMovil === 'lista' ? 'hidden md:flex' : 'flex',
       )}>
         {!seleccionada ? (
@@ -683,77 +950,147 @@ export default function LandlordMessagesStudentsPage() {
                   onClick={() => setMostrarMenuConv((v) => !v)}
                   className="p-1.5 -mr-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Más opciones"
-                  disabled={eliminando}
+                  disabled={archivando}
                 >
                   <span className="material-symbols-outlined text-[22px]">more_vert</span>
                 </button>
                 {mostrarMenuConv && (
                   <div className="absolute right-0 top-full mt-1 z-30 min-w-[200px] bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                     <button
-                      onClick={eliminarConversacion}
-                      disabled={eliminando}
+                      onClick={() => { setMostrarMenuConv(false); setMostrarReportar(true); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">flag</span>
+                      Reportar
+                    </button>
+                    <button
+                      onClick={archivarConversacion}
+                      disabled={archivando}
                       className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined text-[18px]">delete</span>
-                      {eliminando ? 'Borrando…' : 'Borrar conversación'}
+                      {archivando ? 'Archivando…' : 'Archivar conversación'}
                     </button>
                   </div>
                 )}
               </div>
             </header>
 
+            <ReportConversationDialog
+              conversacionId={seleccionada.id}
+              contraparteNombre={seleccionada.contraparteNombre}
+              open={mostrarReportar}
+              onOpenChange={setMostrarReportar}
+            />
+
             {/* Área de mensajes */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
-              {/* Botón cargar mensajes anteriores */}
-              {hayMasAntiguos && (
-                <div className="flex justify-center pb-2">
-                  <button
-                    onClick={cargarAntiguos}
-                    disabled={cargandoAntiguos}
-                    className="text-[11px] font-bold text-primary bg-white/80 hover:bg-white border border-primary/10 px-4 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
-                  >
-                    {cargandoAntiguos ? 'Cargando…' : '↑ Ver mensajes anteriores'}
-                  </button>
-                </div>
+            <div className="flex-1 relative min-h-0">
+              <div
+                ref={scrollRef}
+                onScroll={onScrollMensajes}
+                aria-live="polite"
+                aria-relevant="additions"
+                className="absolute inset-0 overflow-y-auto px-4 py-3 space-y-1"
+              >
+                {/* Botón cargar mensajes anteriores */}
+                {hayMasAntiguos && (
+                  <div className="flex justify-center pb-2">
+                    <button
+                      onClick={cargarAntiguos}
+                      disabled={cargandoAntiguos}
+                      className="text-[11px] font-bold text-primary bg-white/80 hover:bg-white border border-primary/10 px-4 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      {cargandoAntiguos ? 'Cargando…' : '↑ Ver mensajes anteriores'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Spinner de carga */}
+                {cargandoMensajes && (
+                  <div className="flex justify-center py-12">
+                    <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  </div>
+                )}
+
+                {/* Estado vacío de mensajes */}
+                {!cargandoMensajes && mensajes.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full py-20 text-center gap-2">
+                    <span className="material-symbols-outlined text-4xl text-gray-300">forum</span>
+                    <p className="text-gray-500 text-sm">Inicia la conversación enviando un mensaje</p>
+                  </div>
+                )}
+
+                {/* Mensajes (ítem 342: renderizados con windowing vía @tanstack/react-virtual —
+                    solo se monta lo visible + overscan, no los cientos de mensajes cargados) */}
+                {!cargandoMensajes && mensajesConSeps.length > 0 && (
+                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const item = mensajesConSeps[virtualRow.index];
+                      if (!item) return null;
+                      const mio = item.type === 'msg' && esMensajeMio(item.msg, miPerfilId, miRol);
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={rowVirtualizer.measureElement}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                          className="pb-1"
+                        >
+                          {item.type === 'sep' ? (
+                            <FechaSeparador label={item.label} />
+                          ) : (
+                            <BurbujaMensaje
+                              msg={item.msg}
+                              mio={mio}
+                              autor={mio ? 'Tú' : (seleccionada.contraparteNombre || 'Estudiante')}
+                              onReply={() => setQuoteado(item.msg)}
+                              onRetry={() => reintentarEnvio(item.msg)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Typing indicator */}
+                {otroEscribiendo && <TypingDots />}
+              </div>
+
+              {/* Ítem 267: botón flotante cuando llegan mensajes fuera de la vista actual */}
+              {mensajesNoVistos > 0 && (
+                <button
+                  onClick={irAlFondo}
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-primary text-white text-[12px] font-bold px-4 py-1.5 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+                >
+                  ↓ {mensajesNoVistos} mensaje{mensajesNoVistos > 1 ? 's' : ''} nuevo{mensajesNoVistos > 1 ? 's' : ''}
+                </button>
               )}
-
-              {/* Spinner de carga */}
-              {cargandoMensajes && (
-                <div className="flex justify-center py-12">
-                  <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                </div>
-              )}
-
-              {/* Estado vacío de mensajes */}
-              {!cargandoMensajes && mensajes.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-center gap-2">
-                  <span className="material-symbols-outlined text-4xl text-gray-300">forum</span>
-                  <p className="text-gray-500 text-sm">Inicia la conversación enviando un mensaje</p>
-                </div>
-              )}
-
-              {/* Mensajes */}
-              {!cargandoMensajes && mensajesConSeps.map((item) => {
-                if (item.type === 'sep') {
-                  return <FechaSeparador key={item.key} label={item.label} />;
-                }
-                const mio = esMensajeMio(item.msg, miPerfilId, miRol);
-                return (
-                  <BurbujaMensaje
-                    key={item.msg.id}
-                    msg={item.msg}
-                    mio={mio}
-                    onReply={() => setQuoteado(item.msg)}
-                  />
-                );
-              })}
-
-              {/* Typing indicator */}
-              {otroEscribiendo && <TypingDots />}
             </div>
 
             {/* Área de input */}
             <div className="bg-white border-t border-gray-200 px-4 py-3 shrink-0">
+              {/* Ítem 260: respuestas rápidas, solo en conversaciones sin mensajes aún */}
+              {!cargandoMensajes && mensajes.length === 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {RESPUESTAS_RAPIDAS.map((texto) => (
+                    <button
+                      key={texto}
+                      onClick={() => enviarMensaje(texto)}
+                      className="text-[12px] font-medium text-primary bg-primary/5 hover:bg-primary/10 border border-primary/15 px-3 py-1.5 rounded-full transition-colors"
+                    >
+                      {texto}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Preview del mensaje citado */}
               {quoteado && (
                 <div className="flex items-start gap-2 mb-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
@@ -771,6 +1108,24 @@ export default function LandlordMessagesStudentsPage() {
               )}
 
               <div className="flex items-end gap-2">
+                {/* Ítem 254: adjuntar imagen */}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAdjuntarImagen}
+                />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={subiendoImagen}
+                  title={subiendoImagen ? 'Subiendo…' : 'Adjuntar imagen'}
+                  className="p-2 text-gray-400 hover:text-emerald-600 transition-colors disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[24px]">attach_file</span>
+                </button>
+
                 {/* Emoji picker */}
                 <div ref={emojiRef} className="relative shrink-0">
                   <button
@@ -788,6 +1143,7 @@ export default function LandlordMessagesStudentsPage() {
                         }}
                         height={350}
                         width={300}
+                        theme={temaChat as unknown as EmojiTheme}
                       />
                     </div>
                   )}
@@ -808,7 +1164,7 @@ export default function LandlordMessagesStudentsPage() {
 
                 {/* Botón enviar */}
                 <button
-                  onClick={enviarMensaje}
+                  onClick={() => enviarMensaje()}
                   disabled={!borrador.trim()}
                   className="w-10 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
                 >

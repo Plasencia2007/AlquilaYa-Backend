@@ -16,6 +16,8 @@ export interface ItemCatalogo {
   tipo: TipoItemCatalogo;
   icono?: string | null;
   descripcion?: string | null;
+  /** Solo aplica a `BANNER`: URL de la imagen del hero gestionable. */
+  imagenUrl?: string | null;
   activo: boolean;
 }
 
@@ -25,6 +27,8 @@ export interface ItemCatalogoInput {
   tipo: TipoItemCatalogo;
   icono?: string;
   descripcion?: string;
+  /** Solo aplica a `BANNER`: URL de la imagen del hero gestionable. */
+  imagenUrl?: string;
   activo: boolean;
 }
 
@@ -52,5 +56,21 @@ export const catalogService = {
 
   eliminarFiltro: async (id: number): Promise<void> => {
     await api.delete(`catalogos/admin/filtros/${id}`);
+  },
+
+  /**
+   * Sube un archivo de imagen para el banner del hero. El backend lo sube a
+   * Cloudinary (carpeta `alquilaya/banners`) y devuelve la URL segura, que se
+   * guarda como `imagenUrl` del ítem BANNER.
+   */
+  subirImagenBanner: async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<{ url: string }>(
+      'catalogos/admin/banners/imagen',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data.url;
   },
 };

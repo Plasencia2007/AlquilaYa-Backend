@@ -1,18 +1,43 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/legacy-card';
 import { Button } from '@/components/ui/legacy-button';
 import { Badge } from '@/components/ui/legacy-badge';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { ReservationStatusBadge } from '@/components/shared/reservation-status-badge';
+import { ContractActions } from '@/components/student/contract-actions';
 import { useReservationsStore } from '@/stores/reservations-store';
 import type { EstadoReserva, Reserva } from '@/types/reserva';
 
+/** Solo las reservas que ya llegaron al pago tienen contrato generado (G4). */
 const ESTADOS_CONTRATO: EstadoReserva[] = ['PAGADA', 'FINALIZADA'];
 
-interface FilaContrato {
-  reserva: Reserva;
-  /** Etiqueta visible del estado del contrato derivada del estado de la reserva. */
-  estadoContrato: 'firmado' | 'expirado';
+type EstadoFirmaContrato = 'ambas' | 'esperandoEstudiante' | 'pendienteDeTi';
+
+const META_FIRMA: Record<EstadoFirmaContrato, { label: string; variant: 'success' | 'warning' | 'outline' }> = {
+  ambas: { label: 'Firmado', variant: 'success' },
+  esperandoEstudiante: { label: 'Esperando estudiante', variant: 'warning' },
+  pendienteDeTi: { label: 'Pendiente de tu firma', variant: 'outline' },
+};
+
+/**
+ * Estado real de firma (ítem 317), leído de `firmaEstudianteAt`/`firmaArrendadorAt`
+ * (ya vienen en el DTO). Espejo de `contract-actions.tsx` (`yoFirme`/`arrendadorFirmo`/
+ * `ambasFirmas`) pero desde la perspectiva del arrendador: aquí "yo" = arrendador.
+ */
+function estadoFirmaContrato(reserva: Reserva): EstadoFirmaContrato {
+  const yoFirme = Boolean(reserva.firmaArrendadorAt);
+  const estudianteFirmo = Boolean(reserva.firmaEstudianteAt);
+  if (yoFirme && estudianteFirmo) return 'ambas';
+  if (yoFirme && !estudianteFirmo) return 'esperandoEstudiante';
+  return 'pendienteDeTi';
 }
 
 function formatearFecha(iso?: string): string {
@@ -26,30 +51,34 @@ function formatearFecha(iso?: string): string {
   });
 }
 
-function derivarEstadoContrato(reserva: Reserva): FilaContrato['estadoContrato'] {
-  return reserva.estado === 'FINALIZADA' ? 'expirado' : 'firmado';
+function formatearMonto(monto: number): string {
+  return new Intl.NumberFormat('es-PE', {
+    style: 'currency',
+    currency: 'PEN',
+    maximumFractionDigits: 0,
+  }).format(monto);
 }
 
 export default function LandlordContractsPage() {
   const { reservas, loading, error, cargar } = useReservationsStore();
+  const [detalleId, setDetalleId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Cargamos todas y derivamos contratos client-side a partir de los
-    // estados PAGADA y FINALIZADA. Cuando exista un endpoint dedicado a
-    // contratos, sustituir por una llamada server-side directa.
     cargar();
   }, [cargar]);
 
-  const filas: FilaContrato[] = useMemo(() => {
+  const filas: Reserva[] = useMemo(() => {
     return reservas
       .filter((r) => ESTADOS_CONTRATO.includes(r.estado))
-      .map((reserva) => ({ reserva, estadoContrato: derivarEstadoContrato(reserva) }))
-      .sort((a, b) => {
-        const aMs = new Date(a.reserva.fechaCreacion).getTime();
-        const bMs = new Date(b.reserva.fechaCreacion).getTime();
-        return bMs - aMs;
-      });
+      .sort((a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime());
   }, [reservas]);
+
+  // La reserva del detalle se busca en vivo en `reservas` (no en una copia local) para
+  // que, tras firmar, el panel refleje de inmediato el `firmaArrendadorAt` actualizado.
+  const detalle = useMemo(
+    () => (detalleId ? (reservas.find((r) => r.id === detalleId) ?? null) : null),
+    [reservas, detalleId],
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-400">
@@ -118,7 +147,7 @@ export default function LandlordContractsPage() {
                     Periodo
                   </th>
                   <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
-                    Estado
+                    Firma
                   </th>
                   <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-muted-foreground opacity-60 text-right">
                     Acciones
@@ -126,50 +155,52 @@ export default function LandlordContractsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filas.map(({ reserva, estadoContrato }) => (
-                  <tr key={reserva.id} className="hover:bg-muted transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-black text-foreground/90">
-                        {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        Reserva #{reserva.id}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs font-bold text-muted-foreground">
-                        {reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}
-                      </p>
-                      {reserva.propiedadUbicacion && (
-                        <p className="text-[10px] text-muted-foreground/70 font-medium">
-                          {reserva.propiedadUbicacion}
+                {filas.map((reserva) => {
+                  const estadoFirma = estadoFirmaContrato(reserva);
+                  const meta = META_FIRMA[estadoFirma];
+                  return (
+                    <tr key={reserva.id} className="hover:bg-muted transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-black text-foreground/90">
+                          {reserva.estudianteNombre ?? `Estudiante ${reserva.estudianteId}`}
                         </p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-[11px] font-medium text-muted-foreground opacity-80">
-                        {formatearFecha(reserva.fechaInicio)} – {formatearFecha(reserva.fechaFin)}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant={estadoContrato === 'firmado' ? 'success' : 'outline'}
-                        className="text-[10px] font-black uppercase"
-                      >
-                        {estadoContrato}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-primary font-black text-[10px] uppercase tracking-wider"
-                      >
-                        Ver detalle
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                        <p className="text-[10px] text-muted-foreground font-medium">
+                          Reserva #{reserva.id}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-xs font-bold text-muted-foreground">
+                          {reserva.propiedadTitulo ?? `Propiedad ${reserva.propiedadId}`}
+                        </p>
+                        {reserva.propiedadUbicacion && (
+                          <p className="text-[10px] text-muted-foreground/70 font-medium">
+                            {reserva.propiedadUbicacion}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-[11px] font-medium text-muted-foreground opacity-80">
+                          {formatearFecha(reserva.fechaInicio)} – {formatearFecha(reserva.fechaFin)}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={meta.variant} className="text-[10px] font-black uppercase">
+                          {meta.label}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDetalleId(reserva.id)}
+                          className="text-primary font-black text-[10px] uppercase tracking-wider"
+                        >
+                          Ver detalle
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -185,6 +216,64 @@ export default function LandlordContractsPage() {
           Perú. Puedes descargar copias físicas en cualquier momento.
         </p>
       </div>
+
+      <Sheet open={!!detalle} onOpenChange={(open) => { if (!open) setDetalleId(null); }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto space-y-6">
+          {detalle && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Reserva #{detalle.id}</SheetTitle>
+                <SheetDescription>
+                  {detalle.propiedadTitulo ?? `Propiedad ${detalle.propiedadId}`}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60 mb-1">
+                    Estudiante
+                  </p>
+                  <p className="font-bold text-foreground">
+                    {detalle.estudianteNombre ?? `Estudiante ${detalle.estudianteId}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60 mb-1">
+                    Estado de la reserva
+                  </p>
+                  <ReservationStatusBadge estado={detalle.estado} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60 mb-1">
+                    Periodo
+                  </p>
+                  <p className="font-bold text-foreground">
+                    {formatearFecha(detalle.fechaInicio)} – {formatearFecha(detalle.fechaFin)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60 mb-1">
+                    Monto
+                  </p>
+                  <p className="font-black text-primary">{formatearMonto(detalle.montoTotal)}</p>
+                </div>
+              </div>
+
+              <ContractActions
+                reserva={detalle}
+                onFirmado={(actualizada) => {
+                  // El store no expone una acción genérica de parche; usamos el
+                  // `setState` estático de zustand para reflejar la firma sin
+                  // tener que refetchear ni tocar `reservations-store.ts`.
+                  useReservationsStore.setState((state) => ({
+                    reservas: state.reservas.map((r) => (r.id === actualizada.id ? actualizada : r)),
+                  }));
+                }}
+              />
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

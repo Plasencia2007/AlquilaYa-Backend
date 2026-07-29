@@ -6,6 +6,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { esImagenExterna } from '@/lib/img';
+import { imgUrl } from '@/lib/cloudinary';
 
 interface Props {
   imagenes: string[];
@@ -16,6 +17,17 @@ interface Props {
   className?: string;
 }
 
+/**
+ * Placeholder LQIP (ítem 419): blurDataURL de Cloudinary (50px, muy comprimido).
+ * Las fotos externas (pegadas por URL) no pasan por Cloudinary — `imgUrl` las
+ * devuelve intactas, así que ahí se omite el placeholder (evita descargar la
+ * misma foto completa dos veces).
+ */
+function blurProps(src: string): Pick<React.ComponentProps<typeof Image>, 'placeholder' | 'blurDataURL'> {
+  if (esImagenExterna(src)) return {};
+  return { placeholder: 'blur', blurDataURL: imgUrl(src, { blur: true }) };
+}
+
 const SWIPE_THRESHOLD = 50;
 
 /**
@@ -23,7 +35,9 @@ const SWIPE_THRESHOLD = 50;
  * - Desktop: flechas reveladas en hover + dots clicables.
  * - Móvil: swipe táctil (deltaX > 50px cambia slide).
  * - A11y: tablist con dots, live region anunciando cambio, aria-labels en flechas.
- * - Performance: imagen 0 con priority/eager, 1..N lazy.
+ * - Performance (ítem 130): solo la imagen 0 se monta de entrada; las 1..N
+ *   se montan al PRIMER gesto del usuario (hover, foco, swipe o navegación),
+ *   así un grid de N cards no descarga todas sus fotos de golpe al aparecer.
  */
 export function PropertyCardImageCarousel({
   imagenes,
@@ -38,12 +52,17 @@ export function PropertyCardImageCarousel({
   const tablistId = useId();
 
   const [index, setIndex] = useState(0);
+  // Se vuelve true al primer gesto: hasta entonces solo vive la imagen 0 en el DOM.
+  const [activado, setActivado] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef<number>(0);
+
+  const activar = useCallback(() => setActivado(true), []);
 
   const goTo = useCallback(
     (i: number) => {
       if (total === 0) return;
+      setActivado(true);
       const normalized = ((i % total) + total) % total;
       setIndex(normalized);
     },
@@ -69,6 +88,7 @@ export function PropertyCardImageCarousel({
   );
 
   const onTouchStart = (e: React.TouchEvent) => {
+    setActivado(true);
     touchStartX.current = e.touches[0]?.clientX ?? null;
     touchDeltaX.current = 0;
   };
@@ -100,6 +120,7 @@ export function PropertyCardImageCarousel({
           alt={alt}
           priority={priority}
           unoptimized={esImagenExterna(safeImages[0])}
+          {...blurProps(safeImages[0])}
           className="object-cover transition-transform duration-500 motion-safe:group-hover:scale-105"
         />
       </div>
@@ -109,28 +130,35 @@ export function PropertyCardImageCarousel({
   return (
     <div
       className={cn('relative w-full overflow-hidden', aspect, className)}
+      onMouseEnter={activar}
+      onFocus={activar}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Track de imágenes (apiladas, una visible) */}
-      {safeImages.map((src, i) => (
-        <Image
-          key={`${src}-${i}`}
-          fill
-          sizes={sizes}
-          src={src}
-          alt={i === 0 ? alt : `${alt} — imagen ${i + 1}`}
-          priority={i === 0 ? priority : false}
-          loading={i === 0 ? undefined : 'lazy'}
-          unoptimized={esImagenExterna(src)}
-          className={cn(
-            'object-cover transition-opacity duration-300 motion-safe:group-hover:scale-105 motion-safe:transition-transform motion-safe:duration-500',
-            i === index ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          )}
-          aria-hidden={i !== index}
-        />
-      ))}
+      {/* Track de imágenes (apiladas, una visible). Solo la 0 se monta hasta que
+          el usuario interactúa; el resto entra al DOM tras `activado`. */}
+      {safeImages.map((src, i) => {
+        if (i !== 0 && !activado) return null;
+        return (
+          <Image
+            key={`${src}-${i}`}
+            fill
+            sizes={sizes}
+            src={src}
+            alt={i === 0 ? alt : `${alt} — imagen ${i + 1}`}
+            priority={i === 0 ? priority : false}
+            loading={i === 0 ? undefined : 'lazy'}
+            unoptimized={esImagenExterna(src)}
+            {...blurProps(src)}
+            className={cn(
+              'object-cover transition-opacity duration-300 motion-safe:group-hover:scale-105 motion-safe:transition-transform motion-safe:duration-500',
+              i === index ? 'opacity-100' : 'opacity-0 pointer-events-none',
+            )}
+            aria-hidden={i !== index}
+          />
+        );
+      })}
 
       {/* Flechas desktop (hover) */}
       <button

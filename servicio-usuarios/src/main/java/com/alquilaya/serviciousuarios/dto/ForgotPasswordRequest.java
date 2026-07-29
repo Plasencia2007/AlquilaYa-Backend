@@ -10,4 +10,7 @@ public class ForgotPasswordRequest {
     @NotBlank(message = "El correo es obligatorio")
     @Email(message = "Correo inválido")
     private String correo;
+
+    /** Token del widget Cloudflare Turnstile (#184). */
+    private String turnstileToken;
 }

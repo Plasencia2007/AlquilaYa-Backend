@@ -24,9 +24,9 @@ export const PropertyCard = ({ titulo, precio, direccion, estado, imagenUrl }: P
     <Card padding="none" className="group overflow-hidden border-none shadow-sm hover:shadow-xl transition-all duration-500 bg-muted hover:-translate-y-1">
       <div className="relative aspect-[16/10] overflow-hidden">
         {imagenUrl ? (
-          <img 
-            src={imagenUrl} 
-            alt={titulo} 
+          <img
+            src={imagenUrl}
+            alt={`${titulo} — inmueble en ${direccion}`}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (

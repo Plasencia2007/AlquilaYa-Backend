@@ -114,7 +114,14 @@ export default function MapPicker({
   zonas,
 }: MapPickerProps & { zonas?: ZonaGeo[] }) {
   return (
-    <div className="w-full h-[200px] rounded-xl overflow-hidden border border-[#bda5a8]/20 shadow-inner mt-2 animate-in fade-in zoom-in-95 duration-200">
+    // aria-hidden (ítem 400): Leaflet no es operable por teclado; el picker sigue
+    // funcionando con mouse/touch (click + arrastrar el marcador), pero no aporta nada
+    // a un lector de pantalla. La ubicación seleccionada se refleja en los campos
+    // lat/lng accesibles del formulario que envuelve a este componente.
+    <div
+      className="w-full h-[200px] rounded-xl overflow-hidden border border-[#bda5a8]/20 shadow-inner mt-2 animate-in fade-in zoom-in-95 duration-200"
+      aria-hidden="true"
+    >
       <MapContainer
         center={[lat, lng]}
         zoom={15}

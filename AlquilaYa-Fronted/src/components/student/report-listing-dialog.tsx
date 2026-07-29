@@ -14,6 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/use-auth';
 import { denunciarPropiedad, type MotivoDenuncia } from '@/services/property-service';
 import { notify } from '@/lib/notify';
@@ -60,9 +66,23 @@ export function ReportListingDialog({ propiedadId, trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <span onClick={() => setOpen(true)} className="contents">
-        {trigger}
-      </span>
+      {/*
+        El trigger es inyectado por quien use el diálogo (usualmente un botón
+        icon-only). Envolvemos con Tooltip acá para que el hover/foco explique
+        la acción sin depender de que cada caller lo agregue por su cuenta.
+        Nota: sin `display:contents` en el span, porque ese modo no genera caja
+        propia y el navegador no dispara pointerenter/pointerleave sobre él
+        (rompería el Tooltip). El impacto visual es nulo: el span solo envuelve
+        un único botón.
+      */}
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span onClick={() => setOpen(true)}>{trigger}</span>
+          </TooltipTrigger>
+          <TooltipContent>Reportar publicación</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

@@ -13,6 +13,10 @@ export const datosPersonalesSchema = z.object({
 
 export const datosAcademicosSchema = z.object({
   universidad: z.string().min(2, 'La universidad es obligatoria'),
+  // Ítem 226: id del catálogo de universidades (servicio-catalogos) cuando se elige del
+  // Combobox. Opcional: queda undefined si el usuario cae al input de texto libre (catálogo
+  // vacío/caído) o si eligió una universidad que no está en el catálogo.
+  universidadId: z.number().int().positive().optional(),
   codigoEstudiante: z.string().min(1, 'El código es obligatorio'),
   carrera: z.string().min(2, 'La carrera es obligatoria'),
   ciclo: z

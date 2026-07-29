@@ -57,6 +57,7 @@ public class PropiedadController {
     private final com.alquilaya.serviciopropiedades.repositories.PrecioTemporadaRepository precioTemporadaRepository;
     private final HabitacionRepository habitacionRepository;
     private final ReservaRepository reservaRepository;
+    private final com.alquilaya.serviciopropiedades.repositories.ResenaPropiedadRepository resenaPropiedadRepository;
     private final KafkaProducerService kafkaProducerService;
     private final CloudinaryService cloudinaryService;
     private final CloudinaryCleanupQueueService cloudinaryCleanupQueue;
@@ -349,6 +350,35 @@ public class PropiedadController {
         return ResponseEntity.ok(propiedadRepository.findAll());
     }
 
+    /**
+     * Estadísticas agregadas de la plataforma para la home (#86). Público. Solo cifras que
+     * este servicio conoce en su propia BD (propiedades, reservas, reseñas): el conteo de
+     * estudiantes vive en servicio-usuarios y NO se cruza aquí. Usa count()/AVG — no carga
+     * entidades.
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<com.alquilaya.serviciopropiedades.dto.PlataformaStatsDTO> stats() {
+        Double promedio = resenaPropiedadRepository.promedioGlobal();
+        return ResponseEntity.ok(com.alquilaya.serviciopropiedades.dto.PlataformaStatsDTO.builder()
+                .propiedadesActivas(propiedadRepository.countByAprobadoPorAdminTrue())
+                .reservasCompletadas(reservaRepository.countByEstado(EstadoReserva.FINALIZADA))
+                .totalResenas(resenaPropiedadRepository.countByVisibleTrue())
+                .calificacionPromedio(promedio != null ? Math.round(promedio * 10.0) / 10.0 : null)
+                .build());
+    }
+
+    /**
+     * Conteo público de avisos por zona para la home (sección "Zonas destacadas"): número de
+     * propiedades publicadas y visibles en cada zona y su precio más bajo. Público (sin auth).
+     * Aplica el mismo criterio de "publicada y visible" que {@code /buscar}
+     * (aprobadoPorAdmin + disponible) y excluye zonas sin resolver. Es una agregación en BD
+     * ({@code GROUP BY zonaId}) — no carga el catálogo de propiedades.
+     */
+    @GetMapping("/conteo-por-zona")
+    public ResponseEntity<List<com.alquilaya.serviciopropiedades.dto.ConteoZonaDTO>> conteoPorZona() {
+        return ResponseEntity.ok(propiedadRepository.conteoPorZona());
+    }
+
     @GetMapping("/arrendador/{arrendadorId}")
     @PreAuthorize("@permisoEnforcer.tienePermiso('VER_CUARTOS')")
     public ResponseEntity<List<Propiedad>> listarPorArrendador(@PathVariable Long arrendadorId) {
@@ -441,10 +471,22 @@ public class PropiedadController {
     /**
      * Registra un evento de CONTACTO (estudiante inició conversación). Alimenta el embudo
      * de analítica (#52). Best-effort: cualquier usuario autenticado, no falla la UX.
+     *
+     * <p>Devuelve además el teléfono del arrendador (#153): se revela recién aquí, tras
+     * registrar la intención de contacto, no en la ficha pública — así el número no queda
+     * expuesto a cualquier visitante que solo mira la publicación.
+     *
+     * <p>Restringido a ESTUDIANTE (antes cualquier autenticado, incl. otros arrendadores):
+     * sin este guard, cualquier cuenta logueada podía iterar ids de propiedad y scrapear
+     * teléfonos de arrendadores uno por uno. No hay rate-limiter en este microservicio
+     * todavía (sí lo hay en servicio-usuarios, `RateLimitFilter`/Bucket4j) — si el abuso
+     * se vuelve un problema real pese al guard de rol, portar ese filtro sería el siguiente paso.
      */
     @PostMapping("/{id}/contacto")
-    public ResponseEntity<Void> registrarContacto(@PathVariable Long id) {
-        if (!propiedadRepository.existsById(id)) {
+    @PreAuthorize("hasRole('ESTUDIANTE')")
+    public ResponseEntity<Map<String, String>> registrarContacto(@PathVariable Long id) {
+        Propiedad p = propiedadRepository.findById(id).orElse(null);
+        if (p == null) {
             return ResponseEntity.notFound().build();
         }
         Long perfilId = CurrentUserProvider.get() != null ? CurrentUserProvider.get().getPerfilId() : null;
@@ -454,7 +496,24 @@ public class PropiedadController {
                         .tipo(com.alquilaya.serviciopropiedades.enums.TipoEvento.CONTACTO)
                         .perfilId(perfilId)
                         .build());
-        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+        String telefono = propiedadService.obtenerTelefonoArrendador(p.getArrendadorId());
+        Map<String, String> body = new java.util.HashMap<>();
+        if (telefono != null && !telefono.isBlank()) {
+            body.put("telefono", telefono);
+        }
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * Registra una VISTA pública de la ficha (#162). Separado de {@code GET /{id}/publico}
+     * a propósito: ese GET también lo golpea el fetch de metadata OG en el servidor
+     * (crawlers/compartidos) y no debe inflar el contador. Este POST solo lo llama el
+     * cliente, una vez por sesión (dedupe en `sessionStorage`, ver `page.tsx`).
+     */
+    @PostMapping("/{id}/vista")
+    public ResponseEntity<Void> registrarVista(@PathVariable Long id) {
+        propiedadService.incrementarVistasAsync(id);
+        return ResponseEntity.accepted().build();
     }
 
     /** Programa la publicación de un borrador para una fecha/hora futura (ISO yyyy-MM-ddTHH:mm). */
@@ -507,6 +566,7 @@ public class PropiedadController {
         dst.setTitulo(src.getTitulo() != null ? src.getTitulo() : "");
         dst.setDescripcion(src.getDescripcion());
         dst.setPrecio(src.getPrecio() != null ? src.getPrecio() : java.math.BigDecimal.ZERO);
+        dst.setDeposito(src.getDeposito());
         dst.setDireccion(src.getDireccion() != null ? src.getDireccion() : "");
         dst.setUbicacionGps(src.getUbicacionGps());
         dst.setTipoPropiedad(src.getTipoPropiedad());
@@ -563,6 +623,7 @@ public class PropiedadController {
                     } else if (updates.getPrecio() != null) {
                         p.setPrecio(updates.getPrecio());
                     }
+                    if (updates.getDeposito() != null) p.setDeposito(updates.getDeposito());
                     if (updates.getDireccion() != null) p.setDireccion(updates.getDireccion());
                     if (updates.getUbicacionGps() != null) p.setUbicacionGps(updates.getUbicacionGps());
                     if (updates.getTipoPropiedad() != null) p.setTipoPropiedad(updates.getTipoPropiedad());
@@ -606,16 +667,33 @@ public class PropiedadController {
                     // Campos privilegiados (sólo ADMIN puede tocarlos)
                     CurrentUser cu = CurrentUserProvider.get();
                     boolean isAdmin = cu != null && "ADMIN".equalsIgnoreCase(cu.getRol());
+                    boolean pasaAPendiente = false;
                     if (isAdmin) {
                         if (updates.getAprobadoPorAdmin() != null) p.setAprobadoPorAdmin(updates.getAprobadoPorAdmin());
                         if (updates.getArrendadorId() != null) p.setArrendadorId(updates.getArrendadorId());
+                        // `estado` también es privilegiado: antes cualquier dueño autenticado podía
+                        // mandarlo en el body y auto-aprobarse saltándose moderación. Solo ADMIN lo toca
+                        // directo; el arrendador lo mueve indirectamente vía el reenvío de abajo (#348).
+                        if (updates.getEstado() != null) p.setEstado(updates.getEstado());
+                    } else if (p.getEstado() == EstadoPropiedad.RECHAZADO) {
+                        // Ítem 348: el arrendador editando un anuncio RECHAZADO cuenta como "corregir y
+                        // reenviar" — vuelve a PENDIENTE para que el admin la revise de nuevo, y se
+                        // limpia el motivo viejo (ya no aplica a la versión corregida).
+                        p.setEstado(EstadoPropiedad.PENDIENTE);
+                        p.setMotivoRechazo(null);
+                        pasaAPendiente = true;
                     }
-                    if (updates.getEstado() != null) p.setEstado(updates.getEstado());
 
                     // Si tras la edición sigue siendo un inmueble completo, exige su distribución.
                     validarDistribucionPorTipo(p);
 
-                    return ResponseEntity.ok(propiedadRepository.save(p));
+                    Propiedad guardada = propiedadRepository.save(p);
+                    if (pasaAPendiente) {
+                        // Notif admin (gap #2/3): el reenvío tras corregir un rechazo también es una
+                        // propiedad nueva pendiente de revisión — mismo evento que publicarBorrador.
+                        kafkaProducerService.enviarPropiedadPendiente(guardada.getId(), guardada.getTitulo(), guardada.getArrendadorId());
+                    }
+                    return ResponseEntity.ok(guardada);
                 }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -696,7 +774,11 @@ public class PropiedadController {
             @RequestParam(required = false) Long universidadId,
             @RequestParam(required = false) Long zonaId,
             @RequestParam(required = false) Integer capacidadMin,
-            @RequestParam(required = false) Integer dormitoriosMin
+            @RequestParam(required = false) Integer dormitoriosMin,
+            @RequestParam(required = false) Double calificacionMin,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean soloConFotos,
+            @RequestParam(required = false) Boolean soloVerificados
     ) {
         // Listado público: por defecto solo mostramos propiedades DISPONIBLES, para que las
         // reservadas/ocupadas no aparezcan. Un caller puede pedir disponible=false explícito.
@@ -706,13 +788,19 @@ public class PropiedadController {
         // desenvolvemos para mantener el contrato HTTP (array JSON).
         return propiedadService.buscarPublicoCacheado(
                 precioMin, precioMax, tipo, periodo, soloDisponibles, distanciaMax, servicios, zona,
-                universidadId, zonaId, capacidadMin, dormitoriosMin
+                universidadId, zonaId, capacidadMin, dormitoriosMin, calificacionMin, q, soloConFotos,
+                soloVerificados
         ).getPropiedades();
     }
 
     /**
      * P5: variante paginada de `/buscar`, aditiva (no reemplaza el endpoint de arriba, que
      * el frontend sigue usando tal cual con su cache Redis). `page` es 0-based.
+     *
+     * <p>Acepta {@code orden} (server-side): {@code precio} (asc), {@code precioDesc},
+     * {@code recientes} (default), {@code calificacion} (desc). El orden "distancia al campus"
+     * NO se soporta aquí (cálculo Haversine sobre coordenadas, no una columna ordenable) —
+     * lo resuelve el cliente; la proximidad real tiene su endpoint {@code /buscar/cerca}.
      */
     @GetMapping("/buscar/paginado")
     public com.alquilaya.serviciopropiedades.dto.PropiedadPaginadaDTO buscarPaginado(
@@ -728,13 +816,19 @@ public class PropiedadController {
             @RequestParam(required = false) Long zonaId,
             @RequestParam(required = false) Integer capacidadMin,
             @RequestParam(required = false) Integer dormitoriosMin,
+            @RequestParam(required = false) Double calificacionMin,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean soloConFotos,
+            @RequestParam(required = false) Boolean soloVerificados,
+            @RequestParam(required = false) String orden,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Boolean soloDisponibles = (disponible != null) ? disponible : Boolean.TRUE;
         return propiedadService.buscarPublicoPaginado(
                 precioMin, precioMax, tipo, periodo, soloDisponibles, distanciaMax, servicios, zona,
-                universidadId, zonaId, capacidadMin, dormitoriosMin, page, size
+                universidadId, zonaId, capacidadMin, dormitoriosMin, calificacionMin, q, soloConFotos,
+                soloVerificados, orden, page, size
         );
     }
 
@@ -748,9 +842,13 @@ public class PropiedadController {
      * prácticamente infinito. Por defecto solo lista disponibles; acepta los mismos filtros
      * escalares opcionales que el listado público. Valida rangos y devuelve 400 si son inválidos
      * (lat∈[-90,90], lng∈[-180,180], 0&lt;radioKm≤50).
+     *
+     * <p>PAGINADO (mismo {@link com.alquilaya.serviciopropiedades.dto.PropiedadPaginadaDTO} que
+     * {@code /buscar/paginado}): {@code page} 0-based, {@code size} por defecto 20. El orden por
+     * distancia ascendente y el {@code distanciaKm} por resultado se calculan ANTES de paginar.
      */
     @GetMapping("/buscar/cerca")
-    public List<PropiedadPublicoDTO> buscarCerca(
+    public com.alquilaya.serviciopropiedades.dto.PropiedadPaginadaDTO buscarCerca(
             @RequestParam double lat,
             @RequestParam double lng,
             @RequestParam(defaultValue = "5") double radioKm,
@@ -762,11 +860,18 @@ public class PropiedadController {
             @RequestParam(required = false) Long universidadId,
             @RequestParam(required = false) Long zonaId,
             @RequestParam(required = false) Integer capacidadMin,
-            @RequestParam(required = false) Integer dormitoriosMin
+            @RequestParam(required = false) Integer dormitoriosMin,
+            @RequestParam(required = false) Double calificacionMin,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean soloConFotos,
+            @RequestParam(required = false) Boolean soloVerificados,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return propiedadService.buscarCerca(
+        return propiedadService.buscarCercaPaginado(
                 lat, lng, radioKm, precioMin, precioMax, tipo, periodo, disponible,
-                universidadId, zonaId, capacidadMin, dormitoriosMin);
+                universidadId, zonaId, capacidadMin, dormitoriosMin, calificacionMin, q, soloConFotos,
+                soloVerificados, page, size);
     }
 
     @GetMapping("/{id}/publico")

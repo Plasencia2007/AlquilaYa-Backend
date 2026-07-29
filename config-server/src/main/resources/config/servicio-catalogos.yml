@@ -25,11 +25,31 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
     locations: classpath:db/migration
+  # Límite de subida multipart: la imagen del banner del hero se valida a 5MB en el
+  # controlador; dejamos 6MB en la capa de transporte para que sea el chequeo de negocio
+  # (mensaje claro) el que rechace, y no un MaxUploadSizeExceededException genérico.
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
 
 server:
   port: 8085
+
+# Configuración de Cloudinary: subida de la imagen del banner del hero (uploader del admin).
+# Mismas credenciales que servicio-propiedades; se inyectan por env (.env en dev/prod).
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
+  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
+  api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 jwt:
   # Sin default real: el secreto se inyecta por env (.env en dev, .env.prod en prod). Nunca en git.
   secret: ${JWT_SECRET:PLACEHOLDER_SET_ENV_VAR}
   expiration: ${JWT_EXPIRATION:7200000}
+
+# Secreto compartido entre servicios internos (mismo valor que usa el servicio Node de
+# notificaciones). Protege el endpoint interno de zonas /zonas/activas/interno, que sí expone la
+# comisión de plataforma. Se inyecta por env (.env en dev, .env.prod en prod). Nunca en git.
+internal:
+  api-key: ${INTERNAL_API_KEY:PLACEHOLDER_SET_ENV_VAR}

@@ -10,7 +10,22 @@ export const TIPOS_PROPIEDAD = [
   'CASA',
   'SUITE',
 ] as const;
-export const ORDENES = ['distancia', 'cercania', 'precio', 'calificacion'] as const;
+// Valores de ordenamiento persistidos en la URL (?orden=...).
+//  - 'distancia'  : más cercanos al campus (Haversine cliente; orden por defecto).
+//  - 'cercania'   : "Cerca de mí" — usa GET /buscar/cerca (distancia real server-side).
+//  - 'precio'     : precio ascendente (menor a mayor).
+//  - 'precioDesc' : precio descendente (mayor a menor).
+//  - 'recientes'  : más nuevos primero — coincide con el orden nativo del backend
+//                   (fechaCreacion DESC), único que permite PAGINACIÓN REAL server-side.
+//  - 'calificacion': mejor calificados primero.
+export const ORDENES = [
+  'distancia',
+  'cercania',
+  'precio',
+  'precioDesc',
+  'recientes',
+  'calificacion',
+] as const;
 export const VISTAS = ['lista', 'mapa'] as const;
 
 export const PRECIO_MIN_DEFAULT = 200;
@@ -19,6 +34,8 @@ export const DISTANCIA_MAX_DEFAULT = 15;
 
 export const filtrosSchema = z.object({
   zona: z.string().trim().max(80).optional(),
+  // Búsqueda de texto libre (ítem 126): server-side sobre título + descripción + dirección.
+  q: z.string().trim().max(120).optional(),
   precioMin: z.number().int().nonnegative().optional(),
   precioMax: z.number().int().positive().optional(),
   tipo: z.enum(TIPOS_PROPIEDAD).optional(),
@@ -32,6 +49,11 @@ export const filtrosSchema = z.object({
   // Capacidad mínima de personas y dormitorios mínimos (inmuebles completos).
   capacidadMin: z.number().int().positive().optional(),
   dormitoriosMin: z.number().int().positive().optional(),
+  // Toggles de calidad (ítem 125). `soloVerificados` filtra por arrendador verificado
+  // (hoy CLIENTE: el flag vive en servicio-usuarios vía Feign, no hay columna local);
+  // `soloConFotos` filtra propiedades con al menos una imagen (server-side).
+  soloVerificados: z.boolean().optional(),
+  soloConFotos: z.boolean().optional(),
   orden: z.enum(ORDENES).default('distancia'),
   view: z.enum(VISTAS).default('lista'),
 });

@@ -13,11 +13,13 @@ import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +29,7 @@ import java.util.Objects;
  * denormaliza {@code propiedad.precio} al mínimo de sus habitaciones, para que la búsqueda
  * y el orden por precio (que operan a nivel propiedad) sigan funcionando como "desde S/X".
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HabitacionService {
@@ -36,6 +39,8 @@ public class HabitacionService {
     private final ReservaRepository reservaRepository;
     private final KafkaProducerService kafkaProducerService;
     private final UsuariosClient usuariosClient;
+    private final CloudinaryService cloudinaryService;
+    private final CloudinaryCleanupQueueService cloudinaryCleanupQueue;
 
     /** Reservas que cuentan como "completadas" / "fallidas" para el score de reputación (#26). */
     private static final EnumSet<EstadoReserva> RESERVAS_COMPLETADAS = EnumSet.of(EstadoReserva.FINALIZADA);
@@ -95,6 +100,7 @@ public class HabitacionService {
                 .area(req.getArea())
                 .descripcion(trimOrNull(req.getDescripcion()))
                 .orden(req.getOrden() != null ? req.getOrden() : 0)
+                .imagenes(req.getImagenes() != null ? new ArrayList<>(req.getImagenes()) : new ArrayList<>())
                 .build();
         Habitacion guardada = habitacionRepository.save(h);
         sincronizarPrecioPropiedad(propiedadId);
@@ -111,6 +117,9 @@ public class HabitacionService {
         h.setArea(req.getArea());
         h.setDescripcion(trimOrNull(req.getDescripcion()));
         if (req.getOrden() != null) h.setOrden(req.getOrden());
+        if (req.getImagenes() != null) {
+            h.setImagenes(new ArrayList<>(req.getImagenes()));
+        }
         Habitacion guardada = habitacionRepository.save(h);
         sincronizarPrecioPropiedad(propiedadId);
         return toResponseEnriched(guardada);
@@ -125,6 +134,18 @@ public class HabitacionService {
         if (conReservasActivas) {
             throw new IllegalStateException(
                     "No se puede eliminar la habitación: tiene reservas activas (solicitadas/aprobadas/pagadas).");
+        }
+        // Limpieza best-effort de las fotos propias de la habitación en Cloudinary (#167) —
+        // mismo patrón que PropiedadController#eliminarPropiedad: la cascada de BD borra las
+        // filas de habitacion_imagenes, pero no los archivos reales, que quedarían huérfanos.
+        for (String url : h.getImagenes()) {
+            if (url == null || url.isBlank()) continue;
+            try {
+                cloudinaryService.eliminarPorUrl(url);
+            } catch (Exception e) {
+                log.warn("[DELETE-HABITACION] Fallo borrando foto {} en Cloudinary, encolando: {}", url, e.getMessage());
+                cloudinaryCleanupQueue.encolar(url);
+            }
         }
         habitacionRepository.delete(h);
         sincronizarPrecioPropiedad(propiedadId);

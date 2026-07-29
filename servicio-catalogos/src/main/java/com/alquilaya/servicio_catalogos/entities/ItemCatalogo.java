@@ -54,6 +54,11 @@ public class ItemCatalogo {
 
     private String descripcion;
 
+    /** URL de imagen (Cloudinary). Usado por ítems tipo BANNER para el hero/CTA del home. */
+    @Size(max = 500, message = "La URL de imagen no puede superar 500 caracteres")
+    @Column(name = "imagen_url", length = 500)
+    private String imagenUrl;
+
     private LocalDateTime fechaCreacion;
 
     @PrePersist

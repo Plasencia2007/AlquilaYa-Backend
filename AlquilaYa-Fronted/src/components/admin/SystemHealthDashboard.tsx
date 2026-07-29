@@ -11,14 +11,6 @@ const dataResources = [
   { time: '10:30', cpu: 22, ram: 55 }, { time: '10:35', cpu: 18, ram: 50 },
 ];
 
-const LOGS = [
-  { time: '10:34:21', level: 'INFO', service: 'Gateway', msg: 'Petición /api/v1/auth/login procesada en 45ms' },
-  { time: '10:34:25', level: 'WARN', service: 'Pagos', msg: 'Timeout parcial en conexión con pasarela externa' },
-  { time: '10:35:01', level: 'ERROR', service: 'Redis', msg: 'Connection reset by peer. Reintentando en 5s...' },
-  { time: '10:35:05', level: 'INFO', service: 'Usuarios', msg: 'Usuario @jhons logueado exitosamente' },
-  { time: '10:35:10', level: 'INFO', service: 'Propiedades', msg: 'Nueva propiedad ID#4598 registrada' },
-];
-
 export default function SystemHealthDashboard() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);

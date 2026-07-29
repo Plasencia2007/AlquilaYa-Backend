@@ -61,6 +61,20 @@ admin:
     email: ${ADMIN_BOOTSTRAP_EMAIL:}
     password: ${ADMIN_BOOTSTRAP_PASSWORD:}
 
+# Faltaba por completo (bug relacionado al de @EnableFeignClients — arreglado en
+# ServicioUsuariosApplication.java): sin esto, CatalogosClient corría sin timeout/circuit
+# breaker configurado, a diferencia de todos los demás servicios. Mismos valores que
+# servicio-pagos.yml/servicio-propiedades.yml.
+feign:
+  circuitbreaker:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 10000
+        loggerLevel: basic
+
 resilience4j:
   circuitbreaker:
     instances:
@@ -90,6 +104,28 @@ resilience4j:
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 3
         minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      # Ítem 354: endpoint agregado de métricas admin (GET /api/v1/usuarios/admin/metricas) —
+      # AdminMetricasAgregadoService llama a servicio-pagos y servicio-propiedades vía Feign; si
+      # cualquiera de los dos está caído, su sección del response queda null en vez de tumbar el
+      # endpoint completo (ver el fallbackMethod de cada uno).
+      pagosResumenCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      propiedadesPendientesCB:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 2
+        minimumNumberOfCalls: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
   retry:
     instances:
@@ -121,6 +157,24 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - java.io.IOException
           - java.util.concurrent.TimeoutException
+      pagosResumenCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+      propiedadesPendientesCB:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
   timelimiter:
     instances:
       enviarEmailCB:
@@ -132,6 +186,12 @@ resilience4j:
       enviarOtpCB:
         timeoutDuration: 5s
         cancelRunningFuture: true
+      pagosResumenCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
+      propiedadesPendientesCB:
+        timeoutDuration: 4s
+        cancelRunningFuture: true
   bulkhead:
     instances:
       enviarWhatsAppCB:
@@ -141,6 +201,12 @@ resilience4j:
         maxConcurrentCalls: 10
         maxWaitDuration: 100ms
       enviarEmailCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      pagosResumenCB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 100ms
+      propiedadesPendientesCB:
         maxConcurrentCalls: 5
         maxWaitDuration: 100ms
   ratelimiter:
@@ -159,7 +225,7 @@ resilience4j:
 spring.mail:
   host: ${SMTP_HOST:smtp.gmail.com}
   port: ${SMTP_PORT:587}
-  username: ${SMTP_USERNAME:jhonsonsplasencia25@gmail.com}
+  username: ${SMTP_USERNAME:PLACEHOLDER_SET_ENV_VAR}
   password: ${SMTP_PASSWORD:PLACEHOLDER_SET_ENV_VAR}
   properties:
     mail:
@@ -175,7 +241,7 @@ spring.mail:
 # OAuth Google (Identity Services)
 google:
   oauth:
-    client-id: ${GOOGLE_OAUTH_CLIENT_ID:918388939289-4nh4mdv7ps1dsde1np523fgrkoo0ht1l.apps.googleusercontent.com}
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:PLACEHOLDER_SET_ENV_VAR}
 
 # Cloudflare Turnstile (captcha invisible en /register)
 turnstile:
@@ -185,8 +251,8 @@ turnstile:
 
 # Cloudinary para almacenamiento de documentos de verificación
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:ddiyaoxkt}
-  api-key: ${CLOUDINARY_API_KEY:387589685746197}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:PLACEHOLDER_SET_ENV_VAR}
+  api-key: ${CLOUDINARY_API_KEY:PLACEHOLDER_SET_ENV_VAR}
   api-secret: ${CLOUDINARY_API_SECRET:PLACEHOLDER_SET_ENV_VAR}
 
 # URL pública del frontend para construir links (reset password, etc.)

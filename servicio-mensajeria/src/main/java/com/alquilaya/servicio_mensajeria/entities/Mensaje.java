@@ -3,6 +3,7 @@ package com.alquilaya.servicio_mensajeria.entities;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.alquilaya.servicio_mensajeria.enums.EstadoMensaje;
 import com.alquilaya.servicio_mensajeria.enums.RolEmisor;
+import com.alquilaya.servicio_mensajeria.enums.TipoMensaje;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -81,9 +82,23 @@ public class Mensaje {
     @Column(name = "fecha_lectura")
     private LocalDateTime fechaLectura;
 
+    // Ítem 254: tipo de contenido (TEXTO/IMAGEN). `contenido` sigue siendo @NotBlank
+    // arriba — para IMAGEN, MensajeService resuelve un fallback legible (p.ej. "📷 Imagen")
+    // antes de construir la entidad, así el preview de conversación nunca queda vacío.
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private TipoMensaje tipo = TipoMensaje.TEXTO;
+
+    /** URL en Cloudinary del adjunto (solo cuando {@link #tipo} == IMAGEN). */
+    @Column(name = "url_adjunto", length = 500)
+    private String urlAdjunto;
+
     @PrePersist
     protected void onCreate() {
         if (fechaEnvio == null) fechaEnvio = LocalDateTime.now();
         if (estado == null) estado = EstadoMensaje.ENVIADO;
+        if (tipo == null) tipo = TipoMensaje.TEXTO;
     }
 }

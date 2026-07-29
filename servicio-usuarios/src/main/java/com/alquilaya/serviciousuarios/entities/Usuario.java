@@ -71,8 +71,14 @@ public class Usuario {
     @Builder.Default
     private TipoLogin tipoLogin = TipoLogin.LOCAL;
 
+    // No serializar en respuestas JSON de /usuarios (listarTodos/obtenerPorId/actualizarUsuario):
+    // son URLs de documentos KYC, y el frontend ya los consulta por el endpoint dedicado
+    // GET /usuarios/documentos/usuario/{usuarioId} (verificado: ningún consumidor del frontend
+    // lee este campo anidado). Migrar todo el endpoint a DTOs específicos por caso de uso queda
+    // pendiente como mejora aparte (afecta también arrendador/estudiante, que sí se consumen).
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private java.util.List<DocumentoVerificacion> documentos;
 
     @OneToOne(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -103,6 +109,50 @@ public class Usuario {
     /** Momento en que la cuenta fue anonimizada/dada de baja (null si activa). */
     @Column(name = "fecha_eliminacion")
     private LocalDateTime fechaEliminacion;
+
+    /** Motivo del baneo (solo se persiste cuando {@code estado} pasa a BANNED). Nullable:
+     *  no todo cambio de estado lo requiere, y los baneos previos a esta columna no lo tienen. */
+    @Column(name = "motivo_baneo", length = 500)
+    private String motivoBaneo;
+
+    /** Momento (reloj del servidor) en que el usuario aceptó los Términos y condiciones y la
+     *  Política de privacidad al registrarse (ítem 185, cobertura legal). Null en cuentas
+     *  creadas antes de esta columna o por vías que no pasan por el checkbox (p. ej. /register-admin). */
+    @Column(name = "acepta_terminos_en")
+    private LocalDateTime aceptaTerminosEn;
+
+    // ===== Preferencias de notificacion (item 210) =====
+    // Categorias reales del catalogo TipoNotificacion de servicio-mensajeria: MENSAJE_NUEVO,
+    // {RESERVA_*, RECORDATORIO_PAGO} y ALERTA_ZONA (la unica categoria "opt-in"/promocional que
+    // existe hoy: suscripcion a alertas de nuevas propiedades). DOCUMENTO_*/BIENVENIDA/SISTEMA
+    // son notificaciones de cuenta y no son togglable -- siempre se entregan.
+
+    @Column(name = "notificar_mensajes", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
+    @Builder.Default
+    private boolean notificarMensajes = true;
+
+    @Column(name = "notificar_reservas", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
+    @Builder.Default
+    private boolean notificarReservas = true;
+
+    @Column(name = "notificar_marketing", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Builder.Default
+    private boolean notificarMarketing = false;
+
+    // ===== 2FA / TOTP (item 229) =====
+
+    /** Secret TOTP (base32) ya confirmado. Nunca se serializa en JSON. Null si 2FA no esta activo. */
+    @Column(name = "totp_secret")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String totpSecret;
+
+    @Column(name = "totp_habilitado", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Builder.Default
+    private boolean totpHabilitado = false;
 
     @CreationTimestamp
     @Column(updatable = false)

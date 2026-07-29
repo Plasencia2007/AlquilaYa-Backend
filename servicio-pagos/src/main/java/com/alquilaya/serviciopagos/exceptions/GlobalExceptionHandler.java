@@ -67,6 +67,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, "No autenticado o sin permisos para este recurso.", req);
     }
 
+    /** Ítem 280: comprobante de un pago/reserva que no pertenece al usuario autenticado. */
+    @ExceptionHandler(ComprobanteAccesoDenegadoException.class)
+    public ResponseEntity<ErrorResponse> handleComprobanteAccesoDenegado(
+            ComprobanteAccesoDenegadoException ex, HttpServletRequest req) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(
             DataIntegrityViolationException ex, HttpServletRequest req) {

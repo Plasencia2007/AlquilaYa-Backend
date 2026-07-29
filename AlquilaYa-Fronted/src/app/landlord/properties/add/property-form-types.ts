@@ -1,3 +1,4 @@
+import { MAX_PROPERTY_IMAGES } from '@/lib/property-photos';
 import type {
   PeriodoAlquiler,
   PoliticaCancelacion,
@@ -8,6 +9,8 @@ export interface FormState {
   titulo: string;
   descripcion: string;
   precio: string;
+  /** Depósito de garantía (S/), adicional a la renta. Opcional. */
+  deposito: string;
   direccion: string;
   tipoPropiedad: TipoPropiedad | '';
   periodoAlquiler: PeriodoAlquiler | '';
@@ -25,6 +28,8 @@ export interface FormState {
   serviciosIncluidos: string[];
   /** Servicios disponibles pero que se pagan aparte. */
   serviciosAparte: string[];
+  /** Monto mensual (S/, texto crudo del input) por cada servicio en `serviciosAparte`, indexado por su clave. */
+  montosServiciosAparte: Record<string, string>;
   reglas: string[];
   estaDisponible: boolean;
   disponibleDesde: string;
@@ -39,6 +44,7 @@ export const INITIAL_FORM: FormState = {
   titulo: '',
   descripcion: '',
   precio: '',
+  deposito: '',
   direccion: '',
   tipoPropiedad: 'CUARTO_INDIVIDUAL',
   periodoAlquiler: 'MENSUAL',
@@ -55,6 +61,7 @@ export const INITIAL_FORM: FormState = {
   longitud: '',
   serviciosIncluidos: [],
   serviciosAparte: [],
+  montosServiciosAparte: {},
   reglas: [],
   estaDisponible: true,
   disponibleDesde: '',
@@ -64,4 +71,5 @@ export const INITIAL_FORM: FormState = {
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-export const MAX_IMAGES = 6;
+/** Ítem 333: unificado con el modal de edición rápida en `@/lib/property-photos`, subido a 12. */
+export const MAX_IMAGES = MAX_PROPERTY_IMAGES;

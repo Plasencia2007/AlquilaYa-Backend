@@ -2,12 +2,15 @@ package com.alquilaya.serviciopropiedades.services;
 
 import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
+import com.alquilaya.serviciopropiedades.config.CurrentUserProvider;
+import com.alquilaya.serviciopropiedades.dto.ArrendadorInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaArrendadorRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaPropiedadRequest;
 import com.alquilaya.serviciopropiedades.dto.CrearResenaEstudianteRequest;
 import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.ResenaResponseDTO;
 import com.alquilaya.serviciopropiedades.dto.ResumenCategoriasDTO;
+import com.alquilaya.serviciopropiedades.dto.TestimonioDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.entities.ResenaArrendador;
@@ -81,6 +84,22 @@ public class ResenaService {
         recalcularPropiedad(req.getPropiedadId());
         log.info("⭐ Reseña de propiedad {} creada por estudiante {} (rating={})",
                 req.getPropiedadId(), estudianteId, req.getRating());
+        // #337: notifica al arrendador (WhatsApp vía Kafka) de la nueva reseña. Defensivo:
+        // si la propiedad no se encuentra (no debería pasar, ya se validó arriba) o el Feign a
+        // usuarios falla, simplemente no se notifica (o se notifica sin teléfono), sin romper
+        // el flujo de guardado ya confirmado — mismo patrón que ReservaService.enriquecerYEmitir.
+        propiedadRepository.findById(req.getPropiedadId()).ifPresent(p -> {
+            String arrendadorTelefono = null;
+            try {
+                ArrendadorInfoDTO arr = usuariosClient.obtenerArrendador(p.getArrendadorId());
+                if (arr != null) arrendadorTelefono = arr.getTelefono();
+            } catch (Exception e) {
+                log.warn("No se pudo obtener teléfono del arrendador {} para notificar reseña: {}",
+                        p.getArrendadorId(), e.getMessage());
+            }
+            kafkaProducerService.enviarResenaCreada(
+                    p.getId(), p.getArrendadorId(), p.getTitulo(), guardada.getRating(), arrendadorTelefono);
+        });
         return guardada;
     }
 
@@ -137,10 +156,25 @@ public class ResenaService {
         return mapPropiedad(resenaPropRepo.save(r));
     }
 
+    /**
+     * Respuesta del panel de moderación admin (#357): la {@link Page} paginada + los 2
+     * agregados calculados sobre TODAS las reseñas (incl. ocultas), no solo la página actual.
+     * Antes el frontend promediaba client-side únicamente los ítems de la página visible (y
+     * caía a un "4.8" fijo si estaba vacía); ahora ambos valores vienen ya calculados en BD.
+     */
+    public record ResenaAdminPageDTO(
+            org.springframework.data.domain.Page<ResenaResponseDTO> page,
+            Double promedioGlobal,
+            long totalResenas
+    ) {}
+
     /** Listado paginado de TODAS las reseñas de propiedad (incl. ocultas) para moderación admin. */
-    public org.springframework.data.domain.Page<ResenaResponseDTO> listarPropiedadAdmin(int page, int size) {
+    public ResenaAdminPageDTO listarPropiedadAdmin(int page, int size) {
         var pageable = org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100));
-        return resenaPropRepo.findAllByOrderByFechaCreacionDesc(pageable).map(this::mapPropiedad);
+        var resultado = resenaPropRepo.findAllByOrderByFechaCreacionDesc(pageable).map(this::mapPropiedad);
+        Double promedioGlobal = resenaPropRepo.promedioGlobalTodas();
+        long totalResenas = resenaPropRepo.count();
+        return new ResenaAdminPageDTO(resultado, promedioGlobal, totalResenas);
     }
 
     /** Moderación: oculta/muestra una reseña de propiedad y recalcula el promedio. */
@@ -209,6 +243,68 @@ public class ResenaService {
 
     private static Double aDouble(Object o) {
         return o instanceof Number n ? n.doubleValue() : null;
+    }
+
+    // ======================= TESTIMONIOS (home) =======================
+
+    /** Rating mínimo para que una reseña sea "destacada" (prueba social de la home). */
+    private static final int RATING_DESTACADA_MIN = 4;
+
+    /**
+     * Mejores reseñas de propiedad para la home (#85): rating alto + comentario no vacío,
+     * ordenadas por rating y recencia. <b>Privacy-safe</b>: expone solo un nombre parcial
+     * ("María G.") y la carrera si servicio-usuarios la resuelve (misma llamada Feign que ya
+     * usamos para el nombre — no se añade ninguna llamada nueva). Nunca nombre completo,
+     * correo ni teléfono. Para visitantes anónimos (sin JWT) el nombre degrada a "Estudiante".
+     */
+    public List<TestimonioDTO> listarDestacadas(int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 10);
+        var pageable = org.springframework.data.domain.PageRequest.of(0, safeLimit);
+        // El nombre/carrera viven en servicio-usuarios y ese endpoint exige JWT: solo tiene
+        // sentido resolverlos si el caller está autenticado. Para visitantes anónimos (el caso
+        // típico de la home) saltamos el Feign — evita 401s garantizados y no ensucia el
+        // circuit breaker; el testimonio se muestra igual con autor "Estudiante".
+        boolean autenticado = CurrentUserProvider.get() != null;
+        return resenaPropRepo.findDestacadas(RATING_DESTACADA_MIN, pageable).stream()
+                .map(r -> aTestimonio(r, autenticado))
+                .toList();
+    }
+
+    private TestimonioDTO aTestimonio(ResenaPropiedad r, boolean autenticado) {
+        TestimonioDTO.TestimonioDTOBuilder b = TestimonioDTO.builder()
+                .id(r.getId())
+                .rating(r.getRating())
+                .comentario(r.getComentario())
+                .fechaCreacion(r.getFechaCreacion())
+                .autor("Estudiante");
+        if (autenticado) {
+            try {
+                EstudianteInfoDTO info = obtenerEstudianteResiliente(r.getEstudianteId()).join();
+                if (info != null) {
+                    b.autor(nombreParcial(info.getNombre(), info.getApellido()));
+                    b.carrera(vacioANull(info.getCarrera()));
+                }
+            } catch (Exception e) {
+                log.warn("No se pudo enriquecer el testimonio del estudiante {}: {}",
+                        r.getEstudianteId(), e.getMessage());
+            }
+        }
+        return b.build();
+    }
+
+    /** "María" + "García" → "María G." · sin apellido → "María" · sin nombre → "Estudiante". */
+    private static String nombreParcial(String nombre, String apellido) {
+        String n = nombre != null ? nombre.trim() : "";
+        if (n.isEmpty()) return "Estudiante";
+        String ap = apellido != null ? apellido.trim() : "";
+        if (!ap.isEmpty()) {
+            return n + " " + Character.toUpperCase(ap.charAt(0)) + ".";
+        }
+        return n;
+    }
+
+    private static String vacioANull(String s) {
+        return (s == null || s.trim().isEmpty()) ? null : s.trim();
     }
 
     // ======================= ARRENDADOR =======================

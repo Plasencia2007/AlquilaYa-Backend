@@ -31,6 +31,11 @@ public class Estudiante {
 
     private String universidad;
 
+    /** FK lógica (sin constraint real: BD distinta, MySQL en servicio-catalogos) hacia
+     *  el catálogo de universidades — ítem 226, Fase 2 de la migración multi-universidad. */
+    @Column(name = "universidad_id")
+    private Long universidadId;
+
     @Column(name = "codigo_estudiante")
     private String codigoEstudiante;
 

@@ -1,47 +1,57 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { cn } from '@/lib/cn';
-import { useAuth } from '@/hooks/use-auth';
-import { useAuthModal } from '@/stores/auth-modal-store';
 import { useCommandPaletteStore } from '@/stores/command-palette-store';
 
-import { Logo } from './logo';
-import { Wordmark } from './wordmark';
 import { MobileNav } from './mobile-nav';
-import { UserMenu } from './user-menu';
+import { NavbarBrand } from './navbar-brand';
+import { NavbarAuthActions } from './navbar-auth-actions';
 
-const navLinks = [
-  { href: '/', label: 'Inicio' },
-  { href: '/search', label: 'Explorar' },
-];
+// Rutas con hero oscuro a pantalla completa: sólo ahí tiene sentido la navbar
+// transparente (texto blanco). En el resto (fondo claro) sería ilegible, así que
+// arranca y se queda sólida.
+const HERO_ROUTES = ['/', '/arrendadores'];
 
 export function TopBar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { usuario, estaAutenticado, cargando } = useAuth();
-  const { open: openAuthModal } = useAuthModal();
 
   const [isScrolled, setIsScrolled] = useState(false);
-  const isHome = pathname === '/';
+  const isHeroRoute = HERO_ROUTES.includes(pathname);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    // Fuera del hero la navbar es siempre sólida: `isTransparent` ya lo garantiza
+    // con `isHeroRoute`, así que no hace falta observer ni tocar el estado aquí.
+    if (!isHeroRoute) return;
 
-  const isTransparent = isHome && !isScrolled;
+    // Sentinel al inicio del documento: mientras es visible estamos sobre el hero;
+    // cuando el scroll lo saca del viewport, la navbar pasa a sólida. Más eficiente
+    // que escuchar cada evento `scroll`. Se inyecta en el body porque el TopBar es
+    // `fixed` (fuera del flujo), así que no puede llevar el sentinel como hijo. El
+    // observer emite un callback inicial al observar, fijando el estado correcto.
+    const sentinel = document.createElement('div');
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.cssText =
+      'position:absolute;top:0;left:0;width:1px;height:80px;pointer-events:none;';
+    document.body.appendChild(sentinel);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsScrolled(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+      sentinel.remove();
+    };
+  }, [isHeroRoute]);
+
+  const isTransparent = isHeroRoute && !isScrolled;
 
   return (
     <nav
@@ -49,38 +59,10 @@ export function TopBar() {
         "fixed top-0 z-50 flex w-full items-center justify-between transition-all duration-300 sm:px-12",
         isTransparent
           ? "bg-transparent py-6 border-transparent"
-          : "editorial-shadow border-b border-primary/10 bg-background/80 px-6 py-3.5 backdrop-blur-xl"
+          : "glass-nav editorial-shadow border-b border-primary/10 bg-background/80 px-6 py-3.5"
       )}
     >
-      <div className="flex items-center gap-12">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 transition-transform active:scale-95"
-        >
-          <Logo className={cn("h-7 w-7 transition-colors", isTransparent ? "text-white" : "text-primary")} />
-          <Wordmark variant={isTransparent ? 'onDark' : 'themed'} />
-        </Link>
-
-        <div className="ml-4 hidden items-center gap-12 md:flex">
-          {navLinks.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.label}
-                href={link.href}
-                className={cn(
-                  "font-headline text-xs font-black uppercase tracking-[0.2em] transition-colors",
-                  active
-                    ? (isTransparent ? 'text-white' : 'text-primary')
-                    : (isTransparent ? 'text-white/80 hover:text-white' : 'text-foreground hover:text-primary'),
-                )}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <NavbarBrand transparent={isTransparent} />
 
       <div className="flex items-center gap-3 sm:gap-4">
         <button
@@ -105,38 +87,7 @@ export function TopBar() {
           className={cn(isTransparent && "text-white hover:bg-white/20 hover:text-white")}
         />
 
-        {cargando ? (
-          <Skeleton className="h-8 w-24 rounded-full" />
-        ) : estaAutenticado && usuario ? (
-          <UserMenu />
-        ) : (
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => router.push('/register')}
-
-              className={cn(
-                "hidden text-xs font-black uppercase tracking-[0.2em] transition-colors sm:inline-block",
-                isTransparent ? "text-white hover:text-white/80" : "text-foreground hover:text-primary"
-              )}
-            >
-              Registrarse
-            </button>
-
-            <Button
-              size="sm"
-              className={cn(
-                "hidden h-9 px-5 text-xs font-black uppercase tracking-[0.2em] shadow-lg md:inline-flex",
-                isTransparent
-                  ? "bg-white text-primary hover:bg-white/90"
-                  : "shadow-primary/20"
-              )}
-              onClick={() => openAuthModal('login')}
-            >
-              Iniciar Sesión
-            </Button>
-          </div>
-        )}
+        <NavbarAuthActions transparent={isTransparent} />
 
         <MobileNav />
       </div>

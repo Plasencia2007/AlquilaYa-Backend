@@ -1,10 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, ChevronDown, Loader2, MapPin, Sparkles, Star } from 'lucide-react';
-import { pagoService } from '@/services/pago-service';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Star,
+} from 'lucide-react';
+import { pagoService, type EstadoPagoResponse } from '@/services/pago-service';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,11 +30,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
-import { metaEstadoReserva } from '@/lib/reservation-status';
 import { formatearFecha } from '@/lib/relative-time';
 import { formatPEN } from '@/lib/money';
+import { calcularReembolso, POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
 import type { Reserva } from '@/types/reserva';
+import type { PoliticaCancelacion } from '@/types/propiedad';
 import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
+import { servicioPropiedades } from '@/services/property-service';
+import { ReservationStatusBadge } from '@/components/shared/reservation-status-badge';
+import { ReservationExpiryCountdown } from '@/components/student/reservation-expiry-countdown';
 
 import { ReservationTimeline } from './reservation-timeline';
 import { ReviewFormDialog } from './review-form-dialog';
@@ -45,6 +59,7 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
   const [motivoOtro, setMotivoOtro] = useState('');
   const [cargandoMotivos, setCargandoMotivos] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [politicaCancelacion, setPoliticaCancelacion] = useState<PoliticaCancelacion | null>(null);
 
   const handleOpenCancelDialog = async (open: boolean) => {
     setCancelDialogOpen(open);
@@ -62,6 +77,14 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
           setCargandoMotivos(false);
         }
       }
+      if (!politicaCancelacion) {
+        try {
+          const propiedad = await servicioPropiedades.obtenerPorId(reserva.propiedadId);
+          if (propiedad?.politicaCancelacion) setPoliticaCancelacion(propiedad.politicaCancelacion);
+        } catch (e) {
+          console.error('Error cargando política de cancelación:', e);
+        }
+      }
     }
   };
 
@@ -69,6 +92,15 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
   const cancelReasonInvalid = showCustomTextArea
     ? motivoOtro.trim().length < 4
     : !motivoSeleccionado;
+
+  const reembolsoPreview = politicaCancelacion
+    ? calcularReembolso(
+        politicaCancelacion,
+        reserva.fechaInicio,
+        new Date(),
+        reserva.montoTotal + (reserva.comision ?? 0),
+      )
+    : null;
 
   const handleConfirmCancel = async () => {
     if (cancelReasonInvalid) return;
@@ -82,9 +114,22 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
   const [payOpen, setPayOpen] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [stayOpen, setStayOpen] = useState(false);
-  const meta = metaEstadoReserva(reserva.estado);
-  const Icono = meta.icon;
+  const [estadoPago, setEstadoPago] = useState<EstadoPagoResponse | null>(null);
   const puedeCancelar = cancelable.includes(reserva.estado);
+
+  useEffect(() => {
+    if (reserva.estado !== 'APROBADA' && reserva.estado !== 'CANCELADA') return;
+    let activo = true;
+    pagoService
+      .getEstadoPago(reserva.id)
+      .then((r) => {
+        if (activo) setEstadoPago(r);
+      })
+      .catch(() => {});
+    return () => {
+      activo = false;
+    };
+  }, [reserva.id, reserva.estado]);
 
   const handlePagar = async () => {
     setPagando(true);
@@ -147,16 +192,24 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                 </p>
               )}
             </div>
-            <span
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wider',
-                meta.bg,
-                meta.text,
-                meta.border,
+            <div className="flex flex-col items-end gap-1.5">
+              <ReservationStatusBadge estado={reserva.estado} />
+              {reserva.estado === 'APROBADA' && reserva.fechaExpiracion && (
+                <ReservationExpiryCountdown fechaExpiracion={reserva.fechaExpiracion} />
               )}
-            >
-              <Icono className="size-3.5" /> {meta.label}
-            </span>
+              {reserva.estado === 'CANCELADA' && estadoPago?.estado === 'REEMBOLSADO' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success-light px-3 py-1 text-[11px] font-bold text-success">
+                  <CheckCircle2 className="size-3.5" aria-hidden />
+                  Reembolso completado
+                </span>
+              )}
+              {reserva.estado === 'CANCELADA' && estadoPago?.estado === 'REEMBOLSO_FALLIDO' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-[11px] font-bold text-destructive">
+                  <ShieldAlert className="size-3.5" aria-hidden />
+                  Reembolso en proceso / falló
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground sm:flex sm:gap-6">
@@ -170,9 +223,18 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
             </div>
             <div className="col-span-2 sm:col-span-1">
               <p className="font-semibold uppercase tracking-wider text-[10px]">Total</p>
-              <p className="tnum font-black text-primary">
-                {formatPEN(reserva.montoTotal)}
-              </p>
+              {reserva.comision && reserva.comision > 0 ? (
+                <>
+                  <p className="tnum text-[11px] text-muted-foreground">
+                    Renta {formatPEN(reserva.montoTotal)} + Comisión {formatPEN(reserva.comision)}
+                  </p>
+                  <p className="tnum font-black text-primary">
+                    = {formatPEN(reserva.montoTotal + reserva.comision)}
+                  </p>
+                </>
+              ) : (
+                <p className="tnum font-black text-primary">{formatPEN(reserva.montoTotal)}</p>
+              )}
             </div>
           </div>
 
@@ -185,6 +247,13 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
           {reserva.estado === 'CANCELADA' && reserva.motivoCancelacion && (
             <div className="mt-1.5 rounded-xl bg-muted p-2.5 text-xs text-muted-foreground border border-border">
               <strong className="font-semibold">Motivo de cancelación:</strong> {reserva.motivoCancelacion}
+            </div>
+          )}
+
+          {reserva.estado === 'APROBADA' && estadoPago?.estado === 'RECHAZADO' && (
+            <div className="mt-1.5 rounded-xl bg-destructive/10 p-2.5 text-xs text-destructive">
+              <strong className="font-bold">Pago rechazado:</strong> tu último intento no se pudo
+              procesar. Puedes intentarlo de nuevo cuando quieras.
             </div>
           )}
 
@@ -202,6 +271,17 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
               />
               {expandido ? 'Ocultar' : 'Ver progreso'}
             </Button>
+
+            <Link href={`/student/reservations/${reserva.id}`}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary"
+              >
+                Ver detalle
+              </Button>
+            </Link>
 
             {puedeCancelar && onCancelar && (
               <AlertDialog open={cancelDialogOpen} onOpenChange={handleOpenCancelDialog}>
@@ -267,6 +347,17 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
                     )}
                   </div>
 
+                  {politicaCancelacion && reembolsoPreview && (
+                    <div className="mb-4 rounded-xl border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+                      Política <strong className="text-foreground">{POLITICA_CANCELACION_INFO[politicaCancelacion].label}</strong>:
+                      si cancelas hoy recibes{' '}
+                      <strong className="text-foreground">
+                        {formatPEN(reembolsoPreview.monto)} ({reembolsoPreview.porcentaje}%)
+                      </strong>
+                      .
+                    </div>
+                  )}
+
                   <AlertDialogFooter>
                     <AlertDialogCancel>Mantener reserva</AlertDialogCancel>
                     <AlertDialogAction
@@ -293,10 +384,16 @@ export function ReservationCard({ reserva, onCancelar }: Props) {
               >
                 {pagando ? (
                   <Loader2 className="size-4 animate-spin" />
+                ) : estadoPago?.estado === 'RECHAZADO' ? (
+                  <RefreshCw className="size-4" />
                 ) : (
                   <CalendarDays className="size-4" />
                 )}
-                {pagando ? 'Abriendo...' : 'Pagar ahora'}
+                {pagando
+                  ? 'Abriendo...'
+                  : estadoPago?.estado === 'RECHAZADO'
+                    ? 'Reintentar pago'
+                    : 'Pagar ahora'}
               </Button>
             )}
 

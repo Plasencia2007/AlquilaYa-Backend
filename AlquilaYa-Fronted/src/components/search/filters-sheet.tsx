@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  SlidersHorizontal, Minus, Plus, Star,
-  Wifi, ShowerHead, CookingPot, Shirt, Tv, Car, ShieldCheck, Droplets, Flame,
+  SlidersHorizontal, Minus, Plus, Star, Bookmark, Search, BadgeCheck, ImageIcon,
+  Wifi, CookingPot, Shirt, Tv, Car, ShieldCheck, Droplets, Flame,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -18,6 +18,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   filtrosFormSchema,
   PRECIO_MAX_DEFAULT,
@@ -27,8 +29,11 @@ import {
   type FiltrosFormData,
   type Filtros,
 } from '@/schemas/search-schema';
-import { contarFiltrosActivos } from '@/lib/search-url';
+import { contarFiltrosActivos, serializarFiltros } from '@/lib/search-url';
 import { cn } from '@/lib/cn';
+import { notify } from '@/lib/notify';
+import { useSavedSearchesStore } from '@/stores/saved-searches-store';
+import { PriceHistogram } from './price-histogram';
 
 /* ─── datos ─────────────────────────────────────────────────────────────── */
 
@@ -62,8 +67,21 @@ const TIPO_LABELS: Record<string, string> = {
   SUITE:             'Suite',
 };
 
-// Histograma visual estático para el rango de precios (distribución representativa)
-const HIST_BARS = [3,5,8,12,18,24,30,38,44,50,54,58,60,58,54,48,42,36,30,24,18,14,10,7,5,4,3,3,2,2];
+/** Etiqueta legible para una búsqueda guardada (ej. "Ñaña · Suite · hasta S/500"). */
+function etiquetaDesdeFiltros(f: Filtros): string {
+  const partes: string[] = [];
+  if (f.zona?.trim()) partes.push(f.zona.trim());
+  if (f.tipo) partes.push(TIPO_LABELS[f.tipo] ?? f.tipo);
+  if (typeof f.precioMax === 'number') partes.push(`hasta S/${f.precioMax}`);
+  else if (typeof f.precioMin === 'number') partes.push(`desde S/${f.precioMin}`);
+  if (f.servicios.length > 0) {
+    partes.push(`${f.servicios.length} servicio${f.servicios.length === 1 ? '' : 's'}`);
+  }
+  if (typeof f.calificacionMin === 'number' && f.calificacionMin > 0) {
+    partes.push(`${f.calificacionMin}★+`);
+  }
+  return partes.length > 0 ? partes.join(' · ') : 'Todos los cuartos';
+}
 
 interface Props {
   filtros: Filtros;
@@ -75,12 +93,17 @@ interface Props {
 function defaultsDesde(filtros: Filtros): FiltrosFormData {
   return {
     zona: filtros.zona,
+    q: filtros.q ?? '',
     precioMin: filtros.precioMin ?? PRECIO_MIN_DEFAULT,
     precioMax: filtros.precioMax ?? PRECIO_MAX_DEFAULT,
     tipo: filtros.tipo,
     servicios: filtros.servicios,
     distanciaMaxKm: filtros.distanciaMaxKm ?? DISTANCIA_MAX_DEFAULT,
     calificacionMin: filtros.calificacionMin ?? 0,
+    capacidadMin: filtros.capacidadMin,
+    dormitoriosMin: filtros.dormitoriosMin,
+    soloVerificados: filtros.soloVerificados ?? false,
+    soloConFotos: filtros.soloConFotos ?? false,
     orden: filtros.orden,
     view: filtros.view,
   };
@@ -91,6 +114,7 @@ function defaultsDesde(filtros: Filtros): FiltrosFormData {
 export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
   const [open, setOpen] = useState(false);
   const activos = contarFiltrosActivos(filtros);
+  const guardarBusqueda = useSavedSearchesStore((s) => s.guardar);
 
   const form = useForm<FiltrosFormData>({
     resolver: zodResolver(filtrosFormSchema),
@@ -104,6 +128,7 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
 
   const onSubmit = (values: FiltrosFormData) => {
     onApply({
+      q: values.q?.trim() ? values.q.trim() : undefined,
       precioMin: values.precioMin === PRECIO_MIN_DEFAULT ? undefined : values.precioMin,
       precioMax: values.precioMax === PRECIO_MAX_DEFAULT ? undefined : values.precioMax,
       tipo: values.tipo,
@@ -112,12 +137,46 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
         values.distanciaMaxKm === DISTANCIA_MAX_DEFAULT ? undefined : values.distanciaMaxKm,
       calificacionMin: values.calificacionMin > 0 ? values.calificacionMin : undefined,
       capacidadMin: values.capacidadMin,
+      dormitoriosMin: values.dormitoriosMin,
+      soloVerificados: values.soloVerificados ? true : undefined,
+      soloConFotos: values.soloConFotos ? true : undefined,
     });
     setOpen(false);
   };
 
+  // Guarda la búsqueda con los valores ACTUALES del formulario (aún sin aplicar) más los
+  // filtros de contexto que el sheet no gestiona (universidad, zona del catálogo, orden).
+  const onGuardar = () => {
+    const v = form.getValues();
+    const filtrosActuales: Filtros = {
+      ...filtros,
+      zona: v.zona,
+      q: v.q?.trim() ? v.q.trim() : undefined,
+      precioMin: v.precioMin === PRECIO_MIN_DEFAULT ? undefined : v.precioMin,
+      precioMax: v.precioMax === PRECIO_MAX_DEFAULT ? undefined : v.precioMax,
+      tipo: v.tipo,
+      servicios: v.servicios,
+      distanciaMaxKm: v.distanciaMaxKm === DISTANCIA_MAX_DEFAULT ? undefined : v.distanciaMaxKm,
+      calificacionMin: v.calificacionMin > 0 ? v.calificacionMin : undefined,
+      capacidadMin: v.capacidadMin,
+      dormitoriosMin: v.dormitoriosMin,
+      soloVerificados: v.soloVerificados ? true : undefined,
+      soloConFotos: v.soloConFotos ? true : undefined,
+    };
+    const { duplicada } = guardarBusqueda({
+      etiqueta: etiquetaDesdeFiltros(filtrosActuales),
+      query: serializarFiltros(filtrosActuales),
+    });
+    if (duplicada) {
+      notify.info('Ya guardaste esta búsqueda', 'La ves en tu panel › Búsquedas guardadas.');
+    } else {
+      notify.success('Búsqueda guardada', 'La encuentras en tu panel › Búsquedas guardadas.');
+    }
+  };
+
   const onLimpiar = () => {
     form.reset({
+      q: '',
       precioMin: PRECIO_MIN_DEFAULT,
       precioMax: PRECIO_MAX_DEFAULT,
       tipo: undefined,
@@ -125,6 +184,9 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
       distanciaMaxKm: DISTANCIA_MAX_DEFAULT,
       calificacionMin: 0,
       capacidadMin: undefined,
+      dormitoriosMin: undefined,
+      soloVerificados: false,
+      soloConFotos: false,
       orden: filtros.orden,
       view: filtros.view,
     });
@@ -159,6 +221,37 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
+
+            {/* ── 0. Búsqueda por palabra clave (q, ítem 126) ── */}
+            <Controller
+              control={form.control}
+              name="q"
+              render={({ field }) => (
+                <section className="px-6 pt-6 pb-2">
+                  <h3 className="mb-3 text-lg font-bold text-foreground">Palabra clave</h3>
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <Input
+                      type="search"
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      placeholder="Ej. amoblado con baño propio"
+                      aria-label="Buscar por palabra clave"
+                      maxLength={120}
+                      className="h-11 rounded-xl pl-9"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Busca en el título, la descripción y la dirección del aviso.
+                  </p>
+                </section>
+              )}
+            />
+
+            <Hr />
 
             {/* ── 1. Más populares ── */}
             <Controller
@@ -255,9 +348,9 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                       <h3 className="mb-1 text-lg font-bold text-foreground">Rango de precios</h3>
                       <p className="mb-5 text-sm text-muted-foreground">Precio mensual (S/)</p>
 
-                      {/* Mini histograma */}
+                      {/* Mini histograma: distribución real de la oferta actual */}
                       <PriceHistogram
-                        bars={HIST_BARS}
+                        filtros={filtros}
                         min={PRECIO_MIN_DEFAULT}
                         max={PRECIO_MAX_DEFAULT}
                         valueMin={minField.value}
@@ -317,22 +410,36 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
 
             <Hr />
 
-            {/* ── 5. Capacidad ── */}
-            <Controller
-              control={form.control}
-              name="capacidadMin"
-              render={({ field }) => (
-                <section className="px-6 py-6">
-                  <h3 className="mb-4 text-lg font-bold text-foreground">Capacidad</h3>
-                  <FilaStepper
-                    label="Personas"
-                    value={field.value}
-                    onChange={field.onChange}
-                    max={10}
-                  />
-                </section>
-              )}
-            />
+            {/* ── 5. Capacidad y distribución (capacidadMin / dormitoriosMin → backend) ── */}
+            <section className="px-6 py-6">
+              <h3 className="mb-4 text-lg font-bold text-foreground">Capacidad y distribución</h3>
+              <div className="space-y-4">
+                <Controller
+                  control={form.control}
+                  name="capacidadMin"
+                  render={({ field }) => (
+                    <FilaStepper
+                      label="Personas (mín.)"
+                      value={field.value}
+                      onChange={field.onChange}
+                      max={10}
+                    />
+                  )}
+                />
+                <Controller
+                  control={form.control}
+                  name="dormitoriosMin"
+                  render={({ field }) => (
+                    <FilaStepper
+                      label="Dormitorios (mín.)"
+                      value={field.value}
+                      onChange={field.onChange}
+                      max={8}
+                    />
+                  )}
+                />
+              </div>
+            </section>
 
             <Hr />
 
@@ -408,17 +515,62 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
                 </section>
               )}
             />
+
+            <Hr />
+
+            {/* ── 8. Toggles de calidad (ítem 125) ── */}
+            <section className="px-6 py-6">
+              <h3 className="mb-4 text-lg font-bold text-foreground">Calidad del aviso</h3>
+              <div className="space-y-3">
+                <Controller
+                  control={form.control}
+                  name="soloVerificados"
+                  render={({ field }) => (
+                    <ToggleFila
+                      icon={BadgeCheck}
+                      label="Solo arrendadores verificados"
+                      hint="Avisos de arrendadores con identidad verificada."
+                      checked={!!field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+                <Controller
+                  control={form.control}
+                  name="soloConFotos"
+                  render={({ field }) => (
+                    <ToggleFila
+                      icon={ImageIcon}
+                      label="Solo con fotos"
+                      hint="Excluye avisos sin ninguna imagen."
+                      checked={!!field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              </div>
+            </section>
           </div>
 
           {/* Footer */}
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-background px-6 py-4">
-            <button
-              type="button"
-              onClick={onLimpiar}
-              className="text-sm font-bold text-foreground underline underline-offset-4 hover:text-muted-foreground"
-            >
-              Limpiar filtros
-            </button>
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-background px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={onLimpiar}
+                className="text-sm font-bold text-foreground underline underline-offset-4 hover:text-muted-foreground"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                onClick={onGuardar}
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-foreground transition-colors hover:text-primary"
+              >
+                <Bookmark className="size-4" aria-hidden />
+                Guardar búsqueda
+              </button>
+            </div>
             <Button
               type="submit"
               size="lg"
@@ -439,6 +591,34 @@ export function FiltersSheet({ filtros, onApply, onClear, total }: Props) {
 
 function Hr() {
   return <div className="h-px bg-border/60 mx-6" />;
+}
+
+/** Fila con icono + etiqueta + switch, para los toggles de calidad (ítem 125). */
+function ToggleFila({
+  icon: Icon,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border px-4 py-3 transition-colors hover:border-foreground/40">
+      <span className="flex items-start gap-3">
+        <Icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground">{label}</span>
+          <span className="text-xs text-muted-foreground">{hint}</span>
+        </span>
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+    </label>
+  );
 }
 
 function RangoPill({ label, value }: { label: string; value: string }) {
@@ -488,44 +668,6 @@ function FilaStepper({
           <Plus className="size-4" />
         </button>
       </div>
-    </div>
-  );
-}
-
-/** Histograma visual para el rango de precios */
-function PriceHistogram({
-  bars,
-  min,
-  max,
-  valueMin,
-  valueMax,
-}: {
-  bars: number[];
-  min: number;
-  max: number;
-  valueMin: number;
-  valueMax: number;
-}) {
-  const maxBar = Math.max(...bars);
-  const total = max - min;
-
-  return (
-    <div className="flex h-16 items-end gap-0.5" aria-hidden>
-      {bars.map((h, i) => {
-        const barMin = min + (total / bars.length) * i;
-        const barMax = min + (total / bars.length) * (i + 1);
-        const inRange = barMax > valueMin && barMin < valueMax;
-        return (
-          <div
-            key={i}
-            className={cn(
-              'flex-1 rounded-sm transition-colors',
-              inRange ? 'bg-foreground' : 'bg-muted-foreground/25',
-            )}
-            style={{ height: `${(h / maxBar) * 100}%` }}
-          />
-        );
-      })}
     </div>
   );
 }

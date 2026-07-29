@@ -24,6 +24,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final JwtBlacklistChecker jwtBlacklistChecker;
 
     @Override
     protected void doFilterInternal(
@@ -45,6 +46,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null
                     && jwtService.isTokenValid(jwt, userEmail)) {
+
+                // La revocación de sesión (logout) debe cortar también REST, no solo el
+                // WebSocket (S8: WebSocketAuthInterceptor ya lo hacía; este filtro no).
+                if (jwtBlacklistChecker.isBlacklisted(jwt)) {
+                    log.warn("[JWT] Request con token revocado (logout) rechazado para {}", userEmail);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 String rol = jwtService.extractClaim(jwt, claims -> claims.get("rol", String.class));
                 Long userId = jwtService.extractClaim(jwt, claims -> claims.get("userId", Long.class));

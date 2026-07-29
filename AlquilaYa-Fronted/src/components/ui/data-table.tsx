@@ -12,7 +12,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { ChevronDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { descargarCsv } from '@/lib/csv';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -42,6 +43,14 @@ interface DataTableProps<TData, TValue> {
   emptyMessage?: string;
   loading?: boolean;
   pageSize?: number;
+  /**
+   * Ítem 380: exportación CSV de la vista filtrada. `exportHeaders`/`exportRow` son explícitos
+   * (en vez de leer `columns` en caliente) porque el header/celda de una `ColumnDef` puede ser
+   * JSX — no hay forma genérica de bajarlo a texto plano.
+   */
+  exportFilename?: string;
+  exportHeaders?: string[];
+  exportRow?: (row: TData) => (string | number)[];
 }
 
 /**
@@ -57,6 +66,9 @@ export function DataTable<TData, TValue>({
   emptyMessage = 'Sin resultados.',
   loading,
   pageSize = 10,
+  exportFilename,
+  exportHeaders,
+  exportRow,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -78,9 +90,16 @@ export function DataTable<TData, TValue>({
   const effectiveSearchColumnId = searchColumnId ?? columns[0]?.id;
   const searchColumn = effectiveSearchColumnId ? table.getColumn(effectiveSearchColumnId) : undefined;
 
+  const canExport = !!(exportFilename && exportHeaders && exportRow);
+  const handleExport = () => {
+    if (!canExport) return;
+    const filas = table.getFilteredRowModel().rows.map((r) => exportRow!(r.original));
+    descargarCsv(exportFilename!, exportHeaders!, filas);
+  };
+
   return (
     <div className="space-y-4">
-      {(searchPlaceholder || columns.length > 3) && (
+      {(searchPlaceholder || columns.length > 3 || canExport) && (
         <div className="flex items-center justify-between gap-3">
           {searchPlaceholder && searchColumn && (
             <Input
@@ -93,28 +112,35 @@ export function DataTable<TData, TValue>({
               className="h-10 max-w-sm"
             />
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto gap-1">
-                Columnas <ChevronDown className="size-4" aria-hidden />
+          <div className="ml-auto flex items-center gap-2">
+            {canExport && (
+              <Button type="button" variant="outline" className="gap-1" onClick={handleExport}>
+                <Download className="size-4" aria-hidden /> Exportar
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-1">
+                  Columnas <ChevronDown className="size-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    >
+                      {column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       )}
 
@@ -123,13 +149,32 @@ export function DataTable<TData, TValue>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  const sortable = header.column.getCanSort();
+                  const sorted = header.column.getIsSorted();
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder ? null : sortable ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 font-medium hover:text-foreground"
+                          onClick={() => header.column.toggleSorting(sorted === 'asc')}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {sorted === 'asc' ? (
+                            <ArrowUp className="size-3.5" aria-hidden />
+                          ) : sorted === 'desc' ? (
+                            <ArrowDown className="size-3.5" aria-hidden />
+                          ) : (
+                            <ArrowUpDown className="size-3.5 opacity-40" aria-hidden />
+                          )}
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>

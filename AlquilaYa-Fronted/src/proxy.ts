@@ -23,10 +23,11 @@ export function proxy(request: NextRequest) {
   const isExpired = payload ? payload.exp < Math.floor(Date.now() / 1000) : true;
   const estaAutenticado = !!payload && !isExpired;
 
-  if (estaAutenticado && rol === 'ARRENDADOR' && (pathname === '/' || pathname === '/search')) {
-    return NextResponse.redirect(new URL('/landlord/dashboard', request.url));
-  }
-
+  // El home (`/`) y el buscador (`/search`) son PÚBLICOS para todos los roles
+  // (ítem 102): un ARRENDADOR/ADMIN puede ver cómo lucen los anuncios y usar el
+  // buscador tal como lo ve un estudiante. La redirección automática a su panel
+  // ocurre sólo post-login (en el `useEffect` del home), no en cada visita.
+  // Las rutas privadas siguen protegidas por rol más abajo.
   let response: NextResponse | null = null;
 
   // Rutas privadas /admin-master

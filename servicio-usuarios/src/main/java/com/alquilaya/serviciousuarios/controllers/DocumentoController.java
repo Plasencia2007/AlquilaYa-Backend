@@ -2,9 +2,9 @@ package com.alquilaya.serviciousuarios.controllers;
 
 import com.alquilaya.serviciousuarios.dto.DocumentoAdminDTO;
 import com.alquilaya.serviciousuarios.dto.TipoDocumentoConfigDTO;
+import com.alquilaya.serviciousuarios.dto.UsuarioDetalleResponse;
 import com.alquilaya.serviciousuarios.dto.VerificarDocumentoRequest;
 import com.alquilaya.serviciousuarios.entities.DocumentoVerificacion;
-import com.alquilaya.serviciousuarios.entities.Usuario;
 import com.alquilaya.serviciousuarios.enums.TipoDocumento;
 import com.alquilaya.serviciousuarios.services.AuditLogService;
 import com.alquilaya.serviciousuarios.services.DocumentoService;
@@ -50,11 +50,12 @@ public class DocumentoController {
     // Anti-IDOR: solo puedes verificar el DNI de TU propia cuenta (escribe usuario.dni + auto-aprueba).
     @PostMapping("/verificar-dni-instantaneo")
     @PreAuthorize("@permisoEnforcer.esPropioUsuario(#usuarioId)")
-    public ResponseEntity<Usuario> verificarDniInstantaneo(
+    public ResponseEntity<UsuarioDetalleResponse> verificarDniInstantaneo(
             @RequestParam("usuarioId") Long usuarioId,
             @RequestParam("dni") String dni) {
 
-        return ResponseEntity.ok(documentoService.verificarDniInstantaneo(usuarioId, dni));
+        return ResponseEntity.ok(
+                UsuarioDetalleResponse.from(documentoService.verificarDniInstantaneo(usuarioId, dni)));
     }
 
     @GetMapping("/{id}")

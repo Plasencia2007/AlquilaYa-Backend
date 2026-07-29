@@ -4,7 +4,9 @@ export type EstadoReserva =
   | 'RECHAZADA'
   | 'PAGADA'
   | 'FINALIZADA'
-  | 'CANCELADA';
+  | 'CANCELADA'
+  /** Reserva APROBADA que no se pagó dentro del plazo configurado (ítem 238). Terminal. */
+  | 'EXPIRADA';
 
 import type { NivelReputacion } from './reputacion';
 
@@ -40,6 +42,14 @@ export interface Reserva {
   estudianteUniversidad?: string;
   estudianteCarrera?: string;
   estudianteVerificado?: boolean;
+  /** Firma electrónica del contrato (G4, ítem 237). Null = esa parte aún no firmó. */
+  firmaEstudianteAt?: string | null;
+  firmaArrendadorAt?: string | null;
+  /** Solo presente cuando `estado === 'APROBADA'` (ítem 238). */
+  fechaExpiracion?: string | null;
+  grupoId?: number | null;
+  /** Habitación reservada, si la propiedad se gestiona por habitaciones (ítem 285). */
+  habitacionId?: number | null;
 }
 
 export interface CrearReservaRequest {

@@ -22,6 +22,8 @@ public class GrupoRoommateDTO {
     private int cuposOcupados;
     private String estado;
     private String codigoInvitacion;
+    /** Link del grupo de WhatsApp para coordinar (#221), solo lo edita el creador. */
+    private String linkWhatsapp;
     /** Reserva grupal generada (Fase 2), si el grupo ya reservó. */
     private Long reservaId;
     private List<MiembroGrupoDTO> miembros;
@@ -48,6 +50,7 @@ public class GrupoRoommateDTO {
                 .cuposOcupados(ocupados)
                 .estado(g.getEstado() != null ? g.getEstado().name() : null)
                 .codigoInvitacion(g.getCodigoInvitacion())
+                .linkWhatsapp(g.getLinkWhatsapp())
                 .miembros(g.getMiembros().stream().map(MiembroGrupoDTO::from).toList())
                 .build();
     }

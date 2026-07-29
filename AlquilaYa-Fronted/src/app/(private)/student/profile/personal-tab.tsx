@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarDays, KeyRound, Pencil, User } from 'lucide-react';
+import Cropper, { type Area } from 'react-easy-crop';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   Form,
   FormControl,
@@ -26,12 +28,16 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { useVerificationStatus } from '@/hooks/use-verification-status';
+import { useTabParam } from '@/hooks/use-tab-param';
 import { studentProfileService } from '@/services/student-profile-service';
+import { profileService } from '@/services/profile-service';
+import { roommateService, type PerfilConvivencia } from '@/services/roommate-service';
 import { notify } from '@/lib/notify';
 import {
   datosPersonalesSchema,
   type DatosPersonalesData,
 } from '@/schemas/student-profile-schema';
+import { TAB_VALUES } from './page';
 
 /** Normaliza un teléfono a formato +51XXXXXXXXX (toma los últimos 9 dígitos). */
 function normalizarTelefono(t?: string | null): string {
@@ -40,10 +46,41 @@ function normalizarTelefono(t?: string | null): string {
   return digits ? '+51' + digits : '';
 }
 
+function cargarImagen(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.addEventListener('load', () => resolve(img));
+    img.addEventListener('error', (e) => reject(e));
+    img.src = url;
+  });
+}
+
+/** Recorta `imagenSrc` al área `pixelCrop` (patrón estándar de react-easy-crop, vía canvas). */
+async function recortarImagenABlob(imagenSrc: string, pixelCrop: Area): Promise<Blob> {
+  const imagen = await cargarImagen(imagenSrc);
+  const canvas = document.createElement('canvas');
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo procesar la imagen');
+  ctx.drawImage(
+    imagen,
+    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
+    0, 0, pixelCrop.width, pixelCrop.height,
+  );
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('No se pudo procesar la imagen'));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
 export function PersonalTab() {
   const { usuario, inicializar } = useAuth();
   const perfilId = usuario?.perfilId;
   const { verificado } = useVerificationStatus();
+  const [, setTab] = useTabParam({ values: TAB_VALUES, defaultValue: 'personal' });
   const [confirmando,      setConfirmando]      = useState(false);
   const [pendiente,        setPendiente]        = useState<DatosPersonalesData | null>(null);
   const [password,         setPassword]         = useState('');
@@ -51,8 +88,19 @@ export function PersonalTab() {
   const [telefonoOriginal, setTelefonoOriginal] = useState('');
   const [fotoUrl,          setFotoUrl]          = useState<string | undefined>(undefined);
 
+  // Perfil de convivencia (ítem 223): fuente real del badge "Buscando roomie".
+  const [perfilConvivencia, setPerfilConvivencia] = useState<PerfilConvivencia | null>(null);
+
+  // Recorte de avatar (ítem 222): input file oculto + modal de recorte 1:1.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagenParaRecortar, setImagenParaRecortar] = useState<string | null>(null);
+  const [recorteAbierto,     setRecorteAbierto]     = useState(false);
+  const [crop,               setCrop]               = useState({ x: 0, y: 0 });
+  const [zoom,                setZoom]              = useState(1);
+  const [areaRecorte,        setAreaRecorte]        = useState<Area | null>(null);
+  const [subiendoFoto,       setSubiendoFoto]       = useState(false);
+
   const partes      = (usuario?.nombre ?? '').split(' ');
-  const inicial     = partes[0]?.charAt(0).toUpperCase() ?? '?';
   const fotoMostrar = fotoUrl ?? usuario?.avatar;
 
   const form = useForm<DatosPersonalesData>({
@@ -86,6 +134,81 @@ export function PersonalTab() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfilId]);
+
+  // Perfil de convivencia (ítem 223) — misma fuente que usa convivencia-tab.tsx.
+  useEffect(() => {
+    roommateService
+      .miConvivencia()
+      .then((p) => setPerfilConvivencia(p))
+      .catch(() => {
+        /* sin perfil de convivencia creado aún: el badge queda oculto */
+      });
+  }, []);
+
+  const abrirSelectorFoto = () => fileInputRef.current?.click();
+
+  const onSeleccionarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo después
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      notify.error(null, 'Selecciona un archivo de imagen');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify.error(null, 'La foto no puede superar 5 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagenParaRecortar(reader.result as string);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setAreaRecorte(null);
+      setRecorteAbierto(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const cerrarRecorte = () => {
+    setRecorteAbierto(false);
+    setImagenParaRecortar(null);
+    setAreaRecorte(null);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+  };
+
+  const guardarFotoRecortada = async () => {
+    if (!imagenParaRecortar || !areaRecorte) return;
+    setSubiendoFoto(true);
+
+    let archivo: File;
+    try {
+      const blob = await recortarImagenABlob(imagenParaRecortar, areaRecorte);
+      archivo = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+    } catch (err) {
+      notify.error(err, 'No se pudo procesar la imagen');
+      setSubiendoFoto(false);
+      return;
+    }
+
+    const promesa = profileService.subirFotoPerfil(archivo);
+    notify.promise(promesa, {
+      loading: 'Subiendo foto…',
+      success: 'Foto de perfil actualizada',
+      error: 'No se pudo subir la foto',
+    });
+    try {
+      const url = await promesa;
+      setFotoUrl(url);
+      inicializar(); // refresca el avatar en toda la app (navbar, etc.)
+      cerrarRecorte();
+    } catch {
+      // el toast de notify.promise ya informó el error
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
 
   const onSubmit = (data: DatosPersonalesData) => {
     if (data.telefono !== telefonoOriginal) {
@@ -133,25 +256,27 @@ export function PersonalTab() {
         <div className="mb-8 flex items-start gap-5">
           {/* Avatar con botón editar */}
           <div className="relative shrink-0">
-            {fotoMostrar ? (
-              <img
-                src={fotoMostrar}
-                alt={usuario?.nombre ?? 'Avatar'}
-                referrerPolicy="no-referrer"
-                className="size-20 rounded-full object-cover ring-2 ring-primary/10"
-              />
-            ) : (
-              <span className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-3xl font-black text-primary">
-                {inicial}
-              </span>
-            )}
+            <UserAvatar
+              src={fotoMostrar}
+              nombre={usuario?.nombre ?? 'Avatar'}
+              size="xl"
+              className="ring-2 ring-primary/10"
+            />
             <button
               type="button"
               aria-label="Editar foto"
+              onClick={abrirSelectorFoto}
               className="absolute bottom-0 right-0 flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md ring-2 ring-white"
             >
               <Pencil className="size-3.5" />
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onSeleccionarFoto}
+              className="hidden"
+            />
           </div>
 
           {/* Info */}
@@ -166,9 +291,15 @@ export function PersonalTab() {
                   Estudiante verificado
                 </span>
               )}
-              <span className="rounded-full border border-border bg-muted/50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Buscando roomie
-              </span>
+              {perfilConvivencia?.buscaCompaneros === true && (
+                <button
+                  type="button"
+                  onClick={() => setTab('convivencia')}
+                  className="rounded-full border border-border bg-muted/50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  Buscando roomie
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -349,6 +480,56 @@ export function PersonalTab() {
             </Button>
           </div>
 
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de recorte de foto de perfil (ítem 222) */}
+      <Dialog open={recorteAbierto} onOpenChange={(v) => { if (!v) cerrarRecorte(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recorta tu foto de perfil</DialogTitle>
+            <DialogDescription>
+              Ajusta el área cuadrada que se usará como tu avatar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {imagenParaRecortar && (
+            <div className="relative h-72 w-full overflow-hidden rounded-xl bg-muted">
+              <Cropper
+                image={imagenParaRecortar}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_area, areaPixeles) => setAreaRecorte(areaPixeles)}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-xs font-semibold text-muted-foreground">Zoom</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.1}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={cerrarRecorte} disabled={subiendoFoto}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void guardarFotoRecortada()} disabled={!areaRecorte || subiendoFoto}>
+              {subiendoFoto ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -7,12 +7,20 @@ import { conversationService } from '@/services/conversation-service';
 import { notify } from '@/lib/notify';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthStore } from '@/stores/auth-store';
+import { useUnreadMessagesStore } from '@/stores/unread-messages-store';
 import type {
   Conversacion,
   EventoConversacion,
   Mensaje,
+  RolEmisor,
 } from '@/types/chat';
 import type { RolUsuario } from '@/types/auth';
+
+/** Ítem 268: payload de `/user/queue/errors` (rate limit del backend, etc.). */
+interface EventoErrorChat {
+  tipo: 'RATE_LIMIT_EXCEEDED' | 'ERROR';
+  error?: string;
+}
 
 /**
  * Maneja el ciclo de vida de un chat individual:
@@ -22,6 +30,8 @@ import type { RolUsuario } from '@/types/auth';
  * - Envía mensajes (REST), marca como leídos al abrir.
  * - Notifica typing al servidor con debounce.
  */
+const PAGE_SIZE = 50;
+
 export function useConversation(conversacionId: number | string) {
   const { estaAutenticado } = useAuth();
   const [conversacion, setConversacion] = useState<Conversacion | null>(null);
@@ -29,10 +39,19 @@ export function useConversation(conversacionId: number | string) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
   const [otroEscribiendo, setOtroEscribiendo] = useState(false);
+  const [cargandoAntiguos, setCargandoAntiguos] = useState(false);
+  const [hayMasAntiguos, setHayMasAntiguos] = useState(false);
+  // Ítem 257: estado de conexión del WS, expuesto para que la UI muestre "Reconectando…".
+  const [conectado, setConectado] = useState(() => stompClient.isConnected());
 
   const { perfilId: miPerfilId, rol: miRol } = obtenerMiIdentidad();
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<boolean>(false);
+  // El backend pagina los mensajes ORDER BY fechaEnvio ASC (page 0 = los más
+  // ANTIGUOS, no los más recientes). Para mostrar la conversación empezando
+  // por lo último, ubicamos la última página en la carga inicial y desde ahí
+  // caminamos hacia atrás (page - 1) cada vez que se pide historial anterior.
+  const paginaMasAntiguaRef = useRef(0);
 
   // Carga inicial + suscripciones
   useEffect(() => {
@@ -41,28 +60,47 @@ export function useConversation(conversacionId: number | string) {
     let cancelado = false;
     let unsubMensajes: (() => void) | null = null;
     let unsubEventos: (() => void) | null = null;
+    let unsubErrores: (() => void) | null = null;
 
     setCargando(true);
     setError(false);
+    setHayMasAntiguos(false);
 
-    Promise.all([
-      conversationService.obtener(conversacionId),
-      conversationService.listarMensajes(conversacionId, 0, 100),
-    ])
-      .then(([conv, pagina]) => {
+    (async () => {
+      try {
+        const [conv, primeraPagina] = await Promise.all([
+          conversationService.obtener(conversacionId),
+          conversationService.listarMensajes(conversacionId, 0, PAGE_SIZE),
+        ]);
         if (cancelado) return;
+
+        let paginaFinal = primeraPagina;
+        let indicePaginaFinal = 0;
+        if (primeraPagina.totalPages > 1) {
+          // Page 0 trajo los mensajes más antiguos: pedimos la última página real.
+          indicePaginaFinal = primeraPagina.totalPages - 1;
+          paginaFinal = await conversationService.listarMensajes(
+            conversacionId,
+            indicePaginaFinal,
+            PAGE_SIZE,
+          );
+          if (cancelado) return;
+        }
+
         setConversacion(conv);
-        // Backend devuelve ASC; mostramos del más antiguo arriba al más reciente abajo.
-        setMensajes((pagina.content ?? []).slice().reverse().reverse());
+        setMensajes(paginaFinal.content ?? []);
+        paginaMasAntiguaRef.current = indicePaginaFinal;
+        setHayMasAntiguos(indicePaginaFinal > 0);
         setCargando(false);
         // Marcar como leídos en background
         conversationService.marcarLeida(conv.id).catch(() => {/* noop */});
-      })
-      .catch(() => {
+        useUnreadMessagesStore.getState().marcarLeida(conv.id);
+      } catch {
         if (cancelado) return;
         setError(true);
         setCargando(false);
-      });
+      }
+    })();
 
     const subscribirSiConectado = () => {
       const destinoMsgs = `/user/queue/conversacion.${conversacionId}`;
@@ -80,9 +118,27 @@ export function useConversation(conversacionId: number | string) {
           // colisionan entre tablas estudiantes/arrendadores.
           const esMio = nuevo.emisorPerfilId === miPerfilId && nuevo.emisorRol === miRol;
           if (!esMio) {
+            // Ítem 266: alimenta el desglose por conversación del store global; como esta
+            // conversación está abierta, `marcarLeida` la vuelve a poner en 0 justo después.
+            useUnreadMessagesStore.getState().incrementar(Number(conversacionId));
             conversationService
               .marcarLeida(conversacionId)
               .catch(() => {/* noop */});
+            useUnreadMessagesStore.getState().marcarLeida(Number(conversacionId));
+          }
+        } catch {
+          /* noop */
+        }
+      });
+
+      // Ítem 268: errores del backend por este canal (ej. rate limit al enviar mensajes).
+      unsubErrores = stompClient.subscribe('/user/queue/errors', (msg) => {
+        try {
+          const evento: EventoErrorChat = JSON.parse(msg.body);
+          if (evento.tipo === 'RATE_LIMIT_EXCEEDED') {
+            notify.error(null, evento.error || 'Estás enviando mensajes muy rápido. Espera un momento.');
+          } else if (evento.tipo === 'ERROR') {
+            notify.error(null, evento.error || 'Ocurrió un error en el chat.');
           }
         } catch {
           /* noop */
@@ -127,6 +183,7 @@ export function useConversation(conversacionId: number | string) {
         off();
         if (unsubMensajes) unsubMensajes();
         if (unsubEventos) unsubEventos();
+        if (unsubErrores) unsubErrores();
       };
     }
 
@@ -134,25 +191,20 @@ export function useConversation(conversacionId: number | string) {
       cancelado = true;
       if (unsubMensajes) unsubMensajes();
       if (unsubEventos) unsubEventos();
+      if (unsubErrores) unsubErrores();
     };
   }, [conversacionId, estaAutenticado, miPerfilId, miRol]);
 
-  const enviar = useCallback(
-    async (contenido: string) => {
-      if (!contenido.trim()) return;
-      try {
-        const nuevo = await conversationService.enviarMensaje(conversacionId, contenido.trim());
-        setMensajes((prev) =>
-          prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo],
-        );
-        // Limpia typing al enviar
-        publicarTyping(false);
-      } catch (err) {
-        notify.error(err, 'No pudimos enviar el mensaje');
-      }
-    },
-    [conversacionId],
-  );
+  // Ítem 257: estado de conexión del singleton STOMP, independiente de la conversación
+  // (se suscribe una sola vez; `stompClient` ya reconecta solo con backoff de 5s).
+  useEffect(() => {
+    const offConnect = stompClient.onConnect(() => setConectado(true));
+    const offDisconnect = stompClient.onDisconnect(() => setConectado(false));
+    return () => {
+      offConnect();
+      offDisconnect();
+    };
+  }, []);
 
   const publicarTyping = useCallback(
     (escribiendo: boolean) => {
@@ -169,6 +221,128 @@ export function useConversation(conversacionId: number | string) {
     typingTimeoutRef.current = setTimeout(() => publicarTyping(false), 2500);
   }, [publicarTyping]);
 
+  /**
+   * Ítem 268: optimistic UI. Agrega de inmediato un mensaje temporal (id negativo,
+   * `estadoEnvio: 'enviando'`) antes de esperar la respuesta REST; si el POST tiene éxito
+   * lo reemplaza por el mensaje real (mismo hueco en el array), si falla lo marca
+   * `estadoEnvio: 'fallido'` sin borrarlo, para que `reintentar()` pueda reintentar el envío.
+   */
+  const enviar = useCallback(
+    async (contenido: string) => {
+      const texto = contenido.trim();
+      if (!texto) return;
+      const idTemporal = -Date.now();
+      const optimista: Mensaje = {
+        id: idTemporal,
+        conversacionId: Number(conversacionId),
+        emisorPerfilId: miPerfilId ?? -1,
+        emisorRol: (miRol as RolEmisor) ?? 'ESTUDIANTE',
+        contenido: texto,
+        estado: 'ENVIADO',
+        fechaEnvio: new Date().toISOString(),
+        estadoEnvio: 'enviando',
+      };
+      setMensajes((prev) => [...prev, optimista]);
+      publicarTyping(false);
+      try {
+        const nuevo = await conversationService.enviarMensaje(conversacionId, texto);
+        setMensajes((prev) => prev.map((m) => (m.id === idTemporal ? nuevo : m)));
+      } catch (err) {
+        setMensajes((prev) =>
+          prev.map((m) => (m.id === idTemporal ? { ...m, estadoEnvio: 'fallido' } : m)),
+        );
+        notify.error(err, 'No pudimos enviar el mensaje');
+      }
+    },
+    [conversacionId, miPerfilId, miRol, publicarTyping],
+  );
+
+  /**
+   * Ítem 254: sube una imagen (Cloudinary vía backend) y crea el mensaje tipo IMAGEN.
+   * Mismo patrón optimista que `enviar()`: mensaje temporal con preview local (blob URL)
+   * mientras sube, reemplazado por el real al terminar. Si falla, se marca `fallido` sin
+   * botón de reintentar (ver `chat-message.tsx`) porque reintentar reenviaría el `File`
+   * original, que este hook no conserva tras el primer intento.
+   */
+  const enviarImagen = useCallback(
+    async (file: File) => {
+      const idTemporal = -Date.now();
+      const previewUrl = URL.createObjectURL(file);
+      const optimista: Mensaje = {
+        id: idTemporal,
+        conversacionId: Number(conversacionId),
+        emisorPerfilId: miPerfilId ?? -1,
+        emisorRol: (miRol as RolEmisor) ?? 'ESTUDIANTE',
+        contenido: '📷 Imagen',
+        estado: 'ENVIADO',
+        fechaEnvio: new Date().toISOString(),
+        estadoEnvio: 'enviando',
+        tipo: 'IMAGEN',
+        urlAdjunto: previewUrl,
+      };
+      setMensajes((prev) => [...prev, optimista]);
+      try {
+        const { url } = await conversationService.subirImagenChat(conversacionId, file);
+        const nuevo = await conversationService.enviarImagen(conversacionId, url);
+        setMensajes((prev) => prev.map((m) => (m.id === idTemporal ? nuevo : m)));
+        URL.revokeObjectURL(previewUrl);
+      } catch (err) {
+        setMensajes((prev) =>
+          prev.map((m) => (m.id === idTemporal ? { ...m, estadoEnvio: 'fallido' } : m)),
+        );
+        notify.error(err, 'No pudimos enviar la imagen');
+      }
+    },
+    [conversacionId, miPerfilId, miRol],
+  );
+
+  /** Ítem 268: reintenta el envío de un mensaje que quedó en `estadoEnvio: 'fallido'`. */
+  const reintentar = useCallback(
+    async (mensajeTemporalId: number, contenido: string) => {
+      setMensajes((prev) =>
+        prev.map((m) => (m.id === mensajeTemporalId ? { ...m, estadoEnvio: 'enviando' } : m)),
+      );
+      try {
+        const nuevo = await conversationService.enviarMensaje(conversacionId, contenido);
+        setMensajes((prev) => prev.map((m) => (m.id === mensajeTemporalId ? nuevo : m)));
+      } catch (err) {
+        setMensajes((prev) =>
+          prev.map((m) => (m.id === mensajeTemporalId ? { ...m, estadoEnvio: 'fallido' } : m)),
+        );
+        notify.error(err, 'No pudimos enviar el mensaje');
+      }
+    },
+    [conversacionId],
+  );
+
+  /**
+   * Carga la página anterior (mensajes más antiguos) y la antepone a `mensajes`.
+   * Camina hacia atrás desde `paginaMasAntiguaRef` (ver nota en la carga inicial).
+   */
+  const cargarAntiguos = useCallback(async () => {
+    if (cargandoAntiguos || paginaMasAntiguaRef.current <= 0) return;
+    setCargandoAntiguos(true);
+    try {
+      const paginaAnterior = paginaMasAntiguaRef.current - 1;
+      const pagina = await conversationService.listarMensajes(
+        conversacionId,
+        paginaAnterior,
+        PAGE_SIZE,
+      );
+      setMensajes((prev) => {
+        const idsExistentes = new Set(prev.map((m) => m.id));
+        const nuevos = (pagina.content ?? []).filter((m) => !idsExistentes.has(m.id));
+        return [...nuevos, ...prev];
+      });
+      paginaMasAntiguaRef.current = paginaAnterior;
+      setHayMasAntiguos(paginaAnterior > 0);
+    } catch (err) {
+      notify.error(err, 'No se pudieron cargar mensajes anteriores');
+    } finally {
+      setCargandoAntiguos(false);
+    }
+  }, [conversacionId, cargandoAntiguos]);
+
   return {
     conversacion,
     mensajes,
@@ -178,7 +352,13 @@ export function useConversation(conversacionId: number | string) {
     miPerfilId,
     miRol,
     enviar,
+    enviarImagen,
+    reintentar,
     notificarTyping,
+    cargarAntiguos,
+    cargandoAntiguos,
+    hayMasAntiguos,
+    conectado,
   };
 }
 

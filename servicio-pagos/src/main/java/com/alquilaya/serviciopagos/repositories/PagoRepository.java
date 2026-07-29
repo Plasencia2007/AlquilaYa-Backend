@@ -1,6 +1,7 @@
 package com.alquilaya.serviciopagos.repositories;
 
 import com.alquilaya.serviciopagos.entities.Pago;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -23,6 +24,17 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
     Optional<Pago> findFirstByReservaIdOrderByFechaCreacionDesc(Long reservaId);
     List<Pago> findAllByReservaIdOrderByFechaCreacionDesc(Long reservaId);
     List<Pago> findByEstado(String estado);
+
+    /**
+     * Ítem 351: pagos "fallidos" para el panel de alertas del admin — cualquier estado que
+     * requiera atención manual (rechazado por MP, discrepancia de reconciliación, o pendiente
+     * de revisión). Sin paginar a propósito: es una de las 5 fuentes de {@code alerts/page.tsx},
+     * que solo necesita el conteo + una lista corta, igual que {@link #findByEstado}.
+     */
+    List<Pago> findByEstadoIn(Collection<String> estados);
+
+    /** Ítem 279: historial paginado de pagos del estudiante autenticado, más reciente primero. */
+    Page<Pago> findByEstudianteIdOrderByFechaCreacionDesc(Long estudianteId, Pageable pageable);
 
     /**
      * Reconciliación (G5): pagos en los estados dados, más antiguos primero, con límite
@@ -52,6 +64,10 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
     BigDecimal saldoPendiente(@Param("arrendadorId") Long arrendadorId);
 
     List<Pago> findByArrendadorIdAndEstadoAndDesembolsoIdIsNull(Long arrendadorId, String estado);
+
+    /** Ítem 318: historial COMPLETO (cubiertos o no por un desembolso) de pagos PAGADOs del
+     *  arrendador autenticado, más reciente primero por {@code fechaPago} real. */
+    List<Pago> findByArrendadorIdAndEstadoOrderByFechaPagoDesc(Long arrendadorId, String estado);
 
     List<Pago> findByDesembolsoId(Long desembolsoId);
 

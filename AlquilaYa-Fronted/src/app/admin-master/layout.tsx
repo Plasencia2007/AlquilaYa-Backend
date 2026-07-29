@@ -1,10 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { usePermisos } from '@/hooks/use-permisos';
+import { useStomp } from '@/hooks/use-stomp';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { NotificationBell } from '@/components/student/notification-bell';
+import { SkipLink } from '@/components/shared/skip-link';
 
 export default function AdminMasterLayout({
   children,
@@ -14,14 +18,16 @@ export default function AdminMasterLayout({
   const { estaAutenticado, usuario, cargando } = useAuth();
   const { tienePermiso, cargando: cargandoPermisos } = usePermisos();
   const router = useRouter();
-  const [isMounted, setIsMounted] = useState(false);
+  // `useHasMounted` en vez de useState+useEffect: ese setState síncrono dentro de un
+  // efecto viola `react-hooks/set-state-in-effect` (mismo patrón ya usado en
+  // `landlord/layout.tsx`).
+  const isMounted = useHasMounted();
+  // Ítem 378: conecta STOMP para que la campana de notificaciones reciba push en vivo
+  // (mismo patrón que `landlord/layout.tsx` y `DashboardShell` del estudiante).
+  useStomp();
 
   // Acceso al panel: rol base ADMIN o cualquier rol personalizado con ADMIN_PANEL (#32).
   const puedeEntrar = estaAutenticado && (usuario?.rol === 'ADMIN' || tienePermiso('ADMIN_PANEL'));
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
@@ -55,8 +61,18 @@ export default function AdminMasterLayout({
 
   return (
     <div className="min-h-screen bg-background relative selection:bg-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-400 flex overflow-hidden">
+      {/* Ítem 394: apunta al `<main id="contenido">` de abajo. */}
+      <SkipLink href="#contenido" />
       <AdminSidebar />
-      <main className="flex-1 pl-[248px] h-screen overflow-y-auto custom-scrollbar bg-background">
+      <main id="contenido" className="flex-1 pl-[248px] h-screen overflow-y-auto custom-scrollbar bg-background">
+        {/* Ítem 378 (PoC, 1 de 3 eventos — ver notas de alcance): campana de notificaciones
+            admin. Hoy solo cubre "documento KYC nuevo" (NotificacionService, ver
+            UserApprovalEventConsumer#notificarAdmins en servicio-mensajeria); denuncia nueva
+            y propiedad pendiente quedan documentadas como siguiente paso. Vive fuera del
+            sidebar porque AdminSidebar no tiene una franja de header propia para montarla. */}
+        <div className="sticky top-0 z-50 flex items-center justify-end border-b border-border bg-background/95 px-10 py-3 backdrop-blur lg:px-14">
+          <NotificationBell verTodasHref="/admin-master/validations/providers?tab=documentos" />
+        </div>
         <div className="p-10 lg:p-14 max-w-[1600px] mx-auto min-h-full flex flex-col text-foreground">
           {children}
         </div>

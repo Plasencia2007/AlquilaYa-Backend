@@ -45,4 +45,8 @@ public class CuotaGrupo {
 
     @Column(name = "fecha_pago")
     private LocalDateTime fechaPago;
+
+    /** Última vez que se empujó un recordatorio de WhatsApp a este miembro (#281, cooldown 24h). */
+    @Column(name = "ultimo_recordatorio_at")
+    private LocalDateTime ultimoRecordatorioAt;
 }

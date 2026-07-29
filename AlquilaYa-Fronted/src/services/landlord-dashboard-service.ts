@@ -12,6 +12,12 @@ export interface IngresoMensual {
   monto: number;
 }
 
+/** Ítem 321: punto de una serie mensual genérica (ej. % de ocupación histórica). */
+export interface PuntoMensual {
+  mes: string;
+  valor: number;
+}
+
 export interface DashboardArrendador {
   ingresosMesActual: number;
   ingresosMesAnterior: number;
@@ -24,6 +30,8 @@ export interface DashboardArrendador {
   reservasActivas: number;
   actividadReciente: ActividadReciente[];
   ingresosPorMes: IngresoMensual[];
+  /** Ítem 321: ocupación histórica retroactiva (últimos ~7 meses), calculada desde reservas cerradas. */
+  ocupacionPorMes: PuntoMensual[];
 }
 
 export const dashboardService = {

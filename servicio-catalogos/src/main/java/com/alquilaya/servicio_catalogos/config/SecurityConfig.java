@@ -36,6 +36,9 @@ public class SecurityConfig {
                         // (seed, búsqueda anónima, resolución de zona al publicar).
                         .requestMatchers("/api/v1/catalogos/universidades/principal").permitAll()
                         .requestMatchers("/api/v1/catalogos/universidades/zonas/activas").permitAll()
+                        // Endpoint interno para servicio-propiedades: pasa el filtro de seguridad
+                        // (sin JWT) pero el controlador exige la cabecera X-Internal-Key.
+                        .requestMatchers("/api/v1/catalogos/universidades/zonas/activas/interno").permitAll()
                         // Rutas admin de cada controlador del catálogo: solo ADMIN.
                         // (defensa a nivel de URL, además del @PreAuthorize de cada método)
                         .requestMatchers("/api/v1/catalogos/admin/**").hasRole("ADMIN")

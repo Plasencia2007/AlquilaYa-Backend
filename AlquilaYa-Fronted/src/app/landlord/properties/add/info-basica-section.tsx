@@ -4,6 +4,7 @@ import { type ChangeEvent } from 'react';
 
 import { type PrecioSugerido } from '@/services/landlord-property-service';
 import { cn } from '@/lib/cn';
+import { NumberInput } from '@/components/ui/number-input';
 import type { PeriodoAlquiler, TipoPropiedad } from '@/types/propiedad';
 import { CustomSelect, Field, InputField, Section } from './property-form-primitives';
 import type { Errores, FormState } from './property-form-types';
@@ -72,18 +73,20 @@ export function InfoBasicaSection({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div data-field="precio">
-          <Field label="Precio" hint="en soles (S/)" required error={errores.precio}>
-            <InputField
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
+          <Field label="Precio" hint="en soles" required error={errores.precio}>
+            <NumberInput
               name="precio"
-              icon="payments"
               value={form.precio}
-              onChange={onInput}
+              onValueChange={(v) => setField('precio', v)}
               placeholder="450.00"
               error={!!errores.precio}
+              className={cn(
+                'h-auto rounded-xl bg-input py-2.5 pl-10 pr-4 text-sm',
+                'focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary',
+                errores.precio
+                  ? 'border-destructive/60 focus-visible:ring-destructive/20 focus-visible:border-destructive'
+                  : 'border-border hover:border-primary/40',
+              )}
             />
           </Field>
           {precioSugerido && (

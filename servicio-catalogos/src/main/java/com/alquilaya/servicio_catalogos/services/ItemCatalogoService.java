@@ -1,8 +1,10 @@
 package com.alquilaya.servicio_catalogos.services;
 
+import com.alquilaya.servicio_catalogos.dto.ItemCatalogoRequest;
 import com.alquilaya.servicio_catalogos.entities.ItemCatalogo;
 import com.alquilaya.servicio_catalogos.enums.TipoItem;
 import com.alquilaya.servicio_catalogos.repositories.ItemCatalogoRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -37,22 +39,32 @@ public class ItemCatalogoService {
     }
 
     @CacheEvict(value = "filtrosActivos", allEntries = true)
-    public ItemCatalogo guardar(ItemCatalogo item) {
+    public ItemCatalogo guardar(ItemCatalogoRequest request) {
+        ItemCatalogo item = ItemCatalogo.builder()
+                .nombre(request.getNombre())
+                .valor(request.getValor())
+                .tipo(request.getTipo())
+                .activo(request.getActivo() != null ? request.getActivo() : true)
+                .icono(request.getIcono())
+                .descripcion(request.getDescripcion())
+                .imagenUrl(request.getImagenUrl())
+                .build();
         return repository.save(item);
     }
 
     @CacheEvict(value = "filtrosActivos", allEntries = true)
-    public ItemCatalogo actualizar(Long id, ItemCatalogo item) {
+    public ItemCatalogo actualizar(Long id, ItemCatalogoRequest request) {
         return repository.findById(id)
                 .map(existing -> {
-                    existing.setNombre(item.getNombre());
-                    existing.setValor(item.getValor());
-                    existing.setTipo(item.getTipo());
-                    existing.setActivo(item.getActivo());
-                    existing.setIcono(item.getIcono());
-                    existing.setDescripcion(item.getDescripcion());
+                    existing.setNombre(request.getNombre());
+                    existing.setValor(request.getValor());
+                    existing.setTipo(request.getTipo());
+                    existing.setActivo(request.getActivo() != null ? request.getActivo() : existing.getActivo());
+                    existing.setIcono(request.getIcono());
+                    existing.setDescripcion(request.getDescripcion());
+                    existing.setImagenUrl(request.getImagenUrl());
                     return repository.save(existing);
-                }).orElseThrow(() -> new RuntimeException("Item no encontrado"));
+                }).orElseThrow(() -> new EntityNotFoundException("Item de catálogo con id " + id + " no encontrado"));
     }
 
     @CacheEvict(value = "filtrosActivos", allEntries = true)

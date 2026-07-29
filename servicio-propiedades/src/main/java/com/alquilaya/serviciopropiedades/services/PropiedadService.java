@@ -45,12 +45,22 @@ public class PropiedadService {
     private final com.alquilaya.serviciopropiedades.repositories.EventoPropiedadRepository eventoPropiedadRepository;
     private final DistanciaService distanciaService;
     private final UsuariosClient usuariosClient;
+    private final ArrendadorVerificacionService arrendadorVerificacionService;
+
+    /** Tope de candidatos que devuelve la búsqueda de texto libre (ítem 491), antes de aplicar
+     *  el resto de filtros/paginación. Generoso para el volumen real del catálogo. */
+    private static final int LIMITE_TEXTO_LIBRE = 1000;
+
+    /** Resultado "sin filas" reusado por los métodos que devuelven `List<Propiedad>`. */
+    private static final List<Propiedad> SIN_RESULTADOS = List.of();
 
     public List<Propiedad> buscar(BigDecimal precioMin, BigDecimal precioMax, String tipo,
                                    String periodo, Boolean disponible, Integer distanciaMax,
                                    List<String> servicios, String zona,
                                    Long universidadId, Long zonaId,
-                                   Integer capacidadMin, Integer dormitoriosMin) {
+                                   Integer capacidadMin, Integer dormitoriosMin,
+                                   Double calificacionMin, String q, Boolean soloConFotos,
+                                   Boolean soloVerificados) {
         if (precioMin != null && precioMin.signum() < 0) {
             throw new IllegalArgumentException("precioMin no puede ser negativo");
         }
@@ -63,16 +73,90 @@ public class PropiedadService {
         if (distanciaMax != null && distanciaMax < 0) {
             throw new IllegalArgumentException("distanciaMax no puede ser negativa");
         }
+        Double filtroCalificacion = normalizarCalificacionMin(calificacionMin);
         List<String> filtroServicios = (servicios == null || servicios.isEmpty()) ? null : servicios;
-        // El patrón LIKE (comodines + minúsculas) se arma aquí para que :zona viaje
-        // como String puro a la query (LOWER(p.direccion) LIKE :zona). Si se concatena
-        // dentro del HQL, Hibernate no infiere el tipo y PostgreSQL lo trata como bytea
-        // -> "function lower(bytea) does not exist".
-        String filtroZona = (zona == null || zona.isBlank())
-                ? null
-                : "%" + zona.trim().toLowerCase() + "%";
+        String filtroZona = patronZona(zona);
+
+        List<Long> qIds = resolverIdsTextoLibre(q);
+        if (sinCoincidenciasTexto(q, qIds)) return SIN_RESULTADOS;
+        List<Long> arrendadoresVerificados = resolverArrendadoresVerificados(soloVerificados);
+        if (sinArrendadoresVerificados(soloVerificados, arrendadoresVerificados)) return SIN_RESULTADOS;
+
         return propiedadRepository.buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax,
-                filtroServicios, filtroZona, universidadId, zonaId, capacidadMin, dormitoriosMin);
+                filtroServicios, filtroZona, universidadId, zonaId, capacidadMin, dormitoriosMin,
+                filtroCalificacion, qIds, normalizarSoloConFotos(soloConFotos), arrendadoresVerificados);
+    }
+
+    /**
+     * Arma el patrón LIKE de {@code zona} (texto libre de dirección): recorta, pasa a
+     * minúsculas y envuelve en comodines {@code %...%}. Viaja como String puro a la query
+     * ({@code LOWER(p.direccion) LIKE :zona}) — si se concatena dentro del HQL, Hibernate no
+     * infiere el tipo y PostgreSQL lo trata como bytea ("function lower(bytea) does not exist").
+     */
+    private static String patronZona(String zona) {
+        return (zona == null || zona.isBlank()) ? null : "%" + zona.trim().toLowerCase() + "%";
+    }
+
+    /**
+     * Full-text search real (ítem 491): resuelve {@code q} a los ids de propiedades que
+     * matchean por {@code tsvector}/GIN (ver migración V5 y {@link PropiedadRepository#idsPorTextoLibre}),
+     * ordenados por relevancia. {@code null} si {@code q} viene vacío (sin filtro de texto).
+     * Reemplaza la versión pragmática anterior con {@code LIKE} (full scan) por una consulta
+     * indexada con stemming en español.
+     */
+    private List<Long> resolverIdsTextoLibre(String q) {
+        if (q == null || q.isBlank()) return null;
+        return propiedadRepository.idsPorTextoLibre(q.trim(), LIMITE_TEXTO_LIBRE);
+    }
+
+    /** {@code true} si había término de búsqueda pero no matcheó ninguna propiedad (corta antes de ir a BD). */
+    private static boolean sinCoincidenciasTexto(String q, List<Long> qIds) {
+        return q != null && !q.isBlank() && (qIds == null || qIds.isEmpty());
+    }
+
+    /**
+     * "Solo verificados" (ítem 125): {@code null} si no se pidió el filtro (no restringe).
+     * Si se pidió, resuelve vía {@link ArrendadorVerificacionService} (cacheado, consulta a
+     * servicio-usuarios) el conjunto de arrendadores verificados con avisos activos.
+     */
+    private List<Long> resolverArrendadoresVerificados(Boolean soloVerificados) {
+        if (!Boolean.TRUE.equals(soloVerificados)) return null;
+        return arrendadorVerificacionService.idsVerificados();
+    }
+
+    /** {@code true} si se pidió "solo verificados" pero no hay ningún arrendador verificado (corta antes de ir a BD). */
+    private static boolean sinArrendadoresVerificados(Boolean soloVerificados, List<Long> arrendadoresVerificados) {
+        return Boolean.TRUE.equals(soloVerificados) && (arrendadoresVerificados == null || arrendadoresVerificados.isEmpty());
+    }
+
+    /**
+     * Normaliza el toggle "solo con fotos" (ítem 125): {@code TRUE} solo cuando se pide
+     * explícitamente, {@code null} en cualquier otro caso (= "sin filtro"). Así la query usa
+     * {@code (:soloConFotos IS NULL OR ...)} y evita una condición inútil cuando no aplica.
+     */
+    private static Boolean normalizarSoloConFotos(Boolean soloConFotos) {
+        return Boolean.TRUE.equals(soloConFotos) ? Boolean.TRUE : null;
+    }
+
+    /**
+     * Valida y normaliza {@code calificacionMin} (filtro server-side, B4). Rango válido
+     * [0,5]; fuera de él → 400. Un {@code 0} (o {@code null}) se trata como "sin filtro"
+     * (devuelve {@code null}) porque toda propiedad cumple {@code >= 0} — así evitamos una
+     * condición inútil en la query.
+     *
+     * <p><b>Decisión de negocio:</b> la entidad {@link Propiedad} arranca con
+     * {@code calificacion = 5.0} por defecto (no null) aun sin reseñas, así que un aviso "sin
+     * reseñas" cuenta como 5★ y PASA cualquier {@code calificacionMin ≤ 5}. Solo filas legacy
+     * con {@code calificacion} NULL quedan EXCLUIDAS cuando {@code calificacionMin > 0}
+     * (la query exige {@code calificacion IS NOT NULL}). Esto coincide con el filtro cliente
+     * previo, donde una calificación ausente se trataba como 0.
+     */
+    private Double normalizarCalificacionMin(Double calificacionMin) {
+        if (calificacionMin == null) return null;
+        if (!Double.isFinite(calificacionMin) || calificacionMin < 0.0 || calificacionMin > 5.0) {
+            throw new IllegalArgumentException("calificacionMin debe estar en el rango [0, 5]");
+        }
+        return calificacionMin > 0.0 ? calificacionMin : null;
     }
 
     // ===== Búsqueda geoespacial "cerca de mí" (G6) =====
@@ -91,20 +175,27 @@ public class PropiedadService {
     private static final double KM_POR_GRADO_LNG_ECUADOR = 111.320;
 
     /**
-     * Búsqueda geoespacial "cerca de mí": propiedades aprobadas dentro de {@code radioKm}
+     * Búsqueda geoespacial "cerca de mí" PAGINADA: propiedades aprobadas dentro de {@code radioKm}
      * de ({@code lat},{@code lng}), ordenadas por distancia ascendente y con {@code distanciaKm}
-     * ya calculada en cada DTO. NO se cachea (el espacio lat/lng/radio es prácticamente infinito;
+     * ya calculada en cada DTO. Devuelve un {@link PropiedadPaginadaDTO} (mismo shape que
+     * {@code /buscar/paginado}). NO se cachea (el espacio lat/lng/radio es prácticamente infinito;
      * cachearlo no aporta y ensuciaría "propiedades:listado").
+     *
+     * <p>El orden por distancia se aplica en la query (SQL nativo) ANTES de paginar: la
+     * {@code countQuery} cuenta el total dentro del radio y el {@code LIMIT/OFFSET} recorta la
+     * página ya ordenada. Por eso el {@link org.springframework.data.domain.Pageable} se pasa SIN
+     * {@code Sort} (el ORDER BY Haversine vive en el SQL).
      *
      * <p>Valida rangos (lat∈[-90,90], lng∈[-180,180], 0&lt;radioKm≤50) y lanza
      * {@link IllegalArgumentException} (→ 400) ante entradas inválidas. Por defecto solo
      * lista propiedades disponibles, igual que el listado público.
      */
-    public List<PropiedadPublicoDTO> buscarCerca(
+    public PropiedadPaginadaDTO buscarCercaPaginado(
             double lat, double lng, double radioKm,
             BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
             Boolean disponible, Long universidadId, Long zonaId,
-            Integer capacidadMin, Integer dormitoriosMin) {
+            Integer capacidadMin, Integer dormitoriosMin, Double calificacionMin,
+            String q, Boolean soloConFotos, Boolean soloVerificados, int pagina, int tamano) {
 
         if (!Double.isFinite(lat) || lat < -90.0 || lat > 90.0) {
             throw new IllegalArgumentException("lat debe estar en el rango [-90, 90]");
@@ -124,6 +215,7 @@ public class PropiedadService {
         if (precioMin != null && precioMax != null && precioMin.compareTo(precioMax) > 0) {
             throw new IllegalArgumentException("precioMin no puede ser mayor que precioMax");
         }
+        Double filtroCalificacion = normalizarCalificacionMin(calificacionMin);
 
         // Bounding box (pre-filtro barato indexable). Deltas generosos para no excluir
         // resultados en las esquinas; el Haversine exacto de la query hace el corte fino.
@@ -137,21 +229,44 @@ public class PropiedadService {
 
         boolean soloDisponibles = (disponible == null) || disponible;
 
-        List<Propiedad> encontrados = propiedadRepository.buscarCerca(
+        int tamanoSeguro = Math.min(Math.max(tamano, 1), 100); // evita pedir páginas gigantes
+        // Pageable SIN Sort: el ORDER BY por distancia está en el SQL nativo; Spring solo aplica LIMIT/OFFSET.
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(Math.max(pagina, 0), tamanoSeguro);
+
+        // "Solo verificados": patrón booleano (no IS NULL sobre lista) porque esta query es
+        // SQL nativo — no hay precedente probado de "lista IS NULL OR IN(:lista)" ahí. Siempre
+        // se enlaza una lista no vacía: la real cuando filtra, o un sentinel inerte si no.
+        boolean filtraVerificados = Boolean.TRUE.equals(soloVerificados);
+        List<Long> arrendadoresVerificados = filtraVerificados
+                ? arrendadorVerificacionService.idsVerificados()
+                : List.of(-1L);
+        if (filtraVerificados && arrendadoresVerificados.isEmpty()) return paginaVacia(pagina, tamanoSeguro);
+
+        org.springframework.data.domain.Page<Propiedad> page = propiedadRepository.buscarCercaPaginado(
                 lat, lng, radioKm, latMin, latMax, lngMin, lngMax, soloDisponibles,
                 tipo, periodo, precioMin, precioMax, universidadId, zonaId,
-                capacidadMin, dormitoriosMin);
+                capacidadMin, dormitoriosMin, filtroCalificacion,
+                (q == null || q.isBlank()) ? null : q.trim(), normalizarSoloConFotos(soloConFotos),
+                filtraVerificados, arrendadoresVerificados, pageable);
 
         // Enriquecemos igual que el listado público (una sola llamada Feign) y luego
         // adjuntamos la distanciaKm por id. El orden por distancia lo garantiza la query.
-        List<PropiedadPublicoDTO> dtos = toPublicoBatch(encontrados);
+        List<PropiedadPublicoDTO> dtos = toPublicoBatch(page.getContent());
         for (PropiedadPublicoDTO dto : dtos) {
             if (dto.getLatitud() != null && dto.getLongitud() != null) {
                 double km = haversineKm(lat, lng, dto.getLatitud(), dto.getLongitud());
                 dto.setDistanciaKm(Math.round(km * 100.0) / 100.0); // 2 decimales
             }
         }
-        return dtos;
+        return PropiedadPaginadaDTO.builder()
+                .propiedades(dtos)
+                .pagina(page.getNumber())
+                .tamano(page.getSize())
+                .totalElementos(page.getTotalElements())
+                .totalPaginas(page.getTotalPages())
+                .esUltimaPagina(page.isLast())
+                .build();
     }
 
     /** Distancia Haversine en km entre dos puntos (misma fórmula/constante que la query nativa). */
@@ -174,13 +289,14 @@ public class PropiedadService {
      */
     @Cacheable(
         value = "propiedades:listado",
-        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona, #universidadId, #zonaId, #capacidadMin, #dormitoriosMin)"
+        key = "T(java.util.Objects).hash(#precioMin, #precioMax, #tipo, #periodo, #disponible, #distanciaMax, #servicios, #zona, #universidadId, #zonaId, #capacidadMin, #dormitoriosMin, #calificacionMin, #q, #soloConFotos, #soloVerificados)"
     )
     public PropiedadBusquedaResultado buscarPublicoCacheado(
             BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
             Boolean disponible, Integer distanciaMax, List<String> servicios, String zona,
-            Long universidadId, Long zonaId, Integer capacidadMin, Integer dormitoriosMin) {
-        List<Propiedad> resultados = buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona, universidadId, zonaId, capacidadMin, dormitoriosMin);
+            Long universidadId, Long zonaId, Integer capacidadMin, Integer dormitoriosMin,
+            Double calificacionMin, String q, Boolean soloConFotos, Boolean soloVerificados) {
+        List<Propiedad> resultados = buscar(precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona, universidadId, zonaId, capacidadMin, dormitoriosMin, calificacionMin, q, soloConFotos, soloVerificados);
         // Batch enrich: una sola llamada Feign al servicio-usuarios por página
         // (evita N+1 contra el listado). Si Feign falla, devuelve sin enriquecer.
         return new PropiedadBusquedaResultado(toPublicoBatch(resultados));
@@ -197,13 +313,31 @@ public class PropiedadService {
             BigDecimal precioMin, BigDecimal precioMax, String tipo, String periodo,
             Boolean disponible, Integer distanciaMax, List<String> servicios, String zona,
             Long universidadId, Long zonaId, Integer capacidadMin, Integer dormitoriosMin,
-            int pagina, int tamano) {
+            Double calificacionMin, String q, Boolean soloConFotos, Boolean soloVerificados,
+            String orden, int pagina, int tamano) {
+        // Validación de rango de precios/calificación reutilizando la del listado plano
+        // (misma semántica). buscar() la ejecuta; aquí solo normalizamos calificacionMin
+        // para pasarla ya limpia a la query paginada.
+        if (precioMin != null && precioMax != null && precioMin.compareTo(precioMax) > 0) {
+            throw new IllegalArgumentException("precioMin no puede ser mayor que precioMax");
+        }
+        Double filtroCalificacion = normalizarCalificacionMin(calificacionMin);
+        // Bug corregido: antes `zona` viajaba cruda (match exacto en vez de substring) porque
+        // esta variante paginada no aplicaba el mismo patrón LIKE que `buscar()` (ítem anotado).
+        String filtroZona = patronZona(zona);
         int tamanoSeguro = Math.min(Math.max(tamano, 1), 100); // evita pedir páginas gigantes
         org.springframework.data.domain.Pageable pageable =
-                org.springframework.data.domain.PageRequest.of(Math.max(pagina, 0), tamanoSeguro);
+                org.springframework.data.domain.PageRequest.of(Math.max(pagina, 0), tamanoSeguro, sortDeOrden(orden));
+
+        List<Long> qIds = resolverIdsTextoLibre(q);
+        if (sinCoincidenciasTexto(q, qIds)) return paginaVacia(pagina, tamanoSeguro);
+        List<Long> arrendadoresVerificados = resolverArrendadoresVerificados(soloVerificados);
+        if (sinArrendadoresVerificados(soloVerificados, arrendadoresVerificados)) return paginaVacia(pagina, tamanoSeguro);
+
         org.springframework.data.domain.Page<Propiedad> page = propiedadRepository.buscarPaginado(
-                precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, zona,
-                universidadId, zonaId, capacidadMin, dormitoriosMin, pageable);
+                precioMin, precioMax, tipo, periodo, disponible, distanciaMax, servicios, filtroZona,
+                universidadId, zonaId, capacidadMin, dormitoriosMin, filtroCalificacion,
+                qIds, normalizarSoloConFotos(soloConFotos), arrendadoresVerificados, pageable);
 
         return PropiedadPaginadaDTO.builder()
                 .propiedades(toPublicoBatch(page.getContent()))
@@ -215,6 +349,51 @@ public class PropiedadService {
                 .build();
     }
 
+    /** {@link PropiedadPaginadaDTO} vacío para los cortocircuitos de "sin coincidencias" (texto libre / verificados). */
+    private static PropiedadPaginadaDTO paginaVacia(int pagina, int tamano) {
+        return PropiedadPaginadaDTO.builder()
+                .propiedades(List.of())
+                .pagina(Math.max(pagina, 0))
+                .tamano(tamano)
+                .totalElementos(0L)
+                .totalPaginas(0)
+                .esUltimaPagina(true)
+                .build();
+    }
+
+    /**
+     * Traduce el parámetro {@code orden} de {@code /buscar/paginado} a un {@link org.springframework.data.domain.Sort}
+     * server-side. Siempre añade {@code id DESC} como desempate para una paginación estable.
+     * Órdenes soportados:
+     * <ul>
+     *   <li>{@code precio} → precio ascendente</li>
+     *   <li>{@code precioDesc} → precio descendente</li>
+     *   <li>{@code calificacion} → calificación descendente</li>
+     *   <li>{@code recientes} (y default) → fechaCreacion descendente (equivale al orden nativo previo)</li>
+     * </ul>
+     * El orden "distancia al campus" NO se soporta aquí: es un cálculo Haversine sobre coordenadas
+     * (no una columna ordenable directamente en esta query) y se resuelve en el cliente. La búsqueda
+     * por proximidad real ("cerca de mí") tiene su propio endpoint {@code /buscar/cerca}.
+     */
+    private static org.springframework.data.domain.Sort sortDeOrden(String orden) {
+        org.springframework.data.domain.Sort desempate =
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id");
+        String o = orden == null ? "" : orden.trim();
+        org.springframework.data.domain.Sort principal = switch (o) {
+            case "precio" -> org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.ASC, "precio");
+            case "precioDesc" -> org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "precio");
+            case "calificacion" -> org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "calificacion");
+            case "recientes" -> org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "fechaCreacion");
+            default -> org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "fechaCreacion");
+        };
+        return principal.and(desempate);
+    }
+
     public void calcularYSetearDistancia(Propiedad p) {
         if (p.getLatitud() != null && p.getLongitud() != null) {
             p.setDistanciaMetros(distanciaService.distanciaACampusMetros(p.getLatitud(), p.getLongitud()));
@@ -222,12 +401,39 @@ public class PropiedadService {
     }
 
     /**
-     * Construye el DTO público SIN enriquecer con datos del arrendador.
-     * Para listados, preferir {@link #toPublicoBatch(List)} para evitar N+1.
+     * Construye el DTO público de la ficha (un solo id), enriquecido con datos del
+     * arrendador (nombre/avatar/verificado/score/tiempo de respuesta). Reusa
+     * {@link #cargarArrendadoresBulk(List)} con una lista de 1 elemento: mismo camino
+     * anónimo-seguro (bulk-publico vs bulk autenticado) que ya usa el listado, evitando
+     * un 403 cuando la ficha la ve un visitante no logueado.
      */
     public PropiedadPublicoDTO toPublico(Propiedad p) {
+        ArrendadorInfoDTO info = p.getArrendadorId() != null
+                ? cargarArrendadoresBulk(List.of(p)).get(p.getArrendadorId())
+                : null;
         // Carga única (ficha): incluye temporadas. El batch del listado NO las carga (anti N+1).
-        return toPublicoBuilder(p, null, contarLibres(p), temporadasDe(p.getId())).build();
+        return toPublicoBuilder(p, info, contarLibres(p), temporadasDe(p.getId())).build();
+    }
+
+    /**
+     * Teléfono del arrendador, resuelto SOLO para revelarlo tras un contacto ya
+     * registrado (#153) — deliberadamente no vive en {@link PropiedadPublicoDTO} para no
+     * exponerlo a cualquier visitante que solo mira la ficha. Mismo camino
+     * anónimo-seguro (bulk-publico) que {@link #cargarArrendadoresBulk(List)}.
+     */
+    public String obtenerTelefonoArrendador(Long arrendadorId) {
+        if (arrendadorId == null) return null;
+        try {
+            boolean autenticado = hayUsuarioAutenticado();
+            List<ArrendadorInfoDTO> infos = autenticado
+                    ? usuariosClient.obtenerArrendadoresBulk(List.of(arrendadorId))
+                    : usuariosClient.obtenerArrendadoresBulkPublico(List.of(arrendadorId));
+            return infos != null && !infos.isEmpty() ? infos.get(0).getTelefono() : null;
+        } catch (Exception e) {
+            log.warn("[CONTACTO] No se pudo resolver teléfono del arrendador {}: {}",
+                    arrendadorId, e.getMessage());
+            return null;
+        }
     }
 
     /** Temporadas de una propiedad como DTO (vacío si no tiene). */
@@ -248,6 +454,7 @@ public class PropiedadService {
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
                 .precioAnterior(p.getPrecioAnterior())
+                .deposito(p.getDeposito())
                 .videoUrl(p.getVideoUrl())
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
@@ -499,6 +706,7 @@ public class PropiedadService {
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
                 .precioAnterior(p.getPrecioAnterior())
+                .deposito(p.getDeposito())
                 .videoUrl(p.getVideoUrl())
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
@@ -557,6 +765,7 @@ public class PropiedadService {
                 .titulo(p.getTitulo())
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
+                .deposito(p.getDeposito())
                 .direccion(p.getDireccion())
                 .tipoPropiedad(p.getTipoPropiedad())
                 .periodoAlquiler(p.getPeriodoAlquiler())

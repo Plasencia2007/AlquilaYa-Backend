@@ -42,16 +42,22 @@ export function ConversationList({
                     {tiempoChat(c.fechaUltimaActividad)}
                   </span>
                 </div>
-                <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-                  <Building2 className="size-3 shrink-0" /> {c.propiedadTitulo}
-                </p>
+                {c.propiedadTitulo && (
+                  <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                    <Building2 className="size-3 shrink-0" /> {c.propiedadTitulo}
+                  </p>
+                )}
                 <p
                   className={cn(
                     'mt-0.5 truncate text-xs',
                     c.noLeidos > 0 ? 'font-bold text-foreground' : 'text-muted-foreground',
                   )}
                 >
-                  {c.ultimoMensajePreview ?? 'Inicia la conversación…'}
+                  {c.ultimoMensajePreview
+                    ? c.ultimoMensajeEsMio
+                      ? `Tú: ${c.ultimoMensajePreview}`
+                      : c.ultimoMensajePreview
+                    : 'Inicia la conversación…'}
                 </p>
               </div>
               {c.noLeidos > 0 && (

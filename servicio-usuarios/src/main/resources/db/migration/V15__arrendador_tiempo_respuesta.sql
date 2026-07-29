@@ -1,0 +1,13 @@
+-- Tiempo de respuesta promedio del arrendador en el chat, en minutos.
+--
+-- Lo calcula servicio-mensajeria (media del tiempo que tarda el arrendador en responder) y lo
+-- propaga por Kafka como señal de reputación en resenas-topic (evento
+-- TIEMPO_RESPUESTA_ARRENDADOR_ACTUALIZADO); lo consume ResenaEventListener y persiste aquí.
+--
+-- Nullable a propósito: queda NULL mientras mensajeria no haya emitido su primera señal o no
+-- tenga datos suficientes. La UI muestra "—" ante NULL; no se define valor por defecto.
+--
+-- Idempotente (ADD COLUMN IF NOT EXISTS): en dev el esquema lo crea ddl-auto=update a partir de
+-- la entidad Arrendador; en prod lo crea esta migración (Flyway + validate). Tipo alineado con
+-- la entidad JPA (Integer).
+ALTER TABLE arrendadores ADD COLUMN IF NOT EXISTS tiempo_respuesta_promedio INTEGER;

@@ -1,6 +1,8 @@
 package com.alquilaya.serviciopropiedades.services;
 
+import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.config.CurrentUser;
+import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.entities.CuotaRenta;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoCuota;
@@ -55,6 +57,7 @@ public class CuotaRentaService {
     private final ReservaRepository reservaRepository;
     private final ReservaService reservaService;
     private final OutboxPublisher outboxPublisher;
+    private final UsuariosClient usuariosClient;
 
     /**
      * (Re)genera el cronograma de cuotas de la reserva indicada. Idempotente: no
@@ -140,8 +143,11 @@ public class CuotaRentaService {
     /**
      * Emite el recordatorio "cuota por vencer" vía Outbox y marca la cuota.
      * Idempotente: si la cuota ya no está PENDIENTE o ya se recordó, no hace nada.
-     * Acción del sistema (scheduler, sin request context): emite sin enriquecimiento
-     * Feign; el consumidor de notificaciones solo necesita los ids del payload.
+     * Acción del sistema (scheduler, sin request context): el enriquecimiento Feign
+     * (#294, {@code estudianteNombre}/{@code estudianteTelefono}) es best-effort, mismo
+     * patrón try/catch que {@code ReservaService.emitirEvento} — si servicio-usuarios
+     * no responde (o rechaza la llamada por falta de JWT en este contexto), el payload
+     * queda solo con los ids y el consumidor de notificaciones no puede armar el WhatsApp.
      *
      * @return true si se emitió el recordatorio.
      */
@@ -167,6 +173,15 @@ public class CuotaRentaService {
             payload.put("propiedadId", r.getPropiedadId());
             payload.put("estudianteId", r.getEstudianteId());
             payload.put("arrendadorId", r.getArrendadorId());
+            try {
+                EstudianteInfoDTO est = usuariosClient.obtenerEstudiante(r.getEstudianteId());
+                if (est != null) {
+                    payload.put("estudianteNombre", est.getNombre() + " " + (est.getApellido() != null ? est.getApellido() : ""));
+                    payload.put("estudianteTelefono", est.getTelefono());
+                }
+            } catch (Exception e) {
+                log.warn("No se pudo obtener info del estudiante {}: {}", r.getEstudianteId(), e.getMessage());
+            }
         });
 
         outboxPublisher.publicar(TOPIC, EVENT_TYPE, AGGREGATE_TYPE,

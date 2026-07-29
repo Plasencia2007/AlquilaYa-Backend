@@ -54,7 +54,8 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }
 
-    @ExceptionHandler({ CorreoYaRegistradoException.class, TelefonoYaRegistradoException.class, DniYaRegistradoException.class })
+    @ExceptionHandler({ CorreoYaRegistradoException.class, TelefonoYaRegistradoException.class,
+            DniYaRegistradoException.class, ConflictoEstadoException.class })
     public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest req) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), req, null);

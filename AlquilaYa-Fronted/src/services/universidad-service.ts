@@ -73,6 +73,8 @@ export interface ZonaResolucion {
   universidadId: number;
   universidadNombre: string;
   nombre: string;
+  descripcion?: string | null;
+  color?: string | null;
   ordenPrioridad: number;
   tipoLimite: TipoLimite;
   latitud?: number | null;

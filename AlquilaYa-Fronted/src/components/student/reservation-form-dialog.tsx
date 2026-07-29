@@ -3,11 +3,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { addMonths, format } from 'date-fns';
+import { differenceInCalendarMonths, format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DayPicker } from 'react-day-picker';
-import 'react-day-picker/style.css';
-import { CalendarDays, ShieldCheck, Users } from 'lucide-react';
+import type { DateRange } from 'react-day-picker';
+import { CalendarDays, CreditCard, Info, ShieldCheck, Users, Wallet } from 'lucide-react';
 
 import {
   Dialog,
@@ -17,15 +16,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import {
   Select,
   SelectContent,
@@ -33,15 +28,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/use-auth';
 import { useAuthModal } from '@/stores/auth-modal-store';
 import { useVerificationStatus } from '@/hooks/use-verification-status';
 import { reservationService } from '@/services/reservation-service';
+import { servicioPropiedades } from '@/services/property-service';
 import { notify } from '@/lib/notify';
-import { cn } from '@/lib/cn';
 import { formatPEN } from '@/lib/money';
 import { POLITICA_CANCELACION_INFO } from '@/lib/politica-cancelacion';
+import { reservaSchema } from '@/lib/reserva-schema';
 import type { Habitacion, Propiedad } from '@/types/propiedad';
+
+function parseFechaLocal(fecha: string): Date {
+  return new Date(`${fecha}T00:00:00`);
+}
 
 interface Props {
   propiedad: Propiedad;
@@ -50,7 +51,6 @@ interface Props {
   habitacion?: Habitacion;
 }
 
-const MESES_PRESET = [1, 3, 6, 12];
 const OCUPANTES_OPCIONES = [1, 2, 3, 4, 5];
 
 export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props) {
@@ -63,22 +63,39 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
   const [open, setOpen] = useState(false);
   const [requiereVerificacion, setRequiereVerificacion] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [fechaInicio, setFechaInicio] = useState<Date | undefined>();
-  const [meses, setMeses] = useState<number>(1);
+  const [rango, setRango] = useState<DateRange | undefined>();
   const [ocupantes, setOcupantes] = useState<number>(1);
   const [visitaPrevia, setVisitaPrevia] = useState(false);
   const [nota, setNota] = useState('');
+  const [rangosOcupados, setRangosOcupados] = useState<DateRange[]>([]);
 
   useEffect(() => {
     if (!open) {
       setRequiereVerificacion(false);
-      setFechaInicio(undefined);
-      setMeses(1);
+      setRango(undefined);
       setOcupantes(1);
       setVisitaPrevia(false);
       setNota('');
+      setRangosOcupados([]);
     }
   }, [open]);
+
+  // Ítem 284: rangos ya ocupados de la propiedad, para deshabilitarlos en el calendario
+  // (mismo endpoint que consume `AvailabilityPanel` en modo solo-lectura).
+  useEffect(() => {
+    if (!open) return;
+    servicioPropiedades
+      .obtenerCalendario(propiedad.id)
+      .then((rangos) => {
+        setRangosOcupados(
+          rangos.map((r) => ({ from: parseFechaLocal(r.desde), to: parseFechaLocal(r.hasta) })),
+        );
+      })
+      .catch(() => setRangosOcupados([]));
+  }, [open, propiedad.id]);
+
+  const fechaInicio = rango?.from;
+  const fechaFin = rango?.to;
 
   // Precio por temporada: si el CHECK-IN cae en una temporada, su precio manda (solo unidad
   // completa; en modo habitación manda el precio del cuarto). Refleja el cálculo del backend.
@@ -91,7 +108,8 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
       : undefined;
   const precioUnitario = temporadaAplicable?.precio ?? habitacion?.precio ?? propiedad.precio;
 
-  const fechaFin = fechaInicio ? addMonths(fechaInicio, meses) : undefined;
+  const meses =
+    fechaInicio && fechaFin ? Math.max(1, differenceInCalendarMonths(fechaFin, fechaInicio)) : 1;
   const total = precioUnitario * meses;
 
   const handleTrigger = (e: React.MouseEvent) => {
@@ -114,16 +132,17 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fechaInicio || !fechaFin) {
-      notify.warning('Elige una fecha de entrada');
+    const parsed = reservaSchema.safeParse({ fechaInicio, fechaFin });
+    if (!parsed.success) {
+      notify.warning(parsed.error.issues[0]?.message ?? 'Revisa las fechas seleccionadas');
       return;
     }
     setEnviando(true);
     try {
       await reservationService.crear({
         propiedadId: propiedad.id,
-        fechaInicio: format(fechaInicio, 'yyyy-MM-dd'),
-        fechaFin: format(fechaFin, 'yyyy-MM-dd'),
+        fechaInicio: format(parsed.data.fechaInicio, 'yyyy-MM-dd'),
+        fechaFin: format(parsed.data.fechaFin, 'yyyy-MM-dd'),
         habitacionId: habitacion?.id,
       });
       notify.success('Solicitud enviada', 'Te avisaremos cuando el arrendador responda.');
@@ -146,7 +165,24 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
 
   return (
     <>
-      <span onClick={handleTrigger}>{trigger}</span>
+      {/* Ítem 414: el trigger nunca queda `disabled` (siempre es clickeable: sin sesión abre el
+          login, ver `handleTrigger`), pero sin este tooltip un usuario deslogueado no sabe POR
+          QUÉ el clic lo manda a iniciar sesión en vez de reservar. Explica la razón en
+          hover/foco antes de hacer clic. */}
+      {estaAutenticado ? (
+        <span onClick={handleTrigger}>{trigger}</span>
+      ) : (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span onClick={handleTrigger}>{trigger}</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-56 text-xs">
+              Inicia sesión para reservar este cuarto.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
@@ -187,58 +223,16 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
           ) : (
           <form onSubmit={onSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase tracking-wider">Fecha de entrada</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      'h-11 w-full justify-start gap-2 text-left font-normal',
-                      !fechaInicio && 'text-muted-foreground',
-                    )}
-                  >
-                    <CalendarDays className="size-4" />
-                    {fechaInicio
-                      ? format(fechaInicio, "d 'de' MMMM yyyy", { locale: es })
-                      : 'Selecciona una fecha'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-2">
-                  <DayPicker
-                    mode="single"
-                    selected={fechaInicio}
-                    onSelect={setFechaInicio}
-                    locale={es}
-                    disabled={{ before: new Date() }}
-                    showOutsideDays
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold uppercase tracking-wider">Duración</Label>
-              <div className="flex flex-wrap gap-2">
-                {MESES_PRESET.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMeses(m)}
-                    className={cn(
-                      'rounded-full border px-4 py-1.5 text-sm font-bold transition-colors',
-                      meses === m
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-card text-foreground hover:border-primary',
-                    )}
-                  >
-                    {m} {m === 1 ? 'mes' : 'meses'}
-                  </button>
-                ))}
-              </div>
-              {fechaFin && (
+              <Label className="text-xs font-bold uppercase tracking-wider">Periodo de estadía</Label>
+              <DateRangePicker
+                value={rango}
+                onChange={setRango}
+                disabled={[{ before: startOfDay(new Date()) }, ...rangosOcupados]}
+                placeholder="Selecciona entrada y salida"
+              />
+              {fechaInicio && fechaFin && (
                 <p className="text-xs text-muted-foreground">
-                  Hasta el{' '}
+                  {meses} {meses === 1 ? 'mes' : 'meses'} · hasta el{' '}
                   <strong className="text-foreground">
                     {format(fechaFin, "d 'de' MMMM yyyy", { locale: es })}
                   </strong>
@@ -293,28 +287,72 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
               <p className="text-right text-[10px] text-muted-foreground">{nota.length}/500</p>
             </div>
 
-            <div className="rounded-xl bg-muted p-4">
-              {temporadaAplicable && (
-                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary">
-                  <CalendarDays className="size-3.5" aria-hidden />
-                  Precio de temporada{temporadaAplicable.etiqueta ? ` · ${temporadaAplicable.etiqueta}` : ''} (según tu fecha de ingreso)
+            <TooltipProvider delayDuration={200}>
+              <div className="space-y-2.5 rounded-xl bg-muted p-4">
+                {temporadaAplicable && (
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                    <CalendarDays className="size-3.5" aria-hidden />
+                    Precio de temporada{temporadaAplicable.etiqueta ? ` · ${temporadaAplicable.etiqueta}` : ''} (según tu fecha de ingreso)
+                  </p>
+                )}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    Renta{habitacion ? ` (${habitacion.nombre})` : ''} · {formatPEN(precioUnitario)} × {meses}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="size-3.5 shrink-0 cursor-help" aria-label="¿Qué es la renta?" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-56 text-xs">
+                        Precio mensual de la propiedad{habitacion ? ' (o de la habitación elegida)' : ''} multiplicado por la duración de tu estadía.
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
+                  <span className="tnum font-bold text-foreground">{formatPEN(total)}</span>
+                </div>
+
+                {!!propiedad.deposito && propiedad.deposito > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      Depósito de garantía
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="size-3.5 shrink-0 cursor-help" aria-label="¿Qué es el depósito de garantía?" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-56 text-xs">
+                          Monto reembolsable que exige el arrendador como garantía, aparte de la renta.
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                    <span className="tnum font-bold text-foreground">{formatPEN(propiedad.deposito)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    Comisión de servicio
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="size-3.5 shrink-0 cursor-help" aria-label="¿Qué es la comisión de servicio?" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-56 text-xs">
+                        Cargo de la plataforma según la zona de la propiedad. Se confirma junto con tu solicitud.
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
+                  <span className="text-xs italic text-muted-foreground">Se calculará según tu zona</span>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border pt-2.5">
+                  <span className="text-sm font-bold">Total estimado</span>
+                  <span className="tnum text-xl font-black text-primary">
+                    {formatPEN(total + (propiedad.deposito ?? 0))}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  No incluye la comisión de servicio, que verás desglosada al confirmar tu solicitud.
                 </p>
-              )}
-              <div className="flex items-center justify-between text-sm">
-                <span className="tnum text-muted-foreground">
-                  {habitacion ? `${habitacion.nombre}: ` : ''}{formatPEN(precioUnitario)} × {meses}
-                </span>
-                <span className="tnum font-bold text-foreground">
-                  {formatPEN(total)}
-                </span>
               </div>
-              <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
-                <span className="text-sm font-bold">Total</span>
-                <span className="tnum text-xl font-black text-primary">
-                  {formatPEN(total)}
-                </span>
-              </div>
-            </div>
+            </TooltipProvider>
 
             {propiedad.politicaCancelacion && (
               <div className="flex items-start gap-2 rounded-xl border border-border bg-background px-3 py-2.5">
@@ -328,6 +366,21 @@ export function ReservationFormDialog({ propiedad, trigger, habitacion }: Props)
                 </p>
               </div>
             )}
+
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                <Wallet className="size-3.5" aria-hidden />
+                Yape
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                <CreditCard className="size-3.5" aria-hidden />
+                Visa / Mastercard
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                <Wallet className="size-3.5" aria-hidden />
+                PagoEfectivo
+              </span>
+            </div>
 
             <Button
               type="submit"

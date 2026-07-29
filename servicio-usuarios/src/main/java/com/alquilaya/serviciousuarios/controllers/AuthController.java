@@ -15,12 +15,14 @@ import com.alquilaya.serviciousuarios.services.GoogleAuthService;
 import com.alquilaya.serviciousuarios.services.JwtBlacklistService;
 import com.alquilaya.serviciousuarios.services.SesionService;
 import com.alquilaya.serviciousuarios.services.LoginAttemptService;
+import com.alquilaya.serviciousuarios.services.OtpRateLimitService;
 import com.alquilaya.serviciousuarios.services.OtpService;
 import com.alquilaya.serviciousuarios.services.PasswordResetService;
 import com.alquilaya.serviciousuarios.services.UsuarioService;
 import com.alquilaya.serviciousuarios.exceptions.CredencialesInvalidasException;
 import com.alquilaya.serviciousuarios.exceptions.OtpInvalidoException;
 import com.alquilaya.serviciousuarios.exceptions.TelefonoNoVerificadoException;
+import com.alquilaya.serviciousuarios.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,18 @@ public class AuthController {
     private final JwtBlacklistService jwtBlacklistService;
     private final SesionService sesionService;
     private final com.alquilaya.serviciousuarios.services.RefreshTokenService refreshTokenService;
+    // Item 229 (2FA/TOTP): completa el segundo paso del login cuando el usuario tiene 2FA activo.
+    private final com.alquilaya.serviciousuarios.services.TotpService totpService;
+    // Rate-limit del código TOTP en /2fa/login-verificar (mismo mecanismo Redis+TTL que ya
+    // protege el OTP por WhatsApp, keyed con un prefijo propio para no mezclar contadores).
+    private final OtpRateLimitService otpRateLimitService;
+    // #184: anti-bots en register/resend-otp/forgot-password (el rate-limit por IP no frena
+    // bots que rotan IP). Degrada a "permitir" si no hay TURNSTILE_SECRET_KEY configurada.
+    private final com.alquilaya.serviciousuarios.services.TurnstileService turnstileService;
+    // S8: misma resolución de IP (respeta rate-limit.trusted-hops) que usa RateLimitFilter —
+    // antes este controller tomaba a ciegas la primera entrada de X-Forwarded-For, falsificable
+    // por el cliente, contaminando la IP guardada en LoginAttempt y en las alertas de intentos fallidos.
+    private final ClientIpResolver clientIpResolver;
 
     @org.springframework.beans.factory.annotation.Value("${jwt.refresh-expiration-ms:2592000000}")
     private long refreshExpirationMs;
@@ -74,6 +88,9 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,
             HttpServletRequest http, HttpServletResponse resp) {
+        if (!turnstileService.verificar(request.getTurnstileToken())) {
+            throw new IllegalArgumentException("No pudimos verificar que eres una persona. Inténtalo de nuevo.");
+        }
         Usuario usuarioCreado = usuarioService.registrarUsuario(request);
         com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
         // Dispara el email de verificación solo si el método elegido lo exige (#3).
@@ -160,6 +177,44 @@ public class AuthController {
 
         loginAttemptService.registrarExito(usuario.getCorreo(), ip);
 
+        // Item 229: si el usuario activó 2FA, el password correcto NO basta — se detiene acá,
+        // sin emitir sesión, y el frontend debe completar con POST /auth/2fa/login-verificar.
+        // Mismo patrón que el gate de verificación de email/teléfono (autenticado=false, sin
+        // cookies), pero con su propio flag `requiere2fa` para que el frontend sepa a qué
+        // pantalla ir.
+        if (usuario.isTotpHabilitado()) {
+            return ResponseEntity.ok(respuesta2faPendiente(usuario));
+        }
+
+        return ResponseEntity.ok(emitirSesion(usuario, http, resp));
+    }
+
+    /**
+     * Segundo paso del login cuando /login respondió {@code requiere2fa=true} (ítem 229):
+     * valida el código TOTP de 6 dígitos y, si es correcto, recién ahí emite la sesión
+     * (mismas cookies httpOnly que un login normal). Rate-limited por correo (Redis+TTL,
+     * {@link OtpRateLimitService}) para que no sea trivial fuerza-bruta los 6 dígitos.
+     */
+    @PostMapping("/2fa/login-verificar")
+    public ResponseEntity<AuthResponse> loginVerificarTotp(@Valid @RequestBody LoginVerificarTotpRequest request,
+            HttpServletRequest http, HttpServletResponse resp) {
+        String ip = clientIp(http);
+        String rateLimitKey = "2fa-login:" + request.getCorreo();
+        otpRateLimitService.verificarLockout(rateLimitKey);
+
+        Usuario usuario = usuarioService.buscarPorCorreo(request.getCorreo()).orElse(null);
+        if (usuario == null || !usuario.isTotpHabilitado()) {
+            throw new CredencialesInvalidasException("No se pudo completar la verificación en dos pasos.");
+        }
+        verificarCuentaHabilitada(usuario);
+
+        if (!totpService.verificar(usuario.getTotpSecret(), request.getCodigo())) {
+            otpRateLimitService.registrarFallo(rateLimitKey);
+            throw new OtpInvalidoException("El código de autenticación es incorrecto o expiró.");
+        }
+        otpRateLimitService.limpiar(rateLimitKey);
+        loginAttemptService.registrarExito(usuario.getCorreo(), ip);
+
         return ResponseEntity.ok(emitirSesion(usuario, http, resp));
     }
 
@@ -187,16 +242,12 @@ public class AuthController {
     }
 
     /**
-     * Obtiene IP real del cliente respetando X-Forwarded-For (gateway / proxy).
-     * Devuelve la primera IP de la lista (la del cliente original).
+     * Obtiene la IP real del cliente. Delega en {@link ClientIpResolver} (S8) — la misma
+     * lógica que usa {@code RateLimitFilter}, en vez de reimplementar aquí una versión que
+     * confiaba a ciegas en X-Forwarded-For sin validar proxies de confianza.
      */
-    private static String clientIp(HttpServletRequest req) {
-        String fwd = req.getHeader("X-Forwarded-For");
-        if (fwd != null && !fwd.isBlank()) {
-            int comma = fwd.indexOf(',');
-            return (comma > 0 ? fwd.substring(0, comma) : fwd).trim();
-        }
-        return req.getRemoteAddr();
+    private String clientIp(HttpServletRequest req) {
+        return clientIpResolver.resolve(req);
     }
 
     @PostMapping("/login-admin")
@@ -289,11 +340,12 @@ public class AuthController {
      * máx 3 reenvíos en 15min). El servicio levanta error si se viola.
      */
     @PostMapping("/resend-otp")
-    public ResponseEntity<Map<String, String>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        otpService.reenviarOtp(request.getTelefono());
-        return ResponseEntity.ok(Map.of(
-                "mensaje", "Te enviamos un nuevo código por WhatsApp."
-        ));
+    public ResponseEntity<com.alquilaya.serviciousuarios.dto.ReenviarOtpResponse> resendOtp(
+            @Valid @RequestBody ResendOtpRequest request) {
+        if (!turnstileService.verificar(request.getTurnstileToken())) {
+            throw new IllegalArgumentException("No pudimos verificar que eres una persona. Inténtalo de nuevo.");
+        }
+        return ResponseEntity.ok(otpService.reenviarOtp(request.getTelefono()));
     }
 
     /**
@@ -303,6 +355,9 @@ public class AuthController {
      */
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        if (!turnstileService.verificar(request.getTurnstileToken())) {
+            throw new IllegalArgumentException("No pudimos verificar que eres una persona. Inténtalo de nuevo.");
+        }
         passwordResetService.solicitarReset(request.getCorreo());
         return ResponseEntity.ok(Map.of(
                 "mensaje", "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña."
@@ -327,6 +382,23 @@ public class AuthController {
         emailVerificationService.verificarCodigo(request.getCorreo(), request.getCodigo());
         Usuario u = usuarioService.buscarPorCorreo(request.getCorreo())
                 .orElseThrow(() -> new com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException("No se encontró el usuario tras verificar el correo"));
+        com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
+        if (estaCompletamenteVerificado(u, metodo)) {
+            return ResponseEntity.ok(emitirSesion(u, http, resp));
+        }
+        return ResponseEntity.ok(respuestaSinToken(u));
+    }
+
+    /**
+     * Verifica el correo con el enlace de un solo click enviado por email (ítem 179),
+     * alternativa a ingresar el código de 6 dígitos a mano en {@code /verify-email}. Mismo
+     * efecto: activa {@code emailVerificado} y, si con eso ya no falta ninguna otra
+     * verificación (U1), emite la sesión.
+     */
+    @GetMapping("/verify-email-token")
+    public ResponseEntity<AuthResponse> verifyEmailToken(@RequestParam String token,
+            HttpServletRequest http, HttpServletResponse resp) {
+        Usuario u = emailVerificationService.verificarToken(token);
         com.alquilaya.serviciousuarios.enums.MetodoVerificacion metodo = configuracionAuthService.getMetodo();
         if (estaCompletamenteVerificado(u, metodo)) {
             return ResponseEntity.ok(emitirSesion(u, http, resp));
@@ -550,6 +622,27 @@ public class AuthController {
     private AuthResponse respuestaSinToken(Usuario u) {
         return AuthResponse.builder()
                 .autenticado(false)
+                .id(u.getId())
+                .nombre(u.getNombre())
+                .correo(u.getCorreo())
+                .rol(u.getRol().name())
+                .perfilId(obtenerPerfilId(u))
+                .foto(u.getFotoUrl())
+                .emailVerificado(u.isEmailVerificado())
+                .tipoLogin(u.getTipoLogin() != null ? u.getTipoLogin().name() : "LOCAL")
+                .build();
+    }
+
+    /**
+     * Item 229: password correcto pero falta el segundo factor TOTP. Igual que
+     * {@link #respuestaSinToken(Usuario)} (sin cookies, autenticado=false), pero con
+     * {@code requiere2fa=true} para que el frontend muestre el paso de código TOTP en vez
+     * de la pantalla de verificación de email/teléfono.
+     */
+    private AuthResponse respuesta2faPendiente(Usuario u) {
+        return AuthResponse.builder()
+                .autenticado(false)
+                .requiere2fa(true)
                 .id(u.getId())
                 .nombre(u.getNombre())
                 .correo(u.getCorreo())

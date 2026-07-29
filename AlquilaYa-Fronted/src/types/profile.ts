@@ -20,6 +20,8 @@ export interface Perfil {
     longitud?: number;
     esEmpresa?: boolean;
     calificacion?: number;
+    /** KYC (U3): true cuando un admin aprobó sus documentos requeridos. Ítems 305/306. */
+    verificado?: boolean;
   };
   detallesEstudiante?: {
     universidad?: string;

@@ -3,6 +3,7 @@ package com.alquilaya.serviciopropiedades.services;
 import com.alquilaya.serviciopropiedades.clients.UsuariosClient;
 import com.alquilaya.serviciopropiedades.dto.CrearGrupoRequest;
 import com.alquilaya.serviciopropiedades.dto.CuotaPagoDTO;
+import com.alquilaya.serviciopropiedades.dto.EstudianteInfoDTO;
 import com.alquilaya.serviciopropiedades.dto.GrupoRoommateDTO;
 import com.alquilaya.serviciopropiedades.entities.CuotaGrupo;
 import com.alquilaya.serviciopropiedades.entities.GrupoRoommate;
@@ -12,12 +13,15 @@ import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoGrupo;
 import com.alquilaya.serviciopropiedades.enums.EstadoMiembro;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
+import com.alquilaya.serviciopropiedades.outbox.publisher.OutboxPublisher;
 import com.alquilaya.serviciopropiedades.repositories.CuotaGrupoRepository;
 import com.alquilaya.serviciopropiedades.repositories.GrupoRoommateRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
+import com.alquilaya.serviciopropiedades.util.CalculoMontoReserva;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +29,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Gestión de grupos de roommates (#38 Fase 1b): crear, invitar, unirse, aprobar. */
 @Service
@@ -40,6 +45,12 @@ public class GrupoRoommateService {
     private final CuotaGrupoRepository cuotaRepo;
     private final ComisionService comisionService;
     private final UsuariosClient usuariosClient;
+    private final OutboxPublisher outboxPublisher;
+
+    private static final String TOPIC_RESERVAS = "reserva-events";
+    /** Reutiliza el topic de reservas; el eventType es nuevo y auto-descriptivo (#281). */
+    private static final String EVENT_TYPE_RECORDATORIO_CUOTA_GRUPO = "CUOTA_GRUPO_RECORDATORIO";
+    private static final long RECORDATORIO_COOLDOWN_HORAS = 24;
 
     @Transactional
     public GrupoRoommateDTO crear(CrearGrupoRequest req, Long creadorId) {
@@ -65,23 +76,28 @@ public class GrupoRoommateService {
         grupoRepo.save(g);
         log.info("[GRUPO] Estudiante {} creó grupo {} para propiedad {} ({} cupos)",
                 creadorId, g.getId(), p.getId(), cupos);
-        return toDTO(g);
+        return toDTO(g, creadorId);
+    }
+
+    /**
+     * Anti-IDOR: {@code codigoInvitacion} solo se expone al creador o a un miembro activo del
+     * grupo (ver {@link #toDTO}); si no, cualquier autenticado podría iterar ids, leer el código
+     * y unirse vía {@code POST /grupos/unirse?codigo=X} saltándose el flujo de solicitud/aprobación.
+     */
+    @Transactional(readOnly = true)
+    public GrupoRoommateDTO obtener(Long id, Long callerId) {
+        return toDTO(get(id), callerId);
     }
 
     @Transactional(readOnly = true)
-    public GrupoRoommateDTO obtener(Long id) {
-        return toDTO(get(id));
-    }
-
-    @Transactional(readOnly = true)
-    public List<GrupoRoommateDTO> abiertosDePropiedad(Long propiedadId) {
+    public List<GrupoRoommateDTO> abiertosDePropiedad(Long propiedadId, Long callerId) {
         return grupoRepo.findByPropiedadIdAndEstado(propiedadId, EstadoGrupo.ABIERTO).stream()
-                .map(this::toDTO).toList();
+                .map(g -> toDTO(g, callerId)).toList();
     }
 
     @Transactional(readOnly = true)
     public List<GrupoRoommateDTO> misGrupos(Long estudianteId) {
-        return grupoRepo.findByMiembro(estudianteId).stream().map(this::toDTO).toList();
+        return grupoRepo.findByMiembro(estudianteId).stream().map(g -> toDTO(g, estudianteId)).toList();
     }
 
     @Transactional
@@ -91,7 +107,7 @@ public class GrupoRoommateService {
         g.getMiembros().add(MiembroGrupo.builder()
                 .grupo(g).estudianteId(estudianteId).estado(EstadoMiembro.SOLICITADO).build());
         grupoRepo.save(g);
-        return toDTO(g);
+        return toDTO(g, estudianteId);
     }
 
     @Transactional
@@ -103,7 +119,7 @@ public class GrupoRoommateService {
                 .grupo(g).estudianteId(estudianteId).estado(EstadoMiembro.UNIDO).build());
         recomputar(g);
         grupoRepo.save(g);
-        return toDTO(g);
+        return toDTO(g, estudianteId);
     }
 
     @Transactional
@@ -122,7 +138,7 @@ public class GrupoRoommateService {
         m.setEstado(EstadoMiembro.UNIDO);
         recomputar(g);
         grupoRepo.save(g);
-        return toDTO(g);
+        return toDTO(g, actorId);
     }
 
     @Transactional
@@ -137,7 +153,23 @@ public class GrupoRoommateService {
         }
         recomputar(g);
         grupoRepo.save(g);
-        return toDTO(g);
+        return toDTO(g, estudianteId);
+    }
+
+    /**
+     * Setea/edita el link del grupo de WhatsApp (#221, alternativa de bajo costo al chat grupal:
+     * el modelo de conversación de servicio-mensajeria es estrictamente 1-a-1). Mismo patrón de
+     * autorización que {@link #eliminar} y {@link #reservarGrupo}: solo el creador puede editarlo.
+     */
+    @Transactional
+    public GrupoRoommateDTO actualizarWhatsapp(Long grupoId, Long actorId, String linkWhatsapp) {
+        GrupoRoommate g = get(grupoId);
+        if (!g.getCreadorEstudianteId().equals(actorId)) {
+            throw new IllegalStateException("Solo el creador puede editar el link de WhatsApp del grupo");
+        }
+        g.setLinkWhatsapp(linkWhatsapp != null && !linkWhatsapp.isBlank() ? linkWhatsapp.trim() : null);
+        grupoRepo.save(g);
+        return toDTO(g, actorId);
     }
 
     @Transactional
@@ -172,9 +204,7 @@ public class GrupoRoommateService {
         Propiedad p = propiedadRepository.findById(g.getPropiedadId())
                 .orElseThrow(() -> new IllegalArgumentException("No existe la propiedad del grupo"));
 
-        long dias = ChronoUnit.DAYS.between(fechaInicio, fechaFin) + 1;
-        long meses = Math.max(1, Math.round(dias / 30.0));
-        BigDecimal montoTotal = p.getPrecio().multiply(BigDecimal.valueOf(meses)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal montoTotal = CalculoMontoReserva.calcular(p.getPrecio(), fechaInicio, fechaFin);
         BigDecimal comision = comisionService.calcular(p.getZonaId(), montoTotal);
         if (comision == null) comision = BigDecimal.ZERO;
 
@@ -207,7 +237,7 @@ public class GrupoRoommateService {
         grupoRepo.save(g);
         log.info("[GRUPO] Grupo {} → reserva {} (propiedad {}), {} cuotas, total {}",
                 grupoId, guardada.getId(), p.getId(), n, total);
-        return toDTO(g);
+        return toDTO(g, creadorId);
     }
 
     /** Cuota del miembro actual en una reserva grupal (la usa pagos para cobrar su parte). */
@@ -233,13 +263,79 @@ public class GrupoRoommateService {
                 titulo, nombre, correo);
     }
 
-    /** Estado de todas las cuotas de una reserva grupal (progreso de pago). */
+    /**
+     * Estado de todas las cuotas de una reserva grupal (progreso de pago). Anti-IDOR: solo un
+     * miembro de esa reserva grupal (con su propia cuota) puede ver el detalle de TODOS, igual
+     * que {@link #miCuota} valida su propia cuota — si no, cualquier autenticado que adivine el
+     * reservaId vería monto/estado de pago de todos los miembros.
+     */
     @Transactional(readOnly = true)
-    public List<CuotaPagoDTO> cuotasDeReserva(Long reservaId) {
+    public List<CuotaPagoDTO> cuotasDeReserva(Long reservaId, Long callerId) {
+        boolean esMiembro = callerId != null
+                && cuotaRepo.findByReservaIdAndEstudianteId(reservaId, callerId).isPresent();
+        if (!esMiembro) {
+            throw new IllegalStateException("No tienes permiso para ver las cuotas de esta reserva grupal");
+        }
         return cuotaRepo.findByReservaId(reservaId).stream()
                 .map(c -> new CuotaPagoDTO(reservaId, c.getGrupoId(), c.getEstudianteId(),
                         c.getMonto(), c.getEstado(), null, null, null))
                 .toList();
+    }
+
+    /**
+     * Empuja un recordatorio de WhatsApp a un miembro con cuota pendiente en una reserva
+     * grupal (#281). Anti-IDOR: mismo mecanismo que {@link #cuotasDeReserva} — solo un
+     * miembro de esa reserva grupal (con su propia cuota) puede recordar a otro. Cooldown de
+     * 24h contra {@code ultimoRecordatorioAt} para evitar spam al moroso.
+     */
+    @Transactional
+    public void recordarCuota(Long reservaId, Long estudianteId, Long callerId) {
+        boolean esMiembro = callerId != null
+                && cuotaRepo.findByReservaIdAndEstudianteId(reservaId, callerId).isPresent();
+        if (!esMiembro) {
+            throw new IllegalStateException("No tienes permiso para recordar cuotas de esta reserva grupal");
+        }
+        CuotaGrupo c = cuotaRepo.findByReservaIdAndEstudianteId(reservaId, estudianteId)
+                .orElseThrow(() -> new IllegalArgumentException("Ese estudiante no tiene una cuota en esta reserva grupal"));
+        if ("PAGADO".equals(c.getEstado())) {
+            throw new IllegalStateException("Esa cuota ya está pagada");
+        }
+        LocalDateTime ahora = LocalDateTime.now();
+        if (c.getUltimoRecordatorioAt() != null
+                && c.getUltimoRecordatorioAt().isAfter(ahora.minusHours(RECORDATORIO_COOLDOWN_HORAS))) {
+            throw new IllegalStateException("Ya se le envió un recordatorio a este miembro en las últimas 24 horas");
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("reservaId", reservaId);
+        payload.put("grupoId", c.getGrupoId());
+        payload.put("estudianteId", estudianteId);
+        payload.put("monto", c.getMonto());
+        payload.put("recordadoPorId", callerId);
+        try {
+            EstudianteInfoDTO moroso = usuariosClient.obtenerEstudiante(estudianteId);
+            if (moroso != null) {
+                payload.put("estudianteNombre", moroso.getNombre() + " " + (moroso.getApellido() != null ? moroso.getApellido() : ""));
+                payload.put("estudianteTelefono", moroso.getTelefono());
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo obtener info del estudiante {} para recordatorio de cuota: {}", estudianteId, e.getMessage());
+        }
+        try {
+            EstudianteInfoDTO recordador = usuariosClient.obtenerEstudiante(callerId);
+            if (recordador != null) {
+                payload.put("recordadoPorNombre", recordador.getNombre() + " " + (recordador.getApellido() != null ? recordador.getApellido() : ""));
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo obtener info del estudiante {} (recordador): {}", callerId, e.getMessage());
+        }
+
+        outboxPublisher.publicar(TOPIC_RESERVAS, EVENT_TYPE_RECORDATORIO_CUOTA_GRUPO, "CuotaGrupo",
+                String.valueOf(c.getId()), payload, MDC.get("correlationId"));
+
+        c.setUltimoRecordatorioAt(ahora);
+        cuotaRepo.save(c);
+        log.info("[GRUPO] Recordatorio de cuota: reserva {} estudiante {} recordado por {}", reservaId, estudianteId, callerId);
     }
 
     // ===== Helpers =====
@@ -273,10 +369,27 @@ public class GrupoRoommateService {
                 .orElseThrow(() -> new IllegalArgumentException("No existe el grupo " + id));
     }
 
-    private GrupoRoommateDTO toDTO(GrupoRoommate g) {
+    /**
+     * {@code true} si {@code estudianteId} es el creador o un miembro activo (CREADOR/UNIDO) del
+     * grupo. Un SOLICITADO (pendiente de aprobación) no cuenta: aún no debe ver el código de
+     * invitación. Usado para decidir si {@link #toDTO} expone {@code codigoInvitacion}.
+     */
+    private boolean esMiembroActivo(GrupoRoommate g, Long estudianteId) {
+        if (estudianteId == null) return false;
+        if (estudianteId.equals(g.getCreadorEstudianteId())) return true;
+        return g.getMiembros().stream().anyMatch(m -> m.getEstudianteId().equals(estudianteId)
+                && (m.getEstado() == EstadoMiembro.CREADOR || m.getEstado() == EstadoMiembro.UNIDO));
+    }
+
+    private GrupoRoommateDTO toDTO(GrupoRoommate g, Long callerId) {
         String titulo = propiedadRepository.findById(g.getPropiedadId())
                 .map(Propiedad::getTitulo).orElse("Propiedad");
         GrupoRoommateDTO dto = GrupoRoommateDTO.from(g, titulo);
+        // Anti-IDOR: el código de invitación solo se expone al creador o a un miembro activo;
+        // cualquier otro caller (p.ej. iterando ids en GET /grupos/{id}) lo recibe en null.
+        if (!esMiembroActivo(g, callerId)) {
+            dto.setCodigoInvitacion(null);
+        }
         if (g.getEstado() == EstadoGrupo.RESERVADO) {
             reservaRepository.findFirstByGrupoId(g.getId()).ifPresent(r -> dto.setReservaId(r.getId()));
         }

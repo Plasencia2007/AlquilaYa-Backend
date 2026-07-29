@@ -20,7 +20,13 @@ const SELECT_CLASS =
 
 const CICLOS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-export function StudentDetailsStep() {
+interface StudentDetailsStepProps {
+  /** Token de Cloudflare Turnstile (#184) capturado en el paso anterior (datos personales).
+   *  Puede llegar `undefined` (widget sin sitekey configurado, caso normal en desarrollo). */
+  turnstileToken?: string;
+}
+
+export function StudentDetailsStep({ turnstileToken }: StudentDetailsStepProps) {
   const { registrarse } = useAuth();
   const { personal, studentDetails, setStudentDetails, setStep } = useAuthModal();
 
@@ -60,7 +66,7 @@ export function StudentDetailsStep() {
     }
     setStudentDetails(data);
     try {
-      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ESTUDIANTE', data, personal.telefono);
+      await registrarse(personal.nombre, personal.apellido, personal.dni, personal.correo, personal.password, 'ESTUDIANTE', data, personal.telefono, turnstileToken);
       let metodo = 'WHATSAPP_OTP';
       try { metodo = await servicioAuth.obtenerMetodoVerificacion(); } catch { /* fallback */ }
       if (metodo === 'WHATSAPP_OTP' || metodo === 'AMBOS') setStep('otp');
@@ -97,14 +103,14 @@ export function StudentDetailsStep() {
                       <option>Cargando universidades…</option>
                     </select>
                   ) : universidades.length > 0 ? (
-                    <select {...field} className={SELECT_CLASS}>
+                    <select {...field} autoFocus className={SELECT_CLASS}>
                       <option value="" disabled>Selecciona tu universidad</option>
                       {universidades.map((u) => (
                         <option key={u.id} value={u.nombre}>{u.nombre}</option>
                       ))}
                     </select>
                   ) : (
-                    <Input {...field} placeholder="Escribe el nombre de tu universidad" className="h-11 rounded-xl bg-input text-sm" />
+                    <Input {...field} autoFocus placeholder="Escribe el nombre de tu universidad" className="h-11 rounded-xl bg-input text-sm" />
                   )}
                 </FormControl>
                 <FormMessage className="px-1 text-[10px]" />
@@ -179,9 +185,9 @@ export function StudentDetailsStep() {
             type="submit"
             size="lg"
             className="h-12 w-full rounded-full text-sm font-bold tracking-wide"
-            disabled={form.formState.isSubmitting}
+            loading={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Registrando…' : 'Finalizar registro →'}
+            Finalizar registro →
           </Button>
 
           <button

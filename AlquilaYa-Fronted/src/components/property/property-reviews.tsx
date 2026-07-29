@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Star } from 'lucide-react';
+import { Home, Star } from 'lucide-react';
 
 import {
   resenaService,
@@ -9,8 +9,15 @@ import {
   type ResumenCategorias,
 } from '@/services/resena-service';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/cn';
-import { formatearFecha } from '@/lib/relative-time';
+import { formatearFecha, tiempoRelativo } from '@/lib/relative-time';
 
 const CATEGORIAS: { key: keyof ResumenCategorias; label: string }[] = [
   { key: 'limpieza', label: 'Limpieza' },
@@ -18,6 +25,18 @@ const CATEGORIAS: { key: keyof ResumenCategorias; label: string }[] = [
   { key: 'precio', label: 'Precio' },
   { key: 'trato', label: 'Trato' },
 ];
+
+type OrdenResena = 'recientes' | 'mejor' | 'peor';
+
+const ORDEN_LABELS: Record<OrdenResena, string> = {
+  recientes: 'Más recientes',
+  mejor: 'Mejor calificadas',
+  peor: 'Peor calificadas',
+};
+const ORDEN_OPCIONES: OrdenResena[] = ['recientes', 'mejor', 'peor'];
+
+const CANTIDAD_INICIAL = 5;
+const CANTIDAD_INCREMENTO = 5;
 
 interface Props {
   propiedadId: string;
@@ -29,6 +48,9 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
   const [resenas, setResenas] = useState<Resena[]>([]);
   const [resumen, setResumen] = useState<ResumenCategorias | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [orden, setOrden] = useState<OrdenResena>('recientes');
+  const [cantidadVisible, setCantidadVisible] = useState(CANTIDAD_INICIAL);
+  const [filtroEstrellas, setFiltroEstrellas] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -62,9 +84,50 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
   }));
   const maxCount = Math.max(...distribucion.map((d) => d.count), 1);
 
+  function toggleFiltroEstrellas(stars: number) {
+    setFiltroEstrellas((prev) => (prev === stars ? null : stars));
+    setCantidadVisible(CANTIDAD_INICIAL);
+  }
+
+  const resenasFiltradas =
+    filtroEstrellas != null
+      ? resenas.filter((r) => Math.round(r.calificacion) === filtroEstrellas)
+      : resenas;
+
+  const resenasOrdenadas = [...resenasFiltradas].sort((a, b) => {
+    if (orden === 'mejor') return b.calificacion - a.calificacion;
+    if (orden === 'peor') return a.calificacion - b.calificacion;
+    return new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime();
+  });
+
+  const resenasVisibles = resenasOrdenadas.slice(0, cantidadVisible);
+  const restantes = resenasOrdenadas.length - resenasVisibles.length;
+
   return (
     <section className="space-y-6">
-      <h2 className="text-h2">Reseñas</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-h2">Reseñas</h2>
+        {!cargando && resenas.length > 1 && (
+          <Select
+            value={orden}
+            onValueChange={(v) => setOrden(v as OrdenResena)}
+          >
+            <SelectTrigger
+              className="h-9 w-auto min-w-[190px] gap-2 rounded-full border-border bg-card text-xs font-semibold shadow-sm"
+              aria-label="Ordenar reseñas"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ORDEN_OPCIONES.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {ORDEN_LABELS[o]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
       {totalResenas > 0 && (
         <div className="flex gap-6 rounded-2xl border border-border bg-card p-5">
@@ -76,7 +139,19 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
           {!cargando && resenas.length > 0 && (
             <div className="flex flex-1 flex-col justify-center gap-1.5">
               {distribucion.map(({ stars, count }) => (
-                <div key={stars} className="flex items-center gap-2">
+                <button
+                  key={stars}
+                  type="button"
+                  disabled={count === 0}
+                  onClick={() => toggleFiltroEstrellas(stars)}
+                  aria-pressed={filtroEstrellas === stars}
+                  title={count > 0 ? `Filtrar por ${stars} estrellas` : undefined}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors',
+                    count > 0 ? 'cursor-pointer hover:bg-muted' : 'cursor-default opacity-70',
+                    filtroEstrellas === stars && 'bg-primary/10',
+                  )}
+                >
                   <span className="w-3 text-right text-[11px] text-muted-foreground">{stars}</span>
                   <Star className="size-3 shrink-0 fill-warning text-warning" aria-hidden />
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -86,10 +161,23 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
                     />
                   </div>
                   <span className="w-4 text-[11px] text-muted-foreground">{count}</span>
-                </div>
+                </button>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {filtroEstrellas != null && (
+        <div className="flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <span>Mostrando solo reseñas de {filtroEstrellas} estrellas</span>
+          <button
+            type="button"
+            onClick={() => toggleFiltroEstrellas(filtroEstrellas)}
+            className="font-semibold text-primary hover:underline"
+          >
+            Quitar filtro
+          </button>
         </div>
       )}
 
@@ -132,9 +220,13 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
             ? 'No se pudieron cargar las reseñas.'
             : 'Aún no hay reseñas para este cuarto.'}
         </p>
+      ) : resenasOrdenadas.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No hay reseñas con esa calificación.
+        </p>
       ) : (
         <div className="space-y-4">
-          {resenas.map((r) => (
+          {resenasVisibles.map((r) => (
             <div key={r.id} className="space-y-3 rounded-2xl border border-border bg-card p-5">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
@@ -157,7 +249,17 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
               )}
               {r.respuestaArrendador && (
                 <div className="ml-3 rounded-xl border-l-2 border-primary/40 bg-muted/40 p-3">
-                  <p className="text-[11px] font-bold text-primary">Respuesta del arrendador</p>
+                  <div className="flex items-center gap-2">
+                    <p className="flex items-center gap-1 text-[11px] font-bold text-primary">
+                      <Home className="size-3" aria-hidden />
+                      Respuesta del arrendador
+                    </p>
+                    {r.fechaRespuesta && (
+                      <span className="text-[10px] text-muted-foreground">
+                        · {tiempoRelativo(r.fechaRespuesta)}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
                     {r.respuestaArrendador}
                   </p>
@@ -165,6 +267,16 @@ export function PropertyReviews({ propiedadId, calificacion, totalResenas }: Pro
               )}
             </div>
           ))}
+
+          {restantes > 0 && (
+            <button
+              type="button"
+              onClick={() => setCantidadVisible((c) => c + CANTIDAD_INCREMENTO)}
+              className="w-full rounded-xl border border-border bg-card py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-muted"
+            >
+              Ver más reseñas (quedan {restantes})
+            </button>
+          )}
         </div>
       )}
     </section>

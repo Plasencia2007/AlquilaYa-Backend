@@ -16,13 +16,15 @@ import com.alquilaya.serviciopropiedades.repositories.HabitacionRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import com.alquilaya.serviciopropiedades.saga.service.SagaReservaPagoService;
+import com.alquilaya.serviciopropiedades.util.CalculoMontoReserva;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -173,19 +175,6 @@ public class ReservaService {
     }
 
     @Transactional
-    public Reserva marcarPagada(Long reservaId) {
-        Reserva r = obtenerPorId(reservaId);
-        if (r.getEstado() != EstadoReserva.APROBADA) {
-            throw new IllegalStateException("Solo se pueden marcar como PAGADAS reservas APROBADAS");
-        }
-        r.setEstado(EstadoReserva.PAGADA);
-        Reserva guardada = reservaRepository.save(r);
-        emitirEvento("RESERVA_PAGADA", guardada, null);
-        habitacionService.recomputarTrasCambioReserva(guardada);
-        return guardada;
-    }
-
-    @Transactional
     public Reserva cancelar(Long reservaId, String motivo, CurrentUser current) {
         Reserva r = obtenerPorId(reservaId);
         if (current == null || current.getPerfilId() == null) {
@@ -326,6 +315,19 @@ public class ReservaService {
         return reservaRepository.findByEstudianteIdOrderByFechaCreacionDesc(estudianteId);
     }
 
+    /**
+     * Ítem 234: versión paginada de "mis reservas". Si {@code estado} viene informado,
+     * pagina DENTRO de ese filtro (tal como lo consumen las tabs de la UI del estudiante)
+     * en vez de traer todas las reservas y filtrar del lado del cliente.
+     */
+    public Page<Reserva> listarDelEstudiante(Long estudianteId, EstadoReserva estado, Pageable pageable) {
+        if (estado != null) {
+            return reservaRepository.findByEstudianteIdAndEstadoOrderByFechaCreacionDesc(
+                    estudianteId, estado, pageable);
+        }
+        return reservaRepository.findByEstudianteIdOrderByFechaCreacionDesc(estudianteId, pageable);
+    }
+
     public List<Reserva> listarDelArrendador(Long arrendadorId) {
         return reservaRepository.findByArrendadorIdOrderByFechaCreacionDesc(arrendadorId);
     }
@@ -456,22 +458,13 @@ public class ReservaService {
         }
     }
 
-    private BigDecimal calcularMonto(Propiedad p, CrearReservaRequest req) {
-        return calcularMonto(p.getPrecio(), p.getPeriodoAlquiler(), req);
-    }
-
     /**
-     * Calcula el monto de la reserva. El precio se trata como MENSUAL — toda la UI lo asume así
-     * (ficha "/mes", y el formulario cobra precio × meses). Cobramos por MESES COMPLETOS para que
-     * coincida exactamente con lo que muestra el formulario: "1 mes = 1 × precio" (sin prorrateo
-     * por día, que daba totales raros como S/1.03 o, con el divisor por período, S/0.17).
-     * {@code periodoRaw} queda como descriptor del aviso; ya no divide el precio.
+     * Calcula el monto de la reserva. {@code periodoRaw} queda como descriptor del aviso; el
+     * cálculo real (mensual × meses completos) vive en {@link CalculoMontoReserva}, compartido
+     * con {@code GrupoRoommateService} para no duplicar la fórmula.
      */
     private BigDecimal calcularMonto(BigDecimal precio, String periodoRaw, CrearReservaRequest req) {
-        long dias = ChronoUnit.DAYS.between(req.getFechaInicio(), req.getFechaFin()) + 1;
-        // El formulario fija la duración en meses (fechaFin = fechaInicio + N meses); reconstruimos N.
-        long meses = Math.max(1, Math.round(dias / 30.0));
-        return precio.multiply(BigDecimal.valueOf(meses)).setScale(2, RoundingMode.HALF_UP);
+        return CalculoMontoReserva.calcular(precio, req.getFechaInicio(), req.getFechaFin());
     }
 
     private void emitirEvento(String tipo, Reserva r, CurrentUser current) {

@@ -42,8 +42,19 @@ class KafkaConsumer {
         });
         this.consumer.on(this.consumer.events.CRASH, (event) => {
             this.connected = false;
-            logger.error('Kafka consumer crashed', { error: event && event.payload && event.payload.error && event.payload.error.message });
+            const restartable = !!(event && event.payload && event.payload.restart);
+            logger.error('Kafka consumer crashed', {
+                error: event && event.payload && event.payload.error && event.payload.error.message,
+                restartable,
+            });
             if (this.onStateChange) this.onStateChange(false);
+            // KafkaJS solo reintenta por si mismo si el error es "retriable" (restart=true).
+            // Si no, el consumer queda muerto para siempre y el pipeline de WhatsApp no se
+            // recupera solo (sin esto, ni reiniciar el contenedor a mano lo arregla si el
+            // proceso sigue vivo). Reintentamos nosotros mismos con backoff.
+            if (!restartable && !this._manualRestartInFlight) {
+                this._scheduleManualRestart();
+            }
         });
     }
 
@@ -56,8 +67,16 @@ class KafkaConsumer {
 
         await this.producer.connect();
         await this.consumer.connect();
+        await this._subscribeAndRun();
+    }
+
+    /** Re-suscribe y arranca el loop de consumo — usado tanto por start() como por la
+     * recuperación manual tras un crash no-retriable (mismo consumer, sin fuga de grupo). */
+    async _subscribeAndRun() {
         await this.consumer.subscribe({ topic: 'user-approval-events', fromBeginning: false });
         await this.consumer.subscribe({ topic: 'reserva-events', fromBeginning: false });
+        await this.consumer.subscribe({ topic: 'resenas-topic', fromBeginning: false });
+        await this.consumer.subscribe({ topic: 'campanas-whatsapp-events', fromBeginning: false });
 
         // autoCommit: false + commit explícito por mensaje = al-menos-una-vez.
         // Los handlers deben tolerar re-entrega (idempotencia) si hay reinicios a mitad de proceso.
@@ -94,6 +113,26 @@ class KafkaConsumer {
         });
     }
 
+    /** Backoff acotado (5s, 10s, 20s... hasta 60s) — no reintenta infinito en caliente. */
+    _scheduleManualRestart(attempt = 1) {
+        this._manualRestartInFlight = true;
+        const delay = Math.min(5000 * attempt, 60000);
+        logger.warn('Reintentando conexion de Kafka consumer', { attempt, delayMs: delay });
+        setTimeout(async () => {
+            try {
+                await this.consumer.connect();
+                await this._subscribeAndRun();
+                this._manualRestartInFlight = false;
+                logger.info('Kafka consumer recuperado tras crash no-retriable', { attempt });
+            } catch (err) {
+                logger.error('Fallo al reintentar conexion de Kafka tras crash', {
+                    attempt, error: err && err.message,
+                });
+                this._scheduleManualRestart(attempt + 1);
+            }
+        }, delay);
+    }
+
     async stop() {
         try { await this.consumer.disconnect(); } catch { /* noop */ }
         try { await this.producer.disconnect(); } catch { /* noop */ }
@@ -108,6 +147,10 @@ class KafkaConsumer {
                     await this.handleUserApprovalEvent(event);
                 } else if (topic === 'reserva-events') {
                     await this.handleReservaEvent(event);
+                } else if (topic === 'resenas-topic') {
+                    await this.handleResenaEvent(event);
+                } else if (topic === 'campanas-whatsapp-events') {
+                    await this.handleCampanaWhatsappEvent(event);
                 }
                 if (attempt > 1) {
                     logger.info('Procesado exitosamente tras reintento', {
@@ -193,6 +236,7 @@ class KafkaConsumer {
             tipo, reservaId, propiedadId, montoTotal, motivo,
             estudianteNombre, estudianteTelefono, estudianteId,
             arrendadorTelefono, arrendadorId,
+            monto, fechaVencimiento, recordadoPorNombre,
         } = event || {};
 
         let destino = null;
@@ -226,25 +270,88 @@ class KafkaConsumer {
                     `Motivo: ${motivo || 'No especificado'}\n\n` +
                     `Puedes buscar otras habitaciones disponibles en la app.`;
                 break;
-            case 'RESERVA_PAGADA':
-                destino = arrendadorTelefono;
-                destinoUserId = arrendadorId;
-                messageText = `*AlquilaYa* 🏠\n\n` +
-                    `El estudiante *${estudianteNombre || 'Sin nombre'}* ha *PAGADO* la reserva #${reservaId}.\n` +
-                    `💵 Monto: S/ ${montoTotal || '-'}\n\n` +
-                    `La reserva queda confirmada. ✅`;
-                break;
-            case 'RESERVA_CANCELADA':
+            case 'RESERVA_PAGADA': {
+                // Dos destinatarios (arrendador + estudiante, #286): mismo patrón que
+                // RESERVA_CANCELADA — cada envío en su propio try/catch para que el fallo
+                // del segundo no reintente handleReservaEvent completo y reenvíe el
+                // WhatsApp al primero, que ya lo recibió con éxito.
+                if (arrendadorTelefono) {
+                    const mensajeArrendador = `*AlquilaYa* 🏠\n\n` +
+                        `El estudiante *${estudianteNombre || 'Sin nombre'}* ha *PAGADO* la reserva #${reservaId}.\n` +
+                        `💵 Monto: S/ ${montoTotal || '-'}\n\n` +
+                        `La reserva queda confirmada. ✅`;
+                    try {
+                        await this._sendWhatsApp(arrendadorTelefono, mensajeArrendador, tipo, { userId: arrendadorId, eventType: tipo });
+                    } catch (err) {
+                        logger.error('Fallo al notificar pago al arrendador', {
+                            reservaId, userId: arrendadorId, error: err && err.message,
+                        });
+                    }
+                }
+                if (estudianteTelefono) {
+                    const mensajeEstudiante = `*AlquilaYa* 🏠\n\n` +
+                        `*¡Tu pago fue recibido!* 🎉\n\n` +
+                        `🏠 Propiedad ID: ${propiedadId}\n` +
+                        `🆔 Reserva #${reservaId}\n` +
+                        `💵 Monto: S/ ${montoTotal || '-'}\n\n` +
+                        `Tu reserva queda *confirmada*. Coordina con el arrendador los siguientes pasos desde el chat de la app. ✅`;
+                    try {
+                        await this._sendWhatsApp(estudianteTelefono, mensajeEstudiante, tipo, { userId: estudianteId, eventType: tipo });
+                    } catch (err) {
+                        logger.error('Fallo al notificar pago al estudiante', {
+                            reservaId, userId: estudianteId, error: err && err.message,
+                        });
+                    }
+                }
+                return;
+            }
+            case 'RESERVA_CANCELADA': {
                 const mensaje = `*AlquilaYa* 🏠\n\n` +
                     `La reserva #${reservaId} fue *CANCELADA*.\n` +
                     `Si no fuiste tú quien la canceló, contacta al soporte.`;
+                // Cada envío va en su propio try/catch: si el segundo falla (p.ej. timeout de
+                // 15s), la excepción NO debe subir a _processWithRetries, o reintentaría
+                // handleReservaEvent completo y reenviaría el WhatsApp al primer destinatario,
+                // que ya lo recibió con éxito. _sendWhatsApp ya deja constancia en el audit
+                // trail (Redis) de cada intento, éxito o fallo.
                 if (estudianteTelefono) {
-                    await this._sendWhatsApp(estudianteTelefono, mensaje, tipo, { userId: estudianteId, eventType: tipo });
+                    try {
+                        await this._sendWhatsApp(estudianteTelefono, mensaje, tipo, { userId: estudianteId, eventType: tipo });
+                    } catch (err) {
+                        logger.error('Fallo al notificar cancelacion al estudiante', {
+                            reservaId, userId: estudianteId, error: err && err.message,
+                        });
+                    }
                 }
                 if (arrendadorTelefono) {
-                    await this._sendWhatsApp(arrendadorTelefono, mensaje, tipo, { userId: arrendadorId, eventType: tipo });
+                    try {
+                        await this._sendWhatsApp(arrendadorTelefono, mensaje, tipo, { userId: arrendadorId, eventType: tipo });
+                    } catch (err) {
+                        logger.error('Fallo al notificar cancelacion al arrendador', {
+                            reservaId, userId: arrendadorId, error: err && err.message,
+                        });
+                    }
                 }
                 return;
+            }
+            case 'CUOTA_RENTA_POR_VENCER':
+                destino = estudianteTelefono;
+                destinoUserId = estudianteId;
+                messageText = `*AlquilaYa* 🏠\n\n` +
+                    `Hola *${estudianteNombre || ''}*, tu cuota de renta está por vencer.\n` +
+                    `💵 Monto: S/ ${monto || '-'}\n` +
+                    `📅 Vence: ${fechaVencimiento || '-'}\n\n` +
+                    `Paga aquí: ${(process.env.APP_BASE_URL || 'http://localhost:3000')}/student/reservations/${reservaId}`;
+                break;
+            case 'CUOTA_GRUPO_RECORDATORIO':
+                destino = estudianteTelefono;
+                destinoUserId = estudianteId;
+                messageText = `*AlquilaYa* 🏠\n\n` +
+                    `Hola *${estudianteNombre || ''}*, *${recordadoPorNombre || 'un compañero de tu grupo'}* te recuerda ` +
+                    `que tienes una cuota pendiente en la reserva grupal #${reservaId}.\n` +
+                    `💵 Monto: S/ ${monto || '-'}\n\n` +
+                    `Ingresa a la app para completar tu pago.`;
+                break;
             default:
                 logger.info('Tipo de evento de reserva no manejado', { eventType: tipo });
                 return;
@@ -255,6 +362,71 @@ class KafkaConsumer {
         } else if (!destino) {
             logger.warn('Evento sin telefono destino, se descarta', { eventType: tipo, reservaId });
         }
+    }
+
+    /**
+     * #337: `resenas-topic` ya viaja como envelope canónico
+     * (`{eventId, eventType, eventVersion, occurredAt, source, aggregateType, aggregateId,
+     * correlationId, payload}` — ver `EventEnvelopeBuilder` en servicio-propiedades), a
+     * diferencia de `handleReservaEvent` (arriba), que quedó leyendo campos sueltos del root
+     * por un bug preexistente ya conocido. Este handler es nuevo, así que lee correctamente
+     * `event.eventType` y los datos de negocio desde `event.payload.*`, no del root.
+     */
+    async handleResenaEvent(event) {
+        const eventType = event && event.eventType;
+        const payload = (event && event.payload) || {};
+
+        if (eventType !== 'RESENA_PROPIEDAD_CREADA') {
+            logger.info('Tipo de evento de reseña no manejado', { eventType });
+            return;
+        }
+
+        const { propiedadId, arrendadorId, propiedadTitulo, calificacion, arrendadorTelefono } = payload;
+
+        if (!arrendadorTelefono) {
+            logger.warn('Evento de reseña sin telefono de arrendador, se descarta', {
+                eventType, propiedadId,
+            });
+            return;
+        }
+
+        const link = `${(process.env.APP_BASE_URL || 'http://localhost:3000')}/landlord/messages/reviews`;
+        const messageText = `*AlquilaYa* 🏠\n\n` +
+            `⭐ *Nueva reseña de ${calificacion || '-'}★* en *${propiedadTitulo || 'tu propiedad'}*\n\n` +
+            `Un estudiante calificó tu propiedad. Ingresa para leerla y responder públicamente:\n${link}`;
+
+        await this._sendWhatsApp(arrendadorTelefono, messageText, eventType, { userId: arrendadorId, eventType });
+    }
+
+    /**
+     * #381: mensaje individual de una campaña de WhatsApp a estudiantes (segmentada por
+     * carrera/estado desde servicio-usuarios). Igual que handleResenaEvent, viaja como envelope
+     * canónico (`event.eventType` + `event.payload`), no como campos sueltos del root.
+     */
+    async handleCampanaWhatsappEvent(event) {
+        const eventType = event && event.eventType;
+        const payload = (event && event.payload) || {};
+
+        if (eventType !== 'CAMPANA_WHATSAPP_ENVIAR') {
+            logger.info('Tipo de evento de campaña no manejado', { eventType });
+            return;
+        }
+
+        const { campanaId, usuarioId, telefono, nombre, mensaje } = payload;
+
+        if (!telefono) {
+            logger.warn('Evento de campaña sin telefono, se descarta', { eventType, campanaId, usuarioId });
+            return;
+        }
+        if (!mensaje) {
+            logger.warn('Evento de campaña sin mensaje, se descarta', { eventType, campanaId, usuarioId });
+            return;
+        }
+
+        const messageText = `*AlquilaYa* 📢\n\n` +
+            `Hola *${nombre || ''}*,\n\n${mensaje}`;
+
+        await this._sendWhatsApp(telefono, messageText, eventType, { userId: usuarioId, eventType });
     }
 
     async _sendWhatsApp(telefono, mensaje, ctx, meta = {}) {

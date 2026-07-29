@@ -33,8 +33,15 @@ export function parseFiltros(params: URLSearchParams | null): Filtros {
         .filter(Boolean)
     : [];
 
+  const getBool = (k: string): boolean | undefined => {
+    const v = get(k);
+    if (v === undefined) return undefined;
+    return v === '1' || v.toLowerCase() === 'true';
+  };
+
   const candidato = {
     zona: get('zona'),
+    q: get('q'),
     precioMin: getNum('precioMin'),
     precioMax: getNum('precioMax'),
     tipo: TIPOS_PROPIEDAD.includes(tipo as never) ? tipo : undefined,
@@ -45,6 +52,8 @@ export function parseFiltros(params: URLSearchParams | null): Filtros {
     zonaId: getNum('zonaId'),
     capacidadMin: getNum('capacidadMin'),
     dormitoriosMin: getNum('dormitoriosMin'),
+    soloVerificados: getBool('soloVerificados'),
+    soloConFotos: getBool('soloConFotos'),
     orden: ORDENES.includes(orden as never) ? orden : undefined,
     view: VISTAS.includes(view as never) ? view : undefined,
   };
@@ -67,6 +76,7 @@ export function serializarFiltros(filtros: Partial<Filtros>): string {
   const entries: Array<[string, string]> = [];
 
   if (filtros.zona && filtros.zona.trim()) entries.push(['zona', filtros.zona.trim()]);
+  if (filtros.q && filtros.q.trim()) entries.push(['q', filtros.q.trim()]);
   if (typeof filtros.precioMin === 'number' && Number.isFinite(filtros.precioMin)) {
     entries.push(['precioMin', String(filtros.precioMin)]);
   }
@@ -103,6 +113,8 @@ export function serializarFiltros(filtros: Partial<Filtros>): string {
   if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) {
     entries.push(['dormitoriosMin', String(filtros.dormitoriosMin)]);
   }
+  if (filtros.soloVerificados === true) entries.push(['soloVerificados', '1']);
+  if (filtros.soloConFotos === true) entries.push(['soloConFotos', '1']);
   if (filtros.orden && filtros.orden !== 'distancia') entries.push(['orden', filtros.orden]);
   if (filtros.view && filtros.view !== 'lista') entries.push(['view', filtros.view]);
 
@@ -117,6 +129,7 @@ export function serializarFiltros(filtros: Partial<Filtros>): string {
 export function contarFiltrosActivos(filtros: Filtros): number {
   let n = 0;
   if (filtros.zona && filtros.zona.trim()) n++;
+  if (filtros.q && filtros.q.trim()) n++;
   if (typeof filtros.precioMin === 'number') n++;
   if (typeof filtros.precioMax === 'number') n++;
   if (filtros.tipo) n++;
@@ -124,5 +137,8 @@ export function contarFiltrosActivos(filtros: Filtros): number {
   if (typeof filtros.distanciaMaxKm === 'number') n++;
   if (typeof filtros.calificacionMin === 'number' && filtros.calificacionMin > 0) n++;
   if (typeof filtros.capacidadMin === 'number' && filtros.capacidadMin > 0) n++;
+  if (typeof filtros.dormitoriosMin === 'number' && filtros.dormitoriosMin > 0) n++;
+  if (filtros.soloVerificados === true) n++;
+  if (filtros.soloConFotos === true) n++;
   return n;
 }

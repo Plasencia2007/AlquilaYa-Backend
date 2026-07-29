@@ -7,6 +7,8 @@ export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   value: number;
   /** Etiqueta accesible del progreso (ej. "3 de 5 documentos aprobados"). */
   label?: string;
+  /** Clase del relleno interno (por defecto `bg-primary`) — permite variantes de color (ej. éxito/neutro). */
+  indicatorClassName?: string;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
  * `aria-valuenow/min/max`) a mano para la misma accesibilidad.
  */
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value, label, ...props }, ref) => {
+  ({ className, value, label, indicatorClassName, ...props }, ref) => {
     const pct = Math.min(100, Math.max(0, value));
     return (
       <div
@@ -29,7 +31,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         {...props}
       >
         <div
-          className="h-full rounded-full bg-primary transition-all duration-500"
+          className={cn('h-full rounded-full bg-primary transition-all duration-500', indicatorClassName)}
           style={{ width: `${pct}%` }}
         />
       </div>

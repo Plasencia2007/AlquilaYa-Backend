@@ -59,7 +59,11 @@ public class DocumentoService {
                 .estadoVerificacion(EstadoVerificacion.PENDIENTE)
                 .build();
 
-        return documentoRepository.save(documento);
+        DocumentoVerificacion guardado = documentoRepository.save(documento);
+        // Ítem 378 (PoC): notifica a los admins activos que hay un documento nuevo por revisar.
+        userEventProducer.emitirEventoDocumentoSubido(guardado.getId(), usuario.getId(), usuario.getCorreo(),
+                usuario.getNombre(), usuario.getApellido(), tipo.name());
+        return guardado;
     }
 
     public List<DocumentoVerificacion> obtenerDocumentosUsuario(Long usuarioId) {

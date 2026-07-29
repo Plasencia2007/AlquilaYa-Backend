@@ -25,6 +25,12 @@ export const registerSchema = z.object({
   rol: z.enum(['ESTUDIANTE', 'ARRENDADOR'] as const, {
     errorMap: () => ({ message: 'Selecciona un rol' }),
   }),
+  // ítem 185: cobertura legal — debe ser explícitamente true para poder avanzar de paso.
+  // z.boolean().refine() (en vez de z.literal(true)) para que el tipo inferido siga siendo
+  // `boolean` y `defaultValues: { aceptaTerminos: false }` compile en el useForm de abajo.
+  aceptaTerminos: z
+    .boolean()
+    .refine((v) => v === true, { message: 'Debes aceptar los términos para continuar' }),
 });
 
 export const studentDetailsSchema = z.object({

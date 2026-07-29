@@ -6,11 +6,11 @@ import {
   CalendarDays,
   Check,
   Copy,
+  Download,
   Loader2,
   MapPin,
   MessageCircle,
   PartyPopper,
-  Printer,
   Users,
   X,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import { notify } from '@/lib/notify';
 import { conversationService } from '@/services/conversation-service';
 import { registrarContacto } from '@/services/property-service';
 import { pagoService } from '@/services/pago-service';
-import { formatearFecha, formatRango } from '@/lib/relative-time';
+import { formatearFecha } from '@/lib/relative-time';
 import { formatPEN } from '@/lib/money';
 import type { Reserva } from '@/types/reserva';
 
@@ -42,11 +42,11 @@ function diasHasta(fechaIso: string): number {
 export function StayPanelDialog({ open, reserva, onClose }: Props) {
   const router = useRouter();
   const [paymentId, setPaymentId] = useState<string | null>(null);
-  const [fechaPago, setFechaPago] = useState<string | null>(null);
   // Monto REAL cobrado (incluye comisión); reserva.montoTotal es solo la parte del arrendador.
   const [montoPagado, setMontoPagado] = useState<number | null>(null);
   const [contactando, setContactando] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +56,6 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
       .then((r) => {
         if (!activo) return;
         setPaymentId(r.paymentId);
-        setFechaPago(r.fechaPago);
         setMontoPagado(r.monto);
       })
       .catch(() => {
@@ -103,41 +102,20 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
     }
   };
 
-  const imprimirComprobante = () => {
-    const fecha = fechaPago ? formatearFecha(fechaPago, true) : '—';
-    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
-      <title>Comprobante de pago — AlquilaYa</title>
-      <style>
-        body{font-family:system-ui,Arial,sans-serif;color:#1a1a1a;max-width:520px;margin:40px auto;padding:0 24px}
-        h1{color:#7a1f2b;font-size:20px;margin:0 0 4px}
-        .muted{color:#666;font-size:12px}
-        .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:14px}
-        .row b{font-weight:700}
-        .total{font-size:22px;font-weight:800;margin-top:8px}
-        .ok{display:inline-block;margin-top:16px;padding:6px 12px;border-radius:999px;background:#e7f7ec;color:#1a7f37;font-size:12px;font-weight:700}
-      </style></head><body>
-      <h1>AlquilaYa · Comprobante de pago</h1>
-      <p class="muted">Pago realizado a través de Mercado Pago</p>
-      <span class="ok">✓ PAGADO</span>
-      <div style="margin-top:20px">
-        <div class="row"><span>Reserva</span><b>${reserva.propiedadTitulo ?? `#${reserva.id}`}</b></div>
-        <div class="row"><span>Dirección</span><b>${reserva.propiedadUbicacion ?? '—'}</b></div>
-        <div class="row"><span>Periodo</span><b>${formatRango(reserva.fechaInicio, reserva.fechaFin)}</b></div>
-        <div class="row"><span>Código de pago</span><b>${paymentId ?? '—'}</b></div>
-        <div class="row"><span>Fecha de pago</span><b>${fecha}</b></div>
-        <div class="row"><span>Monto pagado</span><b class="total">${formatPEN(montoPagado ?? reserva.montoTotal)}</b></div>
-      </div>
-      <p class="muted" style="margin-top:24px">Gracias por usar AlquilaYa. Conserva este comprobante como respaldo de tu pago.</p>
-      </body></html>`;
-    const win = window.open('', '_blank', 'width=600,height=820');
-    if (!win) {
-      notify.error(null, 'Permite las ventanas emergentes para imprimir el comprobante.');
-      return;
+  const descargarComprobante = async () => {
+    setDescargando(true);
+    try {
+      const blob = await pagoService.descargarComprobante(reserva.id);
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if (!win) notify.warning('Habilita las ventanas emergentes para ver el comprobante.');
+      // Revocamos con margen: la pestaña nueva necesita tiempo para terminar de cargar el blob.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      notify.error(err, 'No se pudo descargar el comprobante.');
+    } finally {
+      setDescargando(false);
     }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    win.print();
   };
 
   const pasos = [
@@ -298,9 +276,15 @@ export function StayPanelDialog({ open, reserva, onClose }: Props) {
               variant="outline"
               size="sm"
               className="mt-3 w-full gap-1.5"
-              onClick={imprimirComprobante}
+              onClick={descargarComprobante}
+              disabled={descargando}
             >
-              <Printer className="size-4" /> Descargar / imprimir comprobante
+              {descargando ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              Descargar comprobante
             </Button>
           </section>
         </div>

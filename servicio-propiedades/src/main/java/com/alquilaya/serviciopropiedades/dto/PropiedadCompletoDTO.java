@@ -18,6 +18,8 @@ public class PropiedadCompletoDTO {
     private BigDecimal precio;
     /** Precio antes de la última rebaja (para tachado en UI). Null si no hubo rebaja. */
     private BigDecimal precioAnterior;
+    /** Depósito de garantía (S/), adicional a la renta. Null si no está cargado. */
+    private BigDecimal deposito;
     /** Enlace de video (YouTube/Vimeo/.mp4). Null si no tiene. */
     private String videoUrl;
     private String direccion;

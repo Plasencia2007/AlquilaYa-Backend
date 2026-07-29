@@ -2,7 +2,9 @@ package com.alquilaya.serviciousuarios.services;
 
 import com.alquilaya.serviciousuarios.dto.ClusterDuplicadoDTO;
 import com.alquilaya.serviciousuarios.dto.ClusterDuplicadoDTO.CuentaDuplicadaDTO;
+import com.alquilaya.serviciousuarios.entities.DuplicadoRevisado;
 import com.alquilaya.serviciousuarios.entities.Usuario;
+import com.alquilaya.serviciousuarios.repositories.DuplicadoRevisadoRepository;
 import com.alquilaya.serviciousuarios.repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ public class DeteccionDuplicadosService {
     private static final String DNI_PLACEHOLDER = "00000000";
 
     private final UsuarioRepository usuarioRepository;
+    private final DuplicadoRevisadoRepository duplicadoRevisadoRepository;
 
     @Transactional(readOnly = true)
     public List<ClusterDuplicadoDTO> detectar() {
@@ -53,8 +56,29 @@ public class DeteccionDuplicadosService {
             if (lista.size() > 1) clusters.add(cluster("EMAIL", canonico, lista));
         });
 
+        // Ítem 385: descarta los clusters que un admin ya marcó como "revisado — no es duplicado".
+        clusters.removeIf(c -> duplicadoRevisadoRepository.existsByCriterioAndValor(c.criterio(), c.valor()));
+
         log.info("[DUPLICADOS] {} grupo(s) detectado(s)", clusters.size());
         return clusters;
+    }
+
+    /**
+     * Ítem 385: marca un cluster (criterio, valor) como revisado — no es duplicado real —
+     * para que {@link #detectar()} deje de mostrarlo. Idempotente: si ya estaba marcado, no
+     * duplica la fila (evita chocar con el unique constraint ante un doble click).
+     */
+    @Transactional
+    public void marcarRevisado(String criterio, String valor, Long revisadoPor) {
+        if (duplicadoRevisadoRepository.existsByCriterioAndValor(criterio, valor)) {
+            return;
+        }
+        duplicadoRevisadoRepository.save(DuplicadoRevisado.builder()
+                .criterio(criterio)
+                .valor(valor)
+                .revisadoPor(revisadoPor)
+                .build());
+        log.info("[DUPLICADOS] Cluster {}={} marcado como revisado por usuario {}", criterio, valor, revisadoPor);
     }
 
     private ClusterDuplicadoDTO cluster(String criterio, String valor, List<Usuario> usuarios) {

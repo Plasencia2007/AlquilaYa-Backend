@@ -71,4 +71,13 @@ public class Arrendador {
     @Builder.Default
     @Column(name = "reservas_fallidas")
     private Integer reservasFallidas = 0;
+
+    /**
+     * Tiempo medio (en minutos) que el arrendador tarda en responder en el chat. Lo calcula
+     * servicio-mensajeria y lo propaga por Kafka (evento TIEMPO_RESPUESTA_ARRENDADOR_ACTUALIZADO
+     * en resenas-topic; lo consume {@code ResenaEventListener}). Nullable: {@code null} mientras
+     * no haya datos suficientes o hasta que mensajeria emita la primera señal.
+     */
+    @Column(name = "tiempo_respuesta_promedio")
+    private Integer tiempoRespuestaPromedio;
 }

@@ -56,10 +56,22 @@ function Estrellas({ valor, size = 'sm' }: { valor: number; size?: 'sm' | 'md' }
   );
 }
 
-function SelectorEstrellas({ valor, onChange }: { valor: number; onChange: (v: number) => void }) {
+function SelectorEstrellas({
+  valor,
+  onChange,
+  describedBy,
+}: {
+  valor: number;
+  onChange: (v: number) => void;
+  /** Ítem 406: id del mensaje de error (p.ej. "Selecciona una calificación") a linkear aquí. */
+  describedBy?: string;
+}) {
   const [hover, setHover] = useState(0);
   return (
-    <div className="flex gap-1">
+    // Los botones solo tenían un ícono sin texto — sin `aria-label` un lector de pantalla no
+    // anunciaba nada útil. `role="group"` + `aria-label` describe el conjunto; cada botón
+    // ahora dice qué calificación aplica y `aria-pressed` refleja la selección actual.
+    <div className="flex gap-1" role="group" aria-label="Calificación" aria-describedby={describedBy}>
       {[1, 2, 3, 4, 5].map((i) => (
         <button
           key={i}
@@ -67,6 +79,8 @@ function SelectorEstrellas({ valor, onChange }: { valor: number; onChange: (v: n
           onMouseEnter={() => setHover(i)}
           onMouseLeave={() => setHover(0)}
           onClick={() => onChange(i)}
+          aria-label={`${i} ${i === 1 ? 'estrella' : 'estrellas'}`}
+          aria-pressed={i <= valor}
           className="focus:outline-none transition-transform hover:scale-110"
         >
           <span
@@ -74,6 +88,7 @@ function SelectorEstrellas({ valor, onChange }: { valor: number; onChange: (v: n
               i <= (hover || valor) ? 'text-amber-400' : 'text-foreground/15'
             }`}
             style={{ fontVariationSettings: "'FILL' 1" }}
+            aria-hidden
           >
             star
           </span>
@@ -300,7 +315,11 @@ function FormResenaEstudiante({
             <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">
               Calificación
             </p>
-            <SelectorEstrellas valor={rating} onChange={setRating} />
+            <SelectorEstrellas
+              valor={rating}
+              onChange={setRating}
+              describedBy={errorMsg ? 'resena-error' : undefined}
+            />
           </div>
 
           <textarea
@@ -313,8 +332,8 @@ function FormResenaEstudiante({
           />
 
           {errorMsg && (
-            <p className="text-xs text-red-500 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[14px]">error</span>
+            <p id="resena-error" role="alert" className="text-xs text-red-500 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[14px]" aria-hidden>error</span>
               {errorMsg}
             </p>
           )}
@@ -331,8 +350,14 @@ function FormResenaEstudiante({
       )}
 
       {enviado && errorMsg && (
-        <p className="text-xs text-red-500 flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-[14px]">error</span>
+        // Nota: esta rama es redundante con el <p id="resena-error"> de arriba — cuando
+        // enviado && errorMsg son ambos true, el ternario de arriba ya renderiza la rama del
+        // formulario (no la de éxito) y ESA rama ya muestra `errorMsg`. Es un bug preexistente
+        // de duplicado, ajeno al alcance de accesibilidad de este cambio — no se toca la
+        // lógica, solo se le da un id propio (no "resena-error") para no duplicar el id si
+        // ambos llegan a montarse a la vez.
+        <p id="resena-error-duplicado" role="alert" className="text-xs text-red-500 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[14px]" aria-hidden>error</span>
           {errorMsg}
         </p>
       )}
@@ -347,8 +372,9 @@ function TabEnviarContent() {
   const [yaResenados, setYaResenados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // `cargando` ya arranca en `true` (useState(true)) y este efecto solo corre una vez
+    // al montar ([] deps) — llamar setCargando(true) aquí sería un no-op redundante.
     let cancelado = false;
-    setCargando(true);
     reservationService
       .listarComoArrendador('FINALIZADA')
       .then((data) => { if (!cancelado) setReservas(data); })
@@ -522,33 +548,14 @@ interface PropiedadConResenas {
   id: number;
   titulo: string;
   reviews: ResenaPropiedad[];
-}
-
-/** Promedios por categoría calculados en el cliente desde las reseñas ya cargadas. */
-function promediosCategorias(reviews: ResenaPropiedad[]): ResumenCategorias {
-  const sum: Record<keyof ResumenCategorias, number> = { limpieza: 0, ubicacion: 0, precio: 0, trato: 0 };
-  const cnt: Record<keyof ResumenCategorias, number> = { limpieza: 0, ubicacion: 0, precio: 0, trato: 0 };
-  for (const r of reviews) {
-    for (const c of CATEGORIAS_RESENA) {
-      const v = r[c.key];
-      if (typeof v === 'number') {
-        sum[c.key] += v;
-        cnt[c.key] += 1;
-      }
-    }
-  }
-  return {
-    limpieza: cnt.limpieza ? sum.limpieza / cnt.limpieza : null,
-    ubicacion: cnt.ubicacion ? sum.ubicacion / cnt.ubicacion : null,
-    precio: cnt.precio ? sum.precio / cnt.precio : null,
-    trato: cnt.trato ? sum.trato / cnt.trato : null,
-  };
+  resumen: ResumenCategorias;
 }
 
 /**
  * Trae las propiedades del arrendador y sus reseñas UNA sola vez, y muestra: (a) el
- * desglose por categoría (promediado en el cliente) y (b) la lista de reseñas con editor
- * de respuesta. Reemplaza a dos componentes que hacían fetch por separado (anti N+1 doble).
+ * desglose por categoría (ítem 336: resumen ya promediado por el backend vía
+ * `GET /resenas/propiedad/{id}/resumen`, no en el cliente) y (b) la lista de reseñas con
+ * editor de respuesta. Reemplaza a dos componentes que hacían fetch por separado (anti N+1 doble).
  */
 function PropiedadesResenasPanel({ arrendadorId }: { arrendadorId: number | string }) {
   const [data, setData] = useState<PropiedadConResenas[]>([]);
@@ -560,13 +567,15 @@ function PropiedadesResenasPanel({ arrendadorId }: { arrendadorId: number | stri
       try {
         const props = await propiedadService.obtenerPorArrendador(String(arrendadorId));
         const conResenas = await Promise.all(
-          props.map(async (p) => ({
-            id: p.id,
-            titulo: p.titulo,
-            reviews: await resenaService
-              .getResenasPorPropiedad(p.id)
-              .catch(() => [] as ResenaPropiedad[]),
-          })),
+          props.map(async (p) => {
+            const [reviews, resumen] = await Promise.all([
+              resenaService.getResenasPorPropiedad(p.id).catch(() => [] as ResenaPropiedad[]),
+              resenaService
+                .getResumenCategorias(p.id)
+                .catch(() => ({ limpieza: null, ubicacion: null, precio: null, trato: null } as ResumenCategorias)),
+            ]);
+            return { id: p.id, titulo: p.titulo, reviews, resumen };
+          }),
         );
         if (!cancelado) setData(conResenas.filter((p) => p.reviews.length > 0));
       } catch {
@@ -585,9 +594,7 @@ function PropiedadesResenasPanel({ arrendadorId }: { arrendadorId: number | stri
   const flat = data.flatMap((p) =>
     p.reviews.map((resena) => ({ propiedadTitulo: p.titulo, resena })),
   );
-  const conCategorias = data
-    .map((p) => ({ ...p, resumen: promediosCategorias(p.reviews) }))
-    .filter((p) => CATEGORIAS_RESENA.some((c) => p.resumen[c.key] != null));
+  const conCategorias = data.filter((p) => CATEGORIAS_RESENA.some((c) => p.resumen[c.key] != null));
 
   return (
     <div className="space-y-6">
@@ -658,8 +665,10 @@ export default function LandlordReviewsPage() {
 
   useEffect(() => {
     if (!arrendadorId) return;
+    // `cargando` ya arranca en `true`; `arrendadorId` solo pasa de undefined a un valor
+    // real una vez (hidratación del auth-store), así que cuando este efecto corre por
+    // primera vez `cargando` sigue en `true` — setCargando(true) aquí sería redundante.
     let cancelado = false;
-    setCargando(true);
     reviewsService
       .listarResenasArrendador(arrendadorId)
       .then((data) => { if (!cancelado) setResenas(data); })

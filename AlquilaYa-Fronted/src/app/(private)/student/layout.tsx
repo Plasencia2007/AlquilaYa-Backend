@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { DashboardShell } from '@/components/student/dashboard-shell';
 import { ClientChrome } from '@/components/student/client-chrome';
 import { FullScreenLoader } from '@/components/shared/full-screen-loader';
+import { SkipLink } from '@/components/shared/skip-link';
 
 /**
  * Layout privado del estudiante:
@@ -22,7 +24,7 @@ export default function StudentDashboardLayout({
 }) {
   const router = useRouter();
   const { usuario, estaAutenticado, cargando } = useAuth();
-  const [validado, setValidado] = useState(false);
+  const isMounted = useHasMounted();
 
   useEffect(() => {
     if (cargando) return;
@@ -32,9 +34,7 @@ export default function StudentDashboardLayout({
     }
     if (usuario && usuario.rol !== 'ESTUDIANTE') {
       router.replace(usuario.rol === 'ARRENDADOR' ? '/landlord/dashboard' : '/');
-      return;
     }
-    setValidado(true);
   }, [usuario, estaAutenticado, cargando, router]);
 
   useEffect(() => {
@@ -45,12 +45,16 @@ export default function StudentDashboardLayout({
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
+  const validado = isMounted && !cargando && estaAutenticado && usuario?.rol === 'ESTUDIANTE';
+
   if (!validado) {
     return <FullScreenLoader />;
   }
 
   return (
     <>
+      {/* Ítem 394: apunta al `<main id="contenido">` de DashboardShell. */}
+      <SkipLink href="#contenido" />
       <DashboardShell>{children}</DashboardShell>
       <ClientChrome />
     </>

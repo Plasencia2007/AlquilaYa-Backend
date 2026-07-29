@@ -87,6 +87,15 @@ public class Propiedad {
     @Enumerated(EnumType.STRING)
     private EstadoPropiedad estado = EstadoPropiedad.PENDIENTE;
 
+    /**
+     * Motivo indicado por el admin al rechazar la propiedad (ítem 348). Null si nunca fue
+     * rechazada o si el admin no escribió un motivo. Se sobreescribe en cada nuevo rechazo;
+     * no se limpia automáticamente al reenviar/aprobar, pero deja de ser relevante en UI
+     * fuera del estado RECHAZADO.
+     */
+    @Column(name = "motivo_rechazo", length = 500)
+    private String motivoRechazo;
+
     @Column(nullable = false)
     private Long arrendadorId;
 
@@ -136,6 +145,14 @@ public class Propiedad {
     private Boolean estaDisponible = true;
 
     private LocalDate disponibleDesde;
+
+    /**
+     * Depósito de garantía (S/) exigido al firmar, además de la renta mensual. Nullable:
+     * la mayoría de propiedades no lo tienen cargado todavía. Alimenta el "Costo mensual
+     * total estimado" en la ficha pública junto con {@code precio} y los montos de
+     * {@link ServicioPropiedad} en estado APARTE.
+     */
+    private BigDecimal deposito;
 
     /**
      * Política de cancelación: decide si una cancelación PAGADA se reembolsa según la

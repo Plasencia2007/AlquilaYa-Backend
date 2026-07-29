@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { habitacionService } from '@/services/habitacion-service';
 import { ReservationFormDialog } from '@/components/student/reservation-form-dialog';
 import { Button } from '@/components/ui/button';
 import { formatPEN } from '@/lib/money';
+import { esImagenExterna } from '@/lib/img';
 import type { EstadoHabitacion, Habitacion, Propiedad } from '@/types/propiedad';
 
 const ESTADO_META: Record<EstadoHabitacion, { label: string; cls: string }> = {
@@ -44,6 +46,18 @@ export function RoomList({ propiedad }: { propiedad: Propiedad }) {
             key={h.id}
             className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
           >
+            {h.imagenes && h.imagenes.length > 0 && (
+              <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+                <Image
+                  src={h.imagenes[0]}
+                  alt={`Foto de ${h.nombre}`}
+                  fill
+                  sizes="64px"
+                  unoptimized={esImagenExterna(h.imagenes[0])}
+                  className="object-cover"
+                />
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="truncate font-bold text-foreground">{h.nombre}</p>

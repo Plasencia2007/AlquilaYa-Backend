@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /** Habitación reservable de una propiedad gestionada por habitaciones. */
 @Data
@@ -20,6 +21,7 @@ public class HabitacionResponse {
     private String descripcion;
     private Integer orden;
     private EstudianteInfoDTO ocupante;
+    private List<String> imagenes;
 
     public static HabitacionResponse from(Habitacion h) {
         return HabitacionResponse.builder()
@@ -31,6 +33,7 @@ public class HabitacionResponse {
                 .area(h.getArea())
                 .descripcion(h.getDescripcion())
                 .orden(h.getOrden())
+                .imagenes(h.getImagenes())
                 .build();
     }
 }

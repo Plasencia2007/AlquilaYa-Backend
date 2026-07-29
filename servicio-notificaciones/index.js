@@ -25,6 +25,18 @@ if (!INTERNAL_API_KEY) {
     logger.warn('INTERNAL_API_KEY no configurado. Los endpoints de envio rechazaran todas las llamadas.');
 }
 
+// Red de seguridad: en Node 20 un unhandledRejection no capturado termina el proceso por
+// defecto, tumbando también el servidor HTTP y el consumer de Kafka (no solo WhatsApp).
+// Solo logueamos — nunca process.exit() aquí — para no repetir el mismo problema que
+// estamos parcheando en client.initialize() (ver más abajo) para cualquier otra promesa
+// que se nos haya escapado sin .catch().
+process.on('unhandledRejection', (reason) => {
+    logger.error('unhandledRejection no capturado', {
+        error: reason && reason.message ? reason.message : String(reason),
+        stack: reason && reason.stack,
+    });
+});
+
 // Formato E.164 Perú: +51 + 9 dígitos.
 const PHONE_REGEX = /^\+?51\d{9}$/;
 // El OTP siempre se genera con 6 dígitos (usuarios: String.format("%06d", ...)). Exigir exactamente 6.
@@ -130,10 +142,14 @@ client.on('auth_failure', (msg) => {
 client.on('disconnected', (reason) => {
     logger.warn('WhatsApp Client logged out', { reason });
     isReady = false;
-    client.initialize();
+    client.initialize().catch((err) => {
+        logger.error('Error al reinicializar WhatsApp Client tras desconexion', { error: err && err.message });
+    });
 });
 
-client.initialize();
+client.initialize().catch((err) => {
+    logger.error('Error al inicializar WhatsApp Client', { error: err && err.message });
+});
 
 // --- API ---
 

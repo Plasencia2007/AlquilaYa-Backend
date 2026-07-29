@@ -106,6 +106,20 @@ Todo interactivo debe mostrar foco de teclado. Los componentes `ui/*` (shadcn) y
 | Reusar `PasswordInput`, `Progress`, `CenteredSpinner`, `SuccessScreen`, `PaymentResult` (`components/ui`/`components/shared`) | Copiar-pegar el mismo bloque de JSX en una página nueva |
 | Preguntarte si un color realmente necesita ser fijo (`brand-*`/`cream-*`) antes de usarlo | Usar `brand-*`/`cream-*` por defecto — son la excepción, no la regla |
 
+## Organización de `src/components/` (#75)
+
+Tres carpetas, un criterio por dónde vive un componente:
+
+| Carpeta | Contenido |
+|---|---|
+| `ui/` | Primitivos (shadcn y similares): `Button`, `Kbd`, `CopyButton`, `Tooltip`. Sin lógica de dominio — no saben qué es una "propiedad" o una "reserva". |
+| `shared/` | Compuestos multi-rol: usados por 2+ de `student/landlord/admin` (o público + privado), como `ReputationBadge`, `CenteredSpinner`, `PageBreadcrumb`, `CommandPalette`. |
+| `{rol}/` (`student/`, `landlord/`, `admin/`) | Específicos de un solo rol/panel: `RoommateCard` (student), `ReservationCard` (landlord). |
+
+Nombre de archivo: **kebab-case** siempre (`reputation-badge.tsx`, no `ReputationBadge.tsx`), incluso cuando el componente exportado es PascalCase — es la convención ya dominante en `ui/` y `shared/`. No sueltes componentes directo en la raíz de `components/`; si no encaja en `{rol}/`, va en `shared/` (multi-rol) o `ui/` (primitivo sin dominio).
+
+> Existen ~20 archivos heredados en `admin/` y `landlord/` con nombre PascalCase (p. ej. `StatusBadge.tsx`, `ReservationCard.tsx`, `IngresosChart.tsx`) y algunos sueltos en `shared/` (`Footer.tsx`, `MapPicker.tsx`). Renombrarlos es un batch aparte (muchos imports cada uno) — no se tocan como parte de este ítem.
+
 ## Deuda conocida (fuera de este documento)
 
 - El kit `components/ui/legacy-*` (usado en landlord/admin) coexiste con los componentes shadcn — ya lee tokens correctamente mapeados, pero sigue siendo un segundo sistema paralelo pendiente de retirar (ver ítem 41 de `MEJORAS.md`).

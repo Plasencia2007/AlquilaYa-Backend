@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
-import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
 import { Card } from '@/components/ui/legacy-card';
-import type { EstadoReserva, Reserva } from '@/types/reserva';
-import { ReputationBadge } from '@/components/reputation-badge';
+import type { Reserva } from '@/types/reserva';
+import { ReputationBadge } from '@/components/shared/reputation-badge';
+import { ReservationStatusBadge } from '@/components/shared/reservation-status-badge';
+import { Timeline, type TimelineStepStatus } from '@/components/shared/timeline';
+import { ReservationExpiryCountdown } from '@/components/student/reservation-expiry-countdown';
+import { pasosTimeline } from '@/lib/reservation-status';
 import { cn } from '@/lib/cn';
 
 interface ReservationCardProps {
@@ -17,24 +21,6 @@ interface ReservationCardProps {
   /** Modo compacto sólo lectura (historial). */
   readOnly?: boolean;
 }
-
-const ESTADO_VARIANTE: Record<EstadoReserva, 'success' | 'warning' | 'error' | 'primary' | 'surface' | 'outline'> = {
-  SOLICITADA: 'warning',
-  APROBADA: 'primary',
-  PAGADA: 'success',
-  FINALIZADA: 'surface',
-  RECHAZADA: 'error',
-  CANCELADA: 'outline',
-};
-
-const ESTADO_LABEL: Record<EstadoReserva, string> = {
-  SOLICITADA: 'Pendiente',
-  APROBADA: 'Aprobada',
-  PAGADA: 'Pagada',
-  FINALIZADA: 'Finalizada',
-  RECHAZADA: 'Rechazada',
-  CANCELADA: 'Cancelada',
-};
 
 function formatearFecha(iso?: string): string {
   if (!iso) return '—';
@@ -74,12 +60,20 @@ export function ReservationCard({
   onVerPerfil,
   readOnly = false,
 }: ReservationCardProps) {
-  const variante = ESTADO_VARIANTE[reserva.estado];
-  const label = ESTADO_LABEL[reserva.estado];
+  const [mostrarProgreso, setMostrarProgreso] = useState(false);
 
   const puedeAprobarRechazar = reserva.estado === 'SOLICITADA';
   const puedeFinalizar =
     reserva.estado === 'APROBADA' || reserva.estado === 'PAGADA';
+
+  const pasosProgreso = pasosTimeline(reserva.estado).map((paso) => {
+    const status: TimelineStepStatus = paso.completado
+      ? 'completed'
+      : paso.activo
+        ? 'active'
+        : 'pending';
+    return { title: paso.titulo, description: paso.descripcion, status };
+  });
 
   return (
     <Card
@@ -125,7 +119,12 @@ export function ReservationCard({
                 </p>
               )}
             </div>
-            <Badge variant={variante} className="shrink-0">{label}</Badge>
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <ReservationStatusBadge estado={reserva.estado} />
+              {reserva.estado === 'APROBADA' && reserva.fechaExpiracion && (
+                <ReservationExpiryCountdown fechaExpiracion={reserva.fechaExpiracion} />
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
@@ -197,38 +196,54 @@ export function ReservationCard({
             </div>
           )}
 
-          {!readOnly && (puedeAprobarRechazar || puedeFinalizar) && (
-            <div className={cn('flex flex-wrap gap-2 pt-1')}>
-              {puedeAprobarRechazar && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => onAprobar?.(reserva)}
-                    className="bg-green-600 text-white hover:bg-green-700"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">check</span>
-                    Aprobar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => onRechazar?.(reserva)}
-                    className="bg-red-600 text-white hover:bg-red-700"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">close</span>
-                    Rechazar
-                  </Button>
-                </>
-              )}
-              {puedeFinalizar && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setMostrarProgreso((v) => !v)}
+              aria-expanded={mostrarProgreso}
+            >
+              <span className="material-symbols-outlined text-[14px]">
+                {mostrarProgreso ? 'expand_less' : 'expand_more'}
+              </span>
+              {mostrarProgreso ? 'Ocultar progreso' : 'Ver progreso'}
+            </Button>
+
+            {!readOnly && puedeAprobarRechazar && (
+              <>
                 <Button
                   size="sm"
-                  variant="dark"
-                  onClick={() => onFinalizar?.(reserva)}
+                  onClick={() => onAprobar?.(reserva)}
+                  className="bg-green-600 text-white hover:bg-green-700"
                 >
-                  <span className="material-symbols-outlined text-[14px]">flag</span>
-                  Finalizar
+                  <span className="material-symbols-outlined text-[14px]">check</span>
+                  Aprobar
                 </Button>
-              )}
+                <Button
+                  size="sm"
+                  onClick={() => onRechazar?.(reserva)}
+                  className="bg-red-600 text-white hover:bg-red-700"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Rechazar
+                </Button>
+              </>
+            )}
+            {!readOnly && puedeFinalizar && (
+              <Button
+                size="sm"
+                variant="dark"
+                onClick={() => onFinalizar?.(reserva)}
+              >
+                <span className="material-symbols-outlined text-[14px]">flag</span>
+                Finalizar
+              </Button>
+            )}
+          </div>
+
+          {mostrarProgreso && (
+            <div className="rounded-2xl border border-border bg-muted/30 p-4">
+              <Timeline steps={pasosProgreso} />
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 package com.alquilaya.serviciousuarios.services;
 
+import com.alquilaya.serviciousuarios.dto.ReenviarOtpResponse;
 import com.alquilaya.serviciousuarios.entities.OtpVerification;
 import com.alquilaya.serviciousuarios.exceptions.EnvioOtpFallidoException;
 import com.alquilaya.serviciousuarios.repositories.OtpVerificationRepository;
@@ -111,9 +112,13 @@ public class OtpService {
      *  - Cooldown 60s entre reenvíos.
      *  - Máximo {@value #MAX_OTPS_VENTANA} OTPs en {@value #VENTANA_MINUTOS} minutos.
      *
-     * Lanza {@link IllegalArgumentException} (mapeada a 400) si se viola el límite.
+     * Lanza {@link IllegalArgumentException} (mapeada a 400) si se viola el límite. Devuelve
+     * cuántos reenvíos quedan en la ventana actual (hallazgo de backend, ítem 191) — el
+     * teléfono ya se sabe existente en este punto del flujo (viene de un registro en curso,
+     * no es una superficie anti-enumeración como forgot-password), así que no hay problema en
+     * exponer el contador real.
      */
-    public void reenviarOtp(String telefono) {
+    public ReenviarOtpResponse reenviarOtp(String telefono) {
         // También chequea lockout por brute force previo.
         otpRateLimitService.verificarLockout(telefono);
 
@@ -138,6 +143,9 @@ public class OtpService {
         }
 
         generarYEnviarOtp(telefono);
+
+        int restantes = (int) Math.max(0, MAX_OTPS_VENTANA - (enVentana + 1));
+        return new ReenviarOtpResponse("Te enviamos un nuevo código por WhatsApp.", restantes);
     }
 
     public boolean verificarOtp(String telefono, String codigo) {

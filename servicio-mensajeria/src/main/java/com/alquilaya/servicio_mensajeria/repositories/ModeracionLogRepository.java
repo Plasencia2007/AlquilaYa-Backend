@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface ModeracionLogRepository extends JpaRepository<ModeracionLog, Long> {
 
@@ -22,4 +24,9 @@ public interface ModeracionLogRepository extends JpaRepository<ModeracionLog, Lo
             @Param("targetType") TargetModeracion targetType,
             @Param("targetId") Long targetId,
             Pageable pageable);
+
+    // Última acción de moderación sobre un mensaje (usado para mostrar el motivo
+    // del bloqueo en el panel admin sin traer todo el historial).
+    Optional<ModeracionLog> findFirstByTargetTypeAndTargetIdOrderByFechaDesc(
+            TargetModeracion targetType, Long targetId);
 }

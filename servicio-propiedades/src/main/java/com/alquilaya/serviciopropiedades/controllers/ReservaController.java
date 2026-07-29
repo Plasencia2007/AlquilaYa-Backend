@@ -9,6 +9,9 @@ import com.alquilaya.serviciopropiedades.services.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +27,8 @@ public class ReservaController {
 
     private final ReservaService reservaService;
     private final com.alquilaya.serviciopropiedades.services.ContratoService contratoService;
+    // Ítem 238: horas configurables de expiración de una reserva APROBADA sin pagar.
+    private final com.alquilaya.serviciopropiedades.services.ConfiguracionReservaService configuracionReservaService;
 
     @PostMapping
     @PreAuthorize("@permisoEnforcer.tienePermiso('RESERVAR')")
@@ -32,12 +37,20 @@ public class ReservaController {
         return ResponseEntity.ok(toResponseDTO(r));
     }
 
+    /**
+     * Ítem 234: paginación real de "mis reservas". {@code estado} es opcional — si viene,
+     * pagina DENTRO de ese filtro (mismo comportamiento que las tabs de estado de la UI).
+     */
     @GetMapping("/mis")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<ReservaResponseDTO>> misReservas() {
+    public ResponseEntity<Page<ReservaResponseDTO>> misReservas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) EstadoReserva estado) {
         Long estudianteId = CurrentUserProvider.requirePerfilId();
-        return ResponseEntity.ok(reservaService.listarDelEstudiante(estudianteId)
-                .stream().map(this::toResponseDTO).toList());
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return ResponseEntity.ok(reservaService.listarDelEstudiante(estudianteId, estado, pageable)
+                .map(this::toResponseDTO));
     }
 
     @GetMapping("/arrendador")
@@ -129,13 +142,6 @@ public class ReservaController {
         return ResponseEntity.ok(toResponseDTO(r));
     }
 
-    @PatchMapping("/{id}/pagar")
-    @PreAuthorize("@permisoEnforcer.tienePermiso('GESTIONAR_SISTEMA')")
-    public ResponseEntity<ReservaResponseDTO> marcarPagada(@PathVariable Long id) {
-        Reserva r = reservaService.marcarPagada(id);
-        return ResponseEntity.ok(toResponseDTO(r));
-    }
-
     private ReservaResponseDTO toResponseDTO(Reserva r) {
         String titulo = reservaService.obtenerTituloPropiedad(r.getPropiedadId());
         String estNombre = "Estudiante " + r.getEstudianteId();
@@ -175,6 +181,15 @@ public class ReservaController {
         dto.setComision(r.getComision() != null
                 ? r.getComision()
                 : reservaService.calcularComision(r.getPropiedadId(), r.getMontoTotal()));
+
+        // Ítem 238: countdown de expiración — solo aplica mientras la reserva sigue APROBADA
+        // esperando pago. Mismo reloj de referencia (fechaActualizacion) que usa el scheduler
+        // que de verdad la expira (ReservaExpirationScheduler), para que el countdown del
+        // frontend nunca se adelante ni se atrase respecto a cuándo el backend la expira.
+        if (r.getEstado() == EstadoReserva.APROBADA && r.getFechaActualizacion() != null) {
+            int horas = configuracionReservaService.getExpiracionHoras();
+            dto.setFechaExpiracion(r.getFechaActualizacion().plusHours(horas));
+        }
         return dto;
     }
 }

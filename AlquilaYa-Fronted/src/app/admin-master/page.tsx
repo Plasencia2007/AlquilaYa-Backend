@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { StatCard } from '@/components/shared/stat-card';
 import StatusBadge from '@/components/admin/StatusBadge';
@@ -19,6 +19,13 @@ const formatearFecha = (iso?: string) => {
 
 const formatearSoles = (valor?: number) =>
   `S/ ${Number(valor || 0).toLocaleString('es-PE')}`;
+
+/** Ítem 375: la cola de revisión mostraba "PENDIENTE" fijo sin importar el estado real. */
+const mapEstado = (estado: PropiedadAdminDTO['estado']): 'ACTIVO' | 'PENDIENTE' | 'CRITICO' => {
+  if (estado === 'APROBADO') return 'ACTIVO';
+  if (estado === 'RECHAZADO') return 'CRITICO';
+  return 'PENDIENTE';
+};
 
 function ProveedoresWidget({ arrendadores, loading }: { arrendadores: UsuarioMaster[]; loading: boolean }) {
   const total = arrendadores.length;
@@ -97,24 +104,41 @@ export default function AdminDashboard() {
   const [pendientes, setPendientes] = useState<PropiedadAdminDTO[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    const [est, arr, props, pend] = await Promise.allSettled([
+  const pedirDatos = () =>
+    Promise.allSettled([
       usuarioMasterService.obtenerPorRol('ESTUDIANTE'),
       usuarioMasterService.obtenerArrendadoresAdmin(),
       adminService.getRealProperties(),
       adminPropertyService.listarPendientes(),
     ]);
+
+  const aplicarResultados = ([est, arr, props, pend]: Awaited<ReturnType<typeof pedirDatos>>) => {
     setEstudiantes(est.status === 'fulfilled' && Array.isArray(est.value) ? est.value : []);
     setArrendadores(arr.status === 'fulfilled' && Array.isArray(arr.value) ? arr.value : []);
     setPropiedades(props.status === 'fulfilled' && Array.isArray(props.value) ? props.value : []);
     setPendientes(pend.status === 'fulfilled' && Array.isArray(pend.value) ? pend.value : []);
     setLoading(false);
-  }, []);
+  };
 
+  // Botón "Actualizar": click handler normal, resetear acá no viola la regla de abajo.
+  const cargar = () => {
+    setLoading(true);
+    pedirDatos().then(aplicarResultados);
+  };
+
+  // Carga inicial: `.then()` INLINE en el efecto — llamar a una función con nombre desde
+  // el efecto dispara `react-hooks/set-state-in-effect` aunque esa función no haga ningún
+  // setState síncrono; solo la cadena `.then()` literal en el cuerpo del efecto lo satisface.
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    let cancelado = false;
+    pedirDatos().then((resultados) => {
+      if (!cancelado) aplicarResultados(resultados);
+    });
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo carga inicial, a propósito.
+  }, []);
 
   const totalUsuarios = estudiantes.length + arrendadores.length;
   const arrendadoresActivos = arrendadores.filter(u => u.estado === 'ACTIVE').length;
@@ -245,7 +269,7 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 text-[13px] font-bold text-slate-700">{formatearSoles(p.precio)}</td>
                     <td className="px-6 py-4">
-                      <StatusBadge status="PENDIENTE" />
+                      <StatusBadge status={mapEstado(p.estado)} />
                     </td>
                     <td className="px-6 py-4 text-[11px] text-slate-400 font-medium">{formatearFecha(p.fechaCreacion)}</td>
                     <td className="px-6 py-4 text-right">

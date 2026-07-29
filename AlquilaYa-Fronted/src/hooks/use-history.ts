@@ -14,10 +14,11 @@ export function useHistory() {
   const entradas = useHistoryStore((s) => s.entradas);
   const registrar = useHistoryStore((s) => s.registrar);
   const limpiar = useHistoryStore((s) => s.limpiar);
+  const remover = useHistoryStore((s) => s.remover);
 
   useEffect(() => {
     useHistoryStore.persist.rehydrate()?.then(() => setHidratado(true));
   }, []);
 
-  return { entradas: hidratado ? entradas : [], hidratado, registrar, limpiar };
+  return { entradas: hidratado ? entradas : [], hidratado, registrar, limpiar, remover };
 }

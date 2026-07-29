@@ -12,4 +12,7 @@ import java.util.Optional;
 public interface PermisoRepository extends JpaRepository<Permiso, Long> {
     List<Permiso> findByRol(Rol rol);
     Optional<Permiso> findByRolAndFuncionalidad(Rol rol, String funcionalidad);
+
+    /** Cuántos roles base (enum {@link Rol}) tienen esta funcionalidad activa (#387, guard del último admin). */
+    long countByFuncionalidadAndHabilitadoTrue(String funcionalidad);
 }

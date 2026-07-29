@@ -1,7 +1,9 @@
 package com.alquilaya.servicio_mensajeria.services;
 
+import com.alquilaya.servicio_mensajeria.clients.UsuariosClient;
 import com.alquilaya.servicio_mensajeria.config.CurrentUser;
 import com.alquilaya.servicio_mensajeria.dto.NotificacionDTO;
+import com.alquilaya.servicio_mensajeria.dto.PreferenciasNotificacionDTO;
 import com.alquilaya.servicio_mensajeria.entities.Notificacion;
 import com.alquilaya.servicio_mensajeria.enums.TipoNotificacion;
 import com.alquilaya.servicio_mensajeria.repositories.NotificacionRepository;
@@ -36,6 +38,8 @@ public class NotificacionService {
 
     private final NotificacionRepository repo;
     private final SimpMessagingTemplate messagingTemplate;
+    // Item 210 (enforcement real): consulta la preferencia del destinatario antes de crear+pushear.
+    private final UsuariosClient usuariosClient;
 
     @Transactional(readOnly = true)
     public Page<NotificacionDTO> listarMias(CurrentUser user, Pageable pageable) {
@@ -67,11 +71,22 @@ public class NotificacionService {
     /**
      * Crea y persiste una notificación. Si `pushEnVivo`, también la envía por
      * WebSocket al usuario destinatario (si está conectado).
+     *
+     * <p>Ítem 210: es el ÚNICO punto por el que pasan TODAS las notificaciones del sistema
+     * (Kafka consumers de pagos/reservas/aprobación de usuarios + {@code MensajeService} para
+     * chat), así que la preferencia del destinatario se aplica acá y no en cada productor.
+     * Si la categoría de {@code tipo} está deshabilitada, la notificación NI SIQUIERA se
+     * persiste (no solo se omite el push) — devuelve {@code null}, que ningún caller actual
+     * usa (todas las llamadas existentes descartan el valor de retorno).</p>
      */
     @Transactional
     public NotificacionDTO crear(Long usuarioId, TipoNotificacion tipo, String titulo,
                                  String mensaje, String urlDestino, Map<String, Object> datos,
                                  boolean pushEnVivo) {
+        if (!debeNotificar(usuarioId, tipo)) {
+            log.debug("Notificación tipo={} para usuarioId={} suprimida por preferencia del usuario", tipo, usuarioId);
+            return null;
+        }
         Notificacion n = Notificacion.builder()
                 .usuarioId(usuarioId)
                 .tipo(tipo)
@@ -100,4 +115,47 @@ public class NotificacionService {
     public NotificacionDTO crear(Long usuarioId, TipoNotificacion tipo, String titulo, String mensaje) {
         return crear(usuarioId, tipo, titulo, mensaje, null, null, true);
     }
+
+    /**
+     * Ítem 210: true si el destinatario debe recibir este tipo de notificación. Las
+     * categorías sin opt-out (cuenta/seguridad: documentos, bienvenida, sistema) siempre
+     * devuelven true — no son togglable. Fail-open ante cualquier error resolviendo la
+     * preferencia (Feign ya degrada solo vía {@code UsuariosClientFallback}, pero un catch
+     * defensivo evita que un problema de preferencias tumbe una notificación transaccional).
+     */
+    private boolean debeNotificar(Long usuarioId, TipoNotificacion tipo) {
+        Categoria categoria = categoriaDe(tipo);
+        if (categoria == null || usuarioId == null) return true;
+        try {
+            PreferenciasNotificacionDTO prefs = usuariosClient.obtenerPreferenciasNotificacion(usuarioId);
+            return switch (categoria) {
+                case MENSAJES -> prefs.isNotificarMensajes();
+                case RESERVAS -> prefs.isNotificarReservas();
+                case MARKETING -> prefs.isNotificarMarketing();
+            };
+        } catch (Exception e) {
+            log.warn("No se pudo resolver preferencias de notificación de usuarioId={}: {} — fail-open (se notifica)",
+                    usuarioId, e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Mapea cada {@link TipoNotificacion} real del catálogo a una categoría togglable (ítem
+     * 210). MENSAJE_NUEVO es mensajes; las RESERVA_x y RECORDATORIO_PAGO son reservas;
+     * ALERTA_ZONA (suscripción a nuevas propiedades, la única categoría "opt-in"/promocional
+     * que existe hoy) es marketing. DOCUMENTO_x, BIENVENIDA y SISTEMA son notificaciones de
+     * cuenta/seguridad y devuelven null (siempre se envían, sin preferencia que las apague).
+     */
+    private Categoria categoriaDe(TipoNotificacion tipo) {
+        return switch (tipo) {
+            case MENSAJE_NUEVO -> Categoria.MENSAJES;
+            case RESERVA_APROBADA, RESERVA_RECHAZADA, RESERVA_PAGADA, RESERVA_CANCELADA, RECORDATORIO_PAGO ->
+                    Categoria.RESERVAS;
+            case ALERTA_ZONA -> Categoria.MARKETING;
+            default -> null;
+        };
+    }
+
+    private enum Categoria { MENSAJES, RESERVAS, MARKETING }
 }

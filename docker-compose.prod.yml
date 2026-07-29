@@ -2,6 +2,28 @@
 # Uso: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
 services:
+  # ===================== Auto-recuperación =====================
+
+  # Reinicia automáticamente cualquier contenedor con label `autoheal=true` que
+  # Docker marque como `unhealthy`. Suple la ausencia de liveness probes (k8s) en
+  # docker-compose vanilla: si un healthcheck falla de forma sostenida, el contenedor
+  # se reinicia solo. Monitorea vía el socket de Docker (solo lectura de estado +
+  # restart). AUTOHEAL_INTERVAL: cada cuántos segundos revisa; START_PERIOD respeta
+  # el `start_period` de cada healthcheck antes de considerar un contenedor caído.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: alquilaya-autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "15"
+      AUTOHEAL_START_PERIOD: "60"
+      DOCKER_SOCK: /var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - alquilaya-prod-network
+
   # ===================== Infraestructura =====================
 
   postgres:
@@ -109,8 +131,12 @@ services:
     container_name: alquilaya-discovery
     mem_limit: 512m
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     environment:
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+      EUREKA_USERNAME: ${EUREKA_USERNAME}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
       interval: 15s
@@ -127,12 +153,16 @@ services:
     container_name: alquilaya-config
     mem_limit: 512m
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     depends_on:
       discovery-server:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_SERVER_RESOLVE_PLACEHOLDERS: "true"
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       MYSQL_HOST: mysql
@@ -193,15 +223,21 @@ services:
       dockerfile: Dockerfile
     container_name: alquilaya-gateway
     mem_limit: 768m
-    ports:
-      - "8080:8080"
+    # Sin publicar al host: nginx ya lo alcanza por la red interna
+    # (alquilaya-prod-network) vía /api/, que es el único punto de entrada
+    # previsto. Publicar 8080 exponía /actuator/{health,prometheus,
+    # circuitbreakers} sin pasar por nginx (que no tiene location /actuator).
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     depends_on:
       config-server:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -231,8 +267,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -257,8 +295,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -283,8 +323,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       # Perfil prod: excluye el DevOnlyPagoController (endpoint /pagos/simular-exito, @Profile("!prod")).
       SPRING_PROFILES_ACTIVE: prod
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
@@ -311,13 +353,21 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # Catalogos ahora sube la imagen del banner del hero a Cloudinary
+      # (POST /catalogos/admin/banners/imagen). config-server resuelve estos placeholders,
+      # pero los pasamos también aquí por consistencia con propiedades/usuarios.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
     networks:
       - alquilaya-prod-network
 
@@ -334,8 +384,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_DEFAULT_ZONE: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka/
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      CONFIG_SERVER_USERNAME: ${CONFIG_SERVER_USERNAME}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
@@ -356,16 +408,38 @@ services:
     container_name: alquilaya-notificaciones
     mem_limit: 1g
     restart: unless-stopped
+    # El sidecar `autoheal` reinicia este contenedor cuando el healthcheck lo marca
+    # unhealthy (p.ej. WhatsApp/Kafka caídos sin recuperación) — cierra el hueco de
+    # "no hay liveness probe tipo k8s en docker-compose". El consumer de Kafka ya se
+    # auto-recupera en Node; esto cubre el resto de fallos que dejan /health en 503.
+    labels:
+      autoheal: "true"
     depends_on:
       - kafka
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       PORT: 8081
+      # Sin esto (a diferencia de todos los demás servicios) redisClient.js caía a
+      # localhost:6379 sin password dentro del contenedor, que no resuelve al
+      # contenedor "redis" -> audit trail y la parte "redis" de /health fallaban en
+      # silencio (solo un log.warn).
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       # La sesión de WhatsApp se guarda en el volumen montado → no se re-escanea el QR (I6).
       WWEBJS_DATA_PATH: /home/app/.wwebjs_auth
     volumes:
       - whatsapp_auth:/home/app/.wwebjs_auth
+    healthcheck:
+      # /health ya devuelve 503 si whatsapp o kafka están caídos (ver index.js);
+      # wget con código de error HTTP sale con exit != 0, que Docker interpreta
+      # como unhealthy. No reinicia el contenedor solo (vanilla docker-compose no
+      # tiene liveness probes tipo k8s), pero lo hace visible en `docker ps`/monitoreo.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     networks:
       - alquilaya-prod-network
 

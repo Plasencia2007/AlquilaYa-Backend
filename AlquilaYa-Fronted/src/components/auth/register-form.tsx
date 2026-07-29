@@ -9,6 +9,7 @@ import PhoneInput from 'react-phone-number-input';
 import { PasswordStrength } from './password-strength';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -21,9 +22,15 @@ import { EmailCodeStep } from './email-code-step';
 import { ResultStep } from './result-step';
 import { RoleStep } from './role-step';
 import { StudentDetailsStep } from './student-details-step';
+import { TurnstileWidget } from './turnstile-widget';
 
 export function RegisterForm() {
   const { step, targetRole, personal, setPersonal, setStep, open } = useAuthModal();
+
+  // ítem 184: token del widget anti-bots (opcional — si el sitekey no está configurado el
+  // widget nunca renderiza y esto se queda undefined para siempre, lo cual es el caso normal
+  // en desarrollo; el backend degrada a "permitir" cuando no llega token).
+  const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined);
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -35,6 +42,7 @@ export function RegisterForm() {
       password: personal?.password ?? '',
       telefono: personal?.telefono ?? '',
       rol: targetRole,
+      aceptaTerminos: false,
     },
   });
 
@@ -57,7 +65,9 @@ export function RegisterForm() {
 
   if (step === 'role') return <RoleStep />;
   if (step === 'details') {
-    return targetRole === 'ARRENDADOR' ? <LandlordDetailsStep /> : <StudentDetailsStep />;
+    return targetRole === 'ARRENDADOR'
+      ? <LandlordDetailsStep turnstileToken={turnstileToken} />
+      : <StudentDetailsStep turnstileToken={turnstileToken} />;
   }
   if (step === 'otp') return <OtpStep />;
   if (step === 'email-code') return <EmailCodeStep />;
@@ -90,7 +100,7 @@ export function RegisterForm() {
                 <FormItem>
                   <FormLabel className="text-xs font-medium text-muted-foreground">Nombre</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Tu nombre" autoComplete="given-name" className="h-11 rounded-xl bg-input text-sm" />
+                    <Input {...field} autoFocus placeholder="Tu nombre" autoComplete="given-name" className="h-11 rounded-xl bg-input text-sm" />
                   </FormControl>
                   <FormMessage className="px-1 text-[10px]" />
                 </FormItem>
@@ -171,6 +181,58 @@ export function RegisterForm() {
                 <FormMessage className="px-1 text-[10px]" />
               </FormItem>
             )}
+          />
+
+          <FormField
+            control={form.control}
+            name="aceptaTerminos"
+            render={({ field }) => (
+              <FormItem>
+                <div className="flex items-start gap-2.5">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                      className="mt-0.5"
+                    />
+                  </FormControl>
+                  {/* FormLabel setea htmlFor = mismo id que FormControl inyecta en el Checkbox
+                      (vía Slot) — clic en el texto activa el checkbox nativamente, sin handler
+                      manual. Los <a> cortan la propagación para no togglear el checkbox al abrir
+                      el link. */}
+                  <FormLabel className="text-xs font-normal leading-relaxed text-muted-foreground">
+                    Acepto los{' '}
+                    <a
+                      href="/terminos"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      Términos y condiciones
+                    </a>{' '}
+                    y la{' '}
+                    <a
+                      href="/privacidad"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      Política de privacidad
+                    </a>
+                  </FormLabel>
+                </div>
+                <FormMessage className="px-1 text-[10px]" />
+              </FormItem>
+            )}
+          />
+
+          {/* ítem 184: invisible salvo comportamiento sospechoso; sin sitekey no renderiza nada */}
+          <TurnstileWidget
+            onVerify={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(undefined)}
+            className="flex justify-center"
           />
 
           <Button type="submit" size="lg" className="h-12 w-full rounded-full text-sm font-bold tracking-wide">

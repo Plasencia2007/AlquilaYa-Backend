@@ -145,29 +145,37 @@ export function PropertyCardKebabMenu({ propiedadId, titulo }: Props) {
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         {/*
           Usamos PopoverAnchor para que el popover se ancle al botón kebab
-          sin disputarse el rol de trigger con el DropdownMenu.
+          sin disputarse el rol de trigger con el DropdownMenu. El Tooltip se
+          compone encima con otro `asChild`, todos apuntan al mismo <button>.
         */}
-        <PopoverPrimitive.Anchor asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              ref={triggerRef}
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              aria-label="Más opciones"
-              className={cn(
-                'flex size-8 items-center justify-center rounded-full',
-                'bg-white/95 backdrop-blur-md shadow-md transition-all',
-                'hover:scale-110 active:scale-95',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              )}
-            >
-              <MoreVertical className="size-4 text-foreground/70" aria-hidden />
-            </button>
-          </DropdownMenuTrigger>
-        </PopoverPrimitive.Anchor>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <PopoverPrimitive.Anchor asChild>
+              <DropdownMenuTrigger asChild>
+                <TooltipTrigger asChild>
+                  <button
+                    ref={triggerRef}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    aria-label="Más opciones"
+                    className={cn(
+                      'flex size-8 items-center justify-center rounded-full',
+                      'bg-white/95 backdrop-blur-md shadow-md transition-all',
+                      'hover:scale-110 active:scale-95',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    )}
+                  >
+                    <MoreVertical className="size-4 text-foreground/70" aria-hidden />
+                  </button>
+                </TooltipTrigger>
+              </DropdownMenuTrigger>
+            </PopoverPrimitive.Anchor>
+            <TooltipContent side="left">Más opciones</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <DropdownMenuContent
           align="end"

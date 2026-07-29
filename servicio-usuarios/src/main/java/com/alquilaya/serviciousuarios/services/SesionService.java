@@ -1,6 +1,7 @@
 package com.alquilaya.serviciousuarios.services;
 
 import com.alquilaya.serviciousuarios.dto.SesionDTO;
+import com.alquilaya.serviciousuarios.util.ClientIpResolver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,22 +37,33 @@ public class SesionService {
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
+    private final ClientIpResolver clientIpResolver;
+    private final IpGeolocationService ipGeolocationService;
 
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     @Autowired
-    public SesionService(@Nullable StringRedisTemplate redis, ObjectMapper mapper) {
+    public SesionService(@Nullable StringRedisTemplate redis, ObjectMapper mapper,
+                         ClientIpResolver clientIpResolver, IpGeolocationService ipGeolocationService) {
         this.redis = redis;
         this.mapper = mapper;
+        this.clientIpResolver = clientIpResolver;
+        this.ipGeolocationService = ipGeolocationService;
     }
 
     /** Registra (o refresca) la sesión asociada a un jti tras emitir un token. Best-effort. */
     public void registrar(Long userId, String jti, HttpServletRequest req, Date expira) {
         if (redis == null || userId == null || jti == null) return;
         try {
-            String dispositivo = describirDispositivo(req);
-            String ip = clientIp(req);
+            // Ítem 188: se guarda el User-Agent CRUDO (no el resumen "Chrome en Windows" que
+            // devolvía la vieja describirDispositivo()) — el frontend ya lo parsea con
+            // ua-parser-js a un formato legible; mandarle un resumen ya-formateado en vez del
+            // UA real dejaba ese parseo sin nada real que analizar.
+            String dispositivo = req != null && req.getHeader("User-Agent") != null
+                    ? req.getHeader("User-Agent") : "";
+            String ip = clientIpResolver.resolve(req);
+            String ciudad = ipGeolocationService.resolverCiudad(ip);
             String key = SESIONES + userId;
 
             // Dedup: quita entradas previas del mismo dispositivo+IP para que re-loguear en
@@ -71,6 +83,7 @@ public class SesionService {
             json.put("jti", jti);
             json.put("dispositivo", dispositivo);
             json.put("ip", ip);
+            if (ciudad != null) json.put("ciudad", ciudad);
             json.put("creado", System.currentTimeMillis());
             json.put("expira", expira.getTime());
 
@@ -98,6 +111,7 @@ public class SesionService {
                         jti,
                         n.path("dispositivo").asText("Dispositivo"),
                         n.path("ip").asText(""),
+                        n.hasNonNull("ciudad") ? n.path("ciudad").asText() : null,
                         n.path("creado").asLong(0),
                         jti.equals(jtiActual)));
             }
@@ -155,40 +169,5 @@ public class SesionService {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    // ===== Helpers =====
-
-    static String clientIp(HttpServletRequest req) {
-        if (req == null) return "";
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int c = xff.indexOf(',');
-            return (c > 0 ? xff.substring(0, c) : xff).trim();
-        }
-        String real = req.getHeader("X-Real-IP");
-        return (real != null && !real.isBlank()) ? real.trim() : req.getRemoteAddr();
-    }
-
-    /** Nombre amigable del dispositivo a partir del User-Agent (navegador + SO). */
-    static String describirDispositivo(HttpServletRequest req) {
-        String ua = req != null ? req.getHeader("User-Agent") : null;
-        if (ua == null || ua.isBlank()) return "Dispositivo desconocido";
-        String u = ua.toLowerCase();
-        String nav =
-                u.contains("edg/") ? "Edge"
-                : u.contains("opr/") || u.contains("opera") ? "Opera"
-                : u.contains("chrome") ? "Chrome"
-                : u.contains("firefox") ? "Firefox"
-                : u.contains("safari") ? "Safari"
-                : "Navegador";
-        String so =
-                u.contains("android") ? "Android"
-                : (u.contains("iphone") || u.contains("ipad") || u.contains("ios")) ? "iOS"
-                : u.contains("windows") ? "Windows"
-                : (u.contains("mac os") || u.contains("macintosh")) ? "macOS"
-                : u.contains("linux") ? "Linux"
-                : "otro";
-        return nav + " en " + so;
     }
 }

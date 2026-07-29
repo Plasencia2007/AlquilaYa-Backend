@@ -16,6 +16,7 @@ import {
 
 import { analyticsService, type AnaliticaPropiedad } from '@/services/analytics-service';
 import { notify } from '@/lib/notify';
+import { CHART_PRIMARY } from '@/lib/chart-colors';
 
 const VistasChart = dynamic(() => import('@/components/landlord/VistasChart'), { ssr: false });
 
@@ -79,18 +80,21 @@ export default function PropertyAnalyticsPage({ params }: { params: Promise<{ id
   const titulo = searchParams.get('titulo') ?? 'tu aviso';
 
   const [data, setData] = useState<AnaliticaPropiedad | null>(null);
-  const [loading, setLoading] = useState(true);
+  // `loading` se deriva comparando contra el `id` ya resuelto, en vez de un booleano
+  // aparte — así no hace falta un setState síncrono al inicio del efecto para "resetear"
+  // el loading cuando `id` cambia (violaría react-hooks/set-state-in-effect).
+  const [fetchedId, setFetchedId] = useState<string | null>(null);
+  const loading = fetchedId !== id;
 
   useEffect(() => {
     let cancelado = false;
-    setLoading(true);
     analyticsService
       .obtener(id)
       .then((d) => !cancelado && setData(d))
       .catch((err) => {
         if (!cancelado) notify.error(err, 'No se pudo cargar la analítica');
       })
-      .finally(() => !cancelado && setLoading(false));
+      .finally(() => !cancelado && setFetchedId(id));
     return () => {
       cancelado = true;
     };
@@ -160,7 +164,7 @@ export default function PropertyAnalyticsPage({ params }: { params: Promise<{ id
               value={data.embudo.vistas}
               max={data.embudo.vistas}
               prev={null}
-              color="#8f0304"
+              color={CHART_PRIMARY}
               icon={<Eye className="size-3.5" />}
             />
             <FunnelRow

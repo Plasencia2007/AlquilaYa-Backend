@@ -14,6 +14,7 @@ import { notify } from '@/lib/notify';
 import { cn } from '@/lib/cn';
 import { resolveIcon } from '@/lib/icons';
 import { POLITICA_CANCELACION_INFO, POLITICAS_CANCELACION } from '@/lib/politica-cancelacion';
+import { MAX_PROPERTY_IMAGES } from '@/lib/property-photos';
 import type { PrecioTemporada, PropiedadUpdate } from '@/types/propiedad';
 
 /* ── ChipsMultiselect ─────────────────────────────────────── */
@@ -92,7 +93,7 @@ function CustomItemInput({
             >
               <span className="material-symbols-outlined text-[12px]">edit_note</span>
               {item}
-              <button type="button" onClick={() => onRemove(item)} className="ml-0.5 hover:text-amber-600">
+              <button type="button" onClick={() => onRemove(item)} aria-label={`Quitar "${item}"`} className="ml-0.5 hover:text-amber-600">
                 <span className="material-symbols-outlined text-[11px]">close</span>
               </button>
             </span>
@@ -115,7 +116,8 @@ function CustomItemInput({
             type="button"
             onClick={commit}
             disabled={!val.trim()}
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 active:scale-95 transition-all"
+            aria-label="Agregar"
+            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 active:scale-95 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
           </button>
@@ -144,7 +146,8 @@ interface EditPropertyModalProps {
 
 type Tab = 'info' | 'servicios' | 'fotos';
 
-const MAX_FOTOS = 6;
+/** Ítem 333: unificado con el wizard de alta en `@/lib/property-photos` (antes 6, ahora 12). */
+const MAX_FOTOS = MAX_PROPERTY_IMAGES;
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'info',      label: 'Información', icon: 'info' },
@@ -834,7 +837,7 @@ export function EditPropertyModal({ prop, onClose, onSaved }: EditPropertyModalP
                 </button>
                 <p className="text-[11px] text-muted-foreground">
                   El precio de la temporada que cubra la <span className="font-semibold">fecha de ingreso</span> del
-                  estudiante manda. Se guardan al instante (no requieren "Guardar cambios").
+                  estudiante manda. Se guardan al instante (no requieren &quot;Guardar cambios&quot;).
                 </p>
               </div>
             )}

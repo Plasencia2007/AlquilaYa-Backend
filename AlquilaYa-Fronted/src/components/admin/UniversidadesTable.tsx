@@ -8,6 +8,8 @@ import {
   type UniversidadInput,
 } from '@/services/universidad-service';
 import { cn } from '@/lib/cn';
+import { useConfirm } from '@/hooks/use-confirm';
+import { notify } from '@/lib/notify';
 
 const BASE = '/admin-master/catalog/zones/edit';
 const PAGE_SIZE = 8;
@@ -53,6 +55,38 @@ function cobertura(u: Universidad): { etiqueta: string; sub: string } {
   return { etiqueta, sub: partes.join(' · ') || 'Sin zonas' };
 }
 
+/**
+ * Resumen de comisión por universidad (ítem 383): la comisión se configura POR ZONA
+ * (`comisionPorcentaje`/`comisionMonto` en catalog/zones/edit/[id]), así que una
+ * universidad con varias zonas puede tener valores distintos. Regla usada aquí:
+ *  - Ninguna zona con comisión configurada (ni % ni monto) → "—".
+ *  - Todas las zonas con `comisionPorcentaje` coinciden → se muestra ese valor único ("7%").
+ *  - Varían → rango "mín%–máx%".
+ *  - Zonas con comisión FIJA (`comisionMonto`, sin %) se cuentan aparte (no se mezclan
+ *    con el rango de porcentaje, son unidades distintas) y se anotan como detalle.
+ */
+function comisionResumen(u: Universidad): { texto: string; detalle?: string } {
+  const zonas = u.zonas ?? [];
+  const porcentajes = zonas
+    .map((z) => z.comisionPorcentaje)
+    .filter((v): v is number => typeof v === 'number');
+  const conMontoFijo = zonas.filter(
+    (z) => typeof z.comisionMonto === 'number' && typeof z.comisionPorcentaje !== 'number',
+  ).length;
+
+  if (porcentajes.length === 0) {
+    return conMontoFijo > 0
+      ? { texto: 'Monto fijo', detalle: `${conMontoFijo} zona${conMontoFijo > 1 ? 's' : ''}` }
+      : { texto: '—' };
+  }
+
+  const min = Math.min(...porcentajes);
+  const max = Math.max(...porcentajes);
+  const texto = min === max ? `${min}%` : `${min}%–${max}%`;
+  const detalle = conMontoFijo > 0 ? `+${conMontoFijo} con monto fijo` : undefined;
+  return { texto, detalle };
+}
+
 export const UniversidadesTable: React.FC = () => {
   const router = useRouter();
   const [universidades, setUniversidades] = useState<Universidad[]>([]);
@@ -60,6 +94,7 @@ export const UniversidadesTable: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'activo' | 'inactivo'>('todos');
   const [page, setPage] = useState(1);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     try {
@@ -82,19 +117,28 @@ export const UniversidadesTable: React.FC = () => {
     try {
       await universidadService.actualizar(u.id, toInput(u, { activo: !u.activo }));
       await load();
-    } catch {
-      alert('No se pudo cambiar el estado de la universidad');
+    } catch (err) {
+      notify.error(err, 'No se pudo cambiar el estado de la universidad');
     }
   };
 
-  const handleDelete = async (u: Universidad) => {
-    if (!window.confirm(`¿Eliminar permanentemente "${u.nombre}" y sus zonas?`)) return;
-    try {
-      await universidadService.eliminar(u.id);
-      await load();
-    } catch {
-      alert('No se pudo eliminar la universidad.');
-    }
+  const handleDelete = (u: Universidad) => {
+    confirm({
+      title: `¿Eliminar "${u.nombre}"?`,
+      description: 'Se eliminarán también todas sus zonas de cobertura. Esta acción no se puede deshacer.',
+      tone: 'danger',
+      confirmLabel: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await universidadService.eliminar(u.id);
+          notify.success('Universidad eliminada correctamente');
+          await load();
+        } catch (err) {
+          notify.error(err, 'No se pudo eliminar la universidad.');
+          return false;
+        }
+      },
+    });
   };
 
   const filtered = useMemo(
@@ -164,6 +208,7 @@ export const UniversidadesTable: React.FC = () => {
                 <th className="py-4 px-6">Nombre Universidad</th>
                 <th className="py-4 px-6">Zonas</th>
                 <th className="py-4 px-6">Cobertura</th>
+                <th className="py-4 px-6">Comisión</th>
                 <th className="py-4 px-6">Estado</th>
                 <th className="py-4 px-6 text-right">Acciones</th>
               </tr>
@@ -171,19 +216,20 @@ export const UniversidadesTable: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center">
+                  <td colSpan={6} className="py-20 text-center">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Cargando...</span>
                   </td>
                 </tr>
               ) : pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center">
+                  <td colSpan={6} className="py-20 text-center">
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sin resultados</span>
                   </td>
                 </tr>
               ) : (
                 pageItems.map((u) => {
                   const cob = cobertura(u);
+                  const comision = comisionResumen(u);
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/40 transition-colors">
                       <td className="py-4 px-6">
@@ -216,6 +262,12 @@ export const UniversidadesTable: React.FC = () => {
                         <div className="text-[11px] text-slate-400 mt-1.5">{cob.sub}</div>
                       </td>
                       <td className="py-4 px-6">
+                        <span className="text-sm font-bold text-slate-700">{comision.texto}</span>
+                        {comision.detalle && (
+                          <div className="text-[11px] text-slate-400 mt-1.5">{comision.detalle}</div>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="flex items-center gap-2.5">
                           <button
                             type="button"
@@ -244,7 +296,8 @@ export const UniversidadesTable: React.FC = () => {
                             type="button"
                             onClick={() => router.push(`${BASE}/${u.id}`)}
                             title="Editar"
-                            className="text-slate-300 hover:text-primary p-2 rounded-md transition-colors"
+                            aria-label={`Editar ${u.nombre}`}
+                            className="text-slate-300 hover:text-primary p-2 min-h-11 min-w-11 rounded-md transition-colors"
                           >
                             <span className="material-symbols-outlined text-xl">edit_square</span>
                           </button>
@@ -252,7 +305,8 @@ export const UniversidadesTable: React.FC = () => {
                             type="button"
                             onClick={() => handleDelete(u)}
                             title="Eliminar"
-                            className="text-slate-300 hover:text-red-600 p-2 rounded-md transition-colors"
+                            aria-label={`Eliminar ${u.nombre}`}
+                            className="text-slate-300 hover:text-red-600 p-2 min-h-11 min-w-11 rounded-md transition-colors"
                           >
                             <span className="material-symbols-outlined text-xl">delete</span>
                           </button>
@@ -276,7 +330,8 @@ export const UniversidadesTable: React.FC = () => {
               type="button"
               disabled={pageActual <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-40 hover:bg-slate-50"
+              aria-label="Página anterior"
+              className="w-11 h-11 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-40 hover:bg-slate-50"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
@@ -287,13 +342,15 @@ export const UniversidadesTable: React.FC = () => {
               type="button"
               disabled={pageActual >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-40 hover:bg-slate-50"
+              aria-label="Página siguiente"
+              className="w-11 h-11 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-40 hover:bg-slate-50"
             >
               <span className="material-symbols-outlined text-lg">chevron_right</span>
             </button>
           </div>
         </div>
       </div>
+      {ConfirmDialog}
     </div>
   );
 };

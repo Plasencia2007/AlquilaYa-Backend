@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { PuntoSerie } from '@/services/analytics-service';
+import { CHART_PRIMARY } from '@/lib/chart-colors';
 
 const formatearDia = (iso: string) => {
   const [, mm, dd] = iso.split('-');
@@ -25,8 +26,8 @@ export default function VistasChart({ data }: { data: PuntoSerie[] }) {
         <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
           <defs>
             <linearGradient id="gVistas" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#8f0304" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#8f0304" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={CHART_PRIMARY} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={CHART_PRIMARY} stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
@@ -57,7 +58,7 @@ export default function VistasChart({ data }: { data: PuntoSerie[] }) {
           <Area
             type="monotone"
             dataKey="valor"
-            stroke="#8f0304"
+            stroke={CHART_PRIMARY}
             strokeWidth={2}
             fill="url(#gVistas)"
           />

@@ -27,6 +27,7 @@ public class UserEventProducer {
     private static final String TOPIC_SECURITY = "user-security-events";
 
     private static final String AGGREGATE_USUARIO = "Usuario";
+    private static final String AGGREGATE_DOCUMENTO = "DocumentoVerificacion";
 
     private final OutboxPublisher outboxPublisher;
 
@@ -63,6 +64,36 @@ public class UserEventProducer {
                 "USER_RECHAZADO",
                 AGGREGATE_USUARIO,
                 String.valueOf(usuarioId),
+                payload,
+                MDC.get("correlationId"));
+    }
+
+    /**
+     * Ítem 378 (PoC de notificaciones admin): emite un evento cuando un usuario sube un
+     * documento de verificación nuevo, para que servicio-mensajeria notifique a TODOS los
+     * admins activos que hay algo pendiente de revisar (no solo al usuario dueño del
+     * documento, como en aprobación/rechazo). Reusa el mismo topic que
+     * {@link #emitirEventoAprobacion} — es el mismo agregado {@code Usuario}/KYC y así el
+     * consumer existente ({@code UserApprovalEventConsumer}) no necesita suscribirse a un
+     * topic nuevo.
+     */
+    public void emitirEventoDocumentoSubido(Long documentoId, Long usuarioId, String correo,
+                                            String nombre, String apellido, String tipoDocumento) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("documentoId", documentoId);
+        payload.put("usuarioId", usuarioId);
+        payload.put("correo", correo);
+        payload.put("nombre", nombre);
+        payload.put("apellido", apellido);
+        payload.put("tipoDocumento", tipoDocumento);
+
+        log.info("📤 Persistiendo en outbox DOCUMENTO_SUBIDO documento={} usuario={} ({})",
+                documentoId, usuarioId, LogMask.email(correo));
+        outboxPublisher.publicar(
+                TOPIC_APPROVAL,
+                "DOCUMENTO_SUBIDO",
+                AGGREGATE_DOCUMENTO,
+                String.valueOf(documentoId),
                 payload,
                 MDC.get("correlationId"));
     }

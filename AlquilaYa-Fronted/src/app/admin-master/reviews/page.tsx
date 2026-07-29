@@ -6,6 +6,8 @@ import Link from 'next/link';
 
 
 import { adminResenaService, type ResenaModeracion } from '@/services/admin-resena-service';
+import { useHasMounted } from '@/hooks/use-has-mounted';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/cn';
 
 function formatFecha(iso?: string) {
@@ -28,18 +30,23 @@ export default function AdminModeracionResenasPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  // Ítem 357: promedio real sobre TODAS las reseñas (incl. ocultas), calculado en BD — ya no
+  // se promedia solo la página visible ni se cae a un "4.8" fijo cuando está vacía.
+  const [promedioGlobal, setPromedioGlobal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [confirmEliminar, setConfirmEliminar] = useState<ResenaModeracion | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHasMounted();
   const [searchQuery, setSearchQuery] = useState('');
   const [ratingFilter, setRatingFilter] = useState<number | 'ALL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VISIBLE' | 'HIDDEN'>('ALL');
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Ítem 396: focus trap del modal de confirmar eliminar — `active` sigue a si el
+  // modal está abierto (el hook no hace nada mientras `confirmEliminar` es null).
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: !!confirmEliminar,
+    onEscape: () => setConfirmEliminar(null),
+  });
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -50,9 +57,10 @@ export default function AdminModeracionResenasPage() {
     setLoading(true);
     try {
       const data = await adminResenaService.listar(page, PAGE_SIZE);
-      setItems(data.content ?? []);
-      setTotalPages(data.totalPages ?? 0);
-      setTotalElements(data.totalElements ?? 0);
+      setItems(data.page.content ?? []);
+      setTotalPages(data.page.totalPages ?? 0);
+      setTotalElements(data.totalResenas);
+      setPromedioGlobal(data.promedioGlobal);
     } catch {
       showToast('Error al cargar reseñas', 'error');
       setItems([]);
@@ -113,9 +121,9 @@ export default function AdminModeracionResenasPage() {
 
   // Stats calculations
   const totalResenas = totalElements;
-  const promedioValoracion = items.length > 0 
-    ? (items.reduce((acc, x) => acc + x.rating, 0) / items.length).toFixed(1)
-    : '4.8'; // Mock average for display
+  // Ítem 357: promedio real sobre TODAS las reseñas (viene de la BD, no de la página actual).
+  // Sin fallback fijo: "—" es honesto cuando aún no hay ninguna reseña.
+  const promedioValoracion = promedioGlobal != null ? promedioGlobal.toFixed(1) : '—';
   const resenasOcultasCount = items.filter(r => !r.visible).length;
   const respuestasCount = items.filter(r => r.respuestaArrendador).length;
 
@@ -162,13 +170,20 @@ export default function AdminModeracionResenasPage() {
       {/* Confirmación de eliminar */}
       {confirmEliminar && mounted && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eliminar-resena-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8"
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-50 text-red-500">
                 <span className="material-symbols-outlined text-xl">delete</span>
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight">Eliminar reseña</h3>
+                <h3 id="eliminar-resena-title" className="text-base font-black text-slate-900 tracking-tight">Eliminar reseña</h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Reseña #{confirmEliminar.id}
                 </p>
@@ -225,7 +240,8 @@ export default function AdminModeracionResenasPage() {
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
             <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Calificación Media</p>
             <h3 className="text-xl font-black text-amber-500 mt-1 flex items-center gap-1">
-              {promedioValoracion} <span className="text-sm">★</span>
+              {promedioValoracion}
+              {promedioGlobal != null && <span className="text-sm">★</span>}
             </h3>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
@@ -270,7 +286,7 @@ export default function AdminModeracionResenasPage() {
             {/* Visibility Filter */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'VISIBLE' | 'HIDDEN')}
               className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#c14b4c] shadow-sm cursor-pointer"
             >
               <option value="ALL">Todos los estados</option>
@@ -371,8 +387,17 @@ export default function AdminModeracionResenasPage() {
                         {'★'.repeat(Math.round(r.rating))}
                         <span className="text-slate-200">{'★'.repeat(5 - Math.round(r.rating))}</span>
                       </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        Inmueble <Link href={`/admin-master/properties/to-review`} className="text-primary hover:underline font-black">#{r.targetId}</Link> · {formatFecha(r.fechaCreacion)}
+                      <span className="text-[10px] font-bold text-slate-400 inline-flex items-center gap-1">
+                        Inmueble{' '}
+                        <Link
+                          href={`/property/${r.targetId}`}
+                          target="_blank"
+                          className="text-primary hover:underline font-black inline-flex items-center gap-0.5"
+                        >
+                          #{r.targetId}
+                          <span className="material-symbols-outlined text-[11px]">open_in_new</span>
+                        </Link>
+                        {' '}· {formatFecha(r.fechaCreacion)}
                       </span>
                       {!r.visible && (
                         <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100/70 px-2 py-0.5 rounded-md">
@@ -420,8 +445,9 @@ export default function AdminModeracionResenasPage() {
                     onClick={() => toggleVisible(r)}
                     disabled={busy === r.id}
                     title={r.visible ? 'Ocultar reseña' : 'Restaurar reseña'}
+                    aria-label={r.visible ? 'Ocultar reseña' : 'Restaurar reseña'}
                     className={cn(
-                      "p-2 rounded-lg transition-all duration-200",
+                      "p-2 min-h-11 min-w-11 rounded-lg transition-all duration-200",
                       r.visible
                         ? "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
                         : "text-amber-600 bg-amber-50 hover:bg-amber-100/50"
@@ -435,7 +461,8 @@ export default function AdminModeracionResenasPage() {
                     onClick={() => setConfirmEliminar(r)}
                     disabled={busy === r.id}
                     title="Eliminar reseña de forma permanente"
-                    className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                    aria-label="Eliminar reseña de forma permanente"
+                    className="p-2 min-h-11 min-w-11 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
                   >
                     <span className="material-symbols-outlined text-lg">delete</span>
                   </button>
@@ -456,14 +483,16 @@ export default function AdminModeracionResenasPage() {
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0 || loading}
-              className="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label="Página anterior"
+              className="h-11 w-11 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1 || loading}
-              className="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label="Página siguiente"
+              className="h-11 w-11 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>

@@ -68,6 +68,18 @@ public class Pago {
     @Column(name = "grupo_id")
     private Long grupoId;
 
+    /** Ítem 292: cupón aplicado, si lo hubo. Null = no se usó cupón. */
+    @Column(name = "cupon_id")
+    private Long cuponId;
+
+    /** Denormalizado para no depender de un join solo para mostrarlo en historial/comprobante. */
+    @Column(name = "cupon_codigo")
+    private String cuponCodigo;
+
+    /** Cuánto se descontó de la comisión original por el cupón. Null/0 = sin descuento. */
+    @Column(name = "monto_descuento")
+    private BigDecimal montoDescuento;
+
     private String estado;      // PENDIENTE, PAGADO, RECHAZADO, PENDIENTE_REVISION, DISCREPANCIA, EXPIRADO
 
     @Column(name = "fecha_creacion")

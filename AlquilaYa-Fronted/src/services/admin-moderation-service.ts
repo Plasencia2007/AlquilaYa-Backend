@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { Page } from '@/types/pagination';
 
 // ─── Tipos: Documentos ────────────────────────────────────────────────────────
 
@@ -25,26 +26,23 @@ export interface VerificarDocumentoPayload {
 // ─── Tipos: Mensajería ────────────────────────────────────────────────────────
 
 export type EstadoConversacion = 'ACTIVA' | 'SUSPENDIDA';
+export type TipoConversacionAdmin = 'ESTUDIANTE_ARRENDADOR' | 'ROOMMATE';
 
 export interface ConversacionAdmin {
   id: number;
-  propiedadId: number;
-  propiedadTitulo?: string;
+  tipo: TipoConversacionAdmin;
+  /** Null en conversaciones ROOMMATE (no están ancladas a una propiedad). */
+  propiedadId?: number | null;
+  propiedadTitulo?: string | null;
   participantes: { id: number; nombre: string; rol: string }[];
   estado: EstadoConversacion;
-  ultimaActividad: string;
+  fechaUltimaActividad: string;
   totalMensajes?: number;
 }
 
-export interface ConversacionesPage {
-  content: ConversacionAdmin[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
-}
+export type ConversacionesPage = Page<ConversacionAdmin>;
 
-export type EstadoMensaje = 'ACTIVO' | 'BLOQUEADO';
+export type EstadoMensaje = 'ENVIADO' | 'LEIDO' | 'BLOQUEADO';
 
 export interface MensajeAdmin {
   id: number;
@@ -54,16 +52,10 @@ export interface MensajeAdmin {
   contenido: string;
   fechaEnvio: string;
   estado: EstadoMensaje;
-  motivoBloqueo?: string;
+  motivoBloqueo?: string | null;
 }
 
-export interface MensajesPage {
-  content: MensajeAdmin[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
-}
+export type MensajesPage = Page<MensajeAdmin>;
 
 export interface MotivoPayload {
   motivo: string;
@@ -75,6 +67,8 @@ export interface GetConversacionesParams {
   page?: number;
   size?: number;
   estado?: EstadoConversacion | '';
+  /** Búsqueda de texto libre (ítem 384): filtra por contenido de mensaje (ILIKE, case-insensitive). */
+  q?: string;
 }
 
 export interface GetMensajesParams {
@@ -121,9 +115,10 @@ export const adminModerationService = {
   getConversaciones: async (
     params: GetConversacionesParams = {}
   ): Promise<ConversacionesPage> => {
-    const { page = 0, size = 20, estado } = params;
+    const { page = 0, size = 20, estado, q } = params;
     const query: Record<string, string | number> = { page, size };
     if (estado) query.estado = estado;
+    if (q && q.trim()) query.q = q.trim();
     const res = await api.get<ConversacionesPage>(
       'admin/mensajeria/conversaciones',
       { params: query }

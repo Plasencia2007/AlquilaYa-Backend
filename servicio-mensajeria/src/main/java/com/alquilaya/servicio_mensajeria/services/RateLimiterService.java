@@ -6,13 +6,22 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
- * Rate limiting basado en Redis con ventana por minuto.
+ * Rate limiting basado en Redis con ventana deslizante ("sliding window log").
  *
- * Key: mensajeria:ratelimit:&lt;userId&gt;:&lt;yyyyMMddHHmm&gt;
- * Operación: INCR + EXPIRE 120s (TTL doble del minuto para tolerar relojes desalineados).
+ * Key: mensajeria:ratelimit:&lt;userId&gt;
+ * Estructura: sorted set (ZSET) donde el score es el timestamp (epoch millis) del
+ * intento y el member es un valor único (evita colisiones cuando dos intentos caen
+ * en el mismo milisegundo). En cada intento:
+ *   1. ZREMRANGEBYSCORE — purga entradas con score &lt; (ahora - ventana).
+ *   2. ZCARD — cuenta los intentos vigentes dentro de la ventana.
+ *   3. Si no se superó el límite: ZADD el intento actual + EXPIRE (housekeeping del key).
+ *
+ * A diferencia de una ventana fija (clave por minuto tipo yyyyMMddHHmm), esto no
+ * permite ráfagas de hasta 2x el límite en el borde de la ventana: siempre se cuentan
+ * los últimos N segundos reales, sin importar dónde caigan.
  *
  * Graceful degradation: si Redis está caído (RedisTemplate null o lanza excepción),
  * loggeamos warn y permitimos el envío. Es preferible permitir spam ocasional a
@@ -22,9 +31,10 @@ import java.time.LocalDateTime;
 @Service
 public class RateLimiterService {
 
-    /** Tope de mensajes por minuto por usuario (~1 msg/s sostenido). */
+    /** Tope de mensajes por ventana por usuario (~1 msg/s sostenido). */
     private static final int MAX_MESSAGES_PER_MINUTE = 60;
-    private static final Duration WINDOW_TTL = Duration.ofSeconds(120);
+    private static final Duration WINDOW = Duration.ofMinutes(1);
+    private static final Duration KEY_TTL = Duration.ofSeconds(120);
     private static final String PREFIX = "mensajeria:ratelimit:";
 
     private final StringRedisTemplate redisTemplate;
@@ -48,19 +58,23 @@ public class RateLimiterService {
 
         String key = buildKey(userId);
         try {
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count == null) {
-                // No debería pasar — pero si pasa, permitimos.
-                return true;
-            }
-            if (count == 1L) {
-                // Primera vez en esta ventana: setear TTL.
-                redisTemplate.expire(key, WINDOW_TTL);
-            }
-            if (count > MAX_MESSAGES_PER_MINUTE) {
+            long now = System.currentTimeMillis();
+            long windowStart = now - WINDOW.toMillis();
+
+            // Purga entradas fuera de la ventana deslizante.
+            redisTemplate.opsForZSet().removeRangeByScore(key, Double.NEGATIVE_INFINITY, windowStart);
+
+            Long currentCount = redisTemplate.opsForZSet().zCard(key);
+            long count = currentCount == null ? 0L : currentCount;
+
+            if (count >= MAX_MESSAGES_PER_MINUTE) {
                 log.warn("Rate limit excedido userId={} count={} key={}", userId, count, key);
                 return false;
             }
+
+            // Member único por intento: mismo timestamp en el mismo ms no debe colisionar.
+            redisTemplate.opsForZSet().add(key, UUID.randomUUID().toString(), now);
+            redisTemplate.expire(key, KEY_TTL);
             return true;
         } catch (Exception e) {
             // Redis caído / timeout / cualquier error → graceful degradation.
@@ -71,11 +85,6 @@ public class RateLimiterService {
     }
 
     private String buildKey(Long userId) {
-        LocalDateTime now = LocalDateTime.now();
-        // yyyyMMddHHmm — ventana fija de 1 minuto.
-        String window = String.format("%04d%02d%02d%02d%02d",
-                now.getYear(), now.getMonthValue(), now.getDayOfMonth(),
-                now.getHour(), now.getMinute());
-        return PREFIX + userId + ":" + window;
+        return PREFIX + userId;
     }
 }

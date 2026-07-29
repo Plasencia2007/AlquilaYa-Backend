@@ -7,6 +7,7 @@ import {
   type ClusterDuplicado,
   type CuentaDuplicada,
 } from '@/services/admin-user-service';
+import { duplicadosService } from '@/services/duplicados-service';
 import { cn } from '@/lib/cn';
 
 const CRITERIO_LABEL: Record<string, string> = {
@@ -42,6 +43,7 @@ export default function AdminDuplicadosPage() {
   const [clusters, setClusters] = useState<ClusterDuplicado[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
+  const [busyCluster, setBusyCluster] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
@@ -78,6 +80,25 @@ export default function AdminDuplicadosPage() {
     }
   };
 
+  /**
+   * Ítem 385: marca el cluster como "revisado — no es duplicado" para que deje de
+   * aparecer en esta lista (el backend lo filtra vía `duplicado_revisado`). NO fusiona
+   * cuentas — solo silencia el falso positivo.
+   */
+  const marcarRevisado = async (cluster: ClusterDuplicado) => {
+    const key = `${cluster.criterio}:${cluster.valor}`;
+    setBusyCluster(key);
+    try {
+      await duplicadosService.marcarRevisado(cluster.criterio, cluster.valor);
+      showToast('Marcado como revisado — no es duplicado', 'success');
+      await cargar();
+    } catch {
+      showToast('No se pudo marcar el grupo como revisado', 'error');
+    } finally {
+      setBusyCluster(null);
+    }
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <header className="mb-6">
@@ -103,12 +124,22 @@ export default function AdminDuplicadosPage() {
         <div className="space-y-4">
           {clusters.map((c, i) => (
             <div key={`${c.criterio}-${c.valor}-${i}`} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold', CRITERIO_COLOR[c.criterio])}>
-                  {CRITERIO_LABEL[c.criterio] ?? c.criterio}
-                </span>
-                <span className="text-sm font-mono font-bold text-slate-700">{c.valor}</span>
-                <span className="text-xs text-slate-400">· {c.cuentas.length} cuentas</span>
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-bold', CRITERIO_COLOR[c.criterio])}>
+                    {CRITERIO_LABEL[c.criterio] ?? c.criterio}
+                  </span>
+                  <span className="text-sm font-mono font-bold text-slate-700">{c.valor}</span>
+                  <span className="text-xs text-slate-400">· {c.cuentas.length} cuentas</span>
+                </div>
+                <button
+                  onClick={() => marcarRevisado(c)}
+                  disabled={busyCluster === `${c.criterio}:${c.valor}`}
+                  className="shrink-0 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 transition-colors"
+                  title="No es un duplicado real: deja de mostrarse en esta lista"
+                >
+                  {busyCluster === `${c.criterio}:${c.valor}` ? 'Marcando...' : 'Marcar como revisado — no es duplicado'}
+                </button>
               </div>
 
               <div className="divide-y divide-slate-100">

@@ -60,6 +60,16 @@ const META: Record<EstadoReserva, EstadoMeta> = {
     border: 'border-gray-200',
     icon: XCircle,
   },
+  // Ítem 238 (hallazgo): antes este estado no existía acá, así que una reserva EXPIRADA
+  // caía al fallback de metaEstadoReserva() y se mostraba como "Pendiente" — un badge
+  // engañoso para una reserva que en realidad ya venció sin pagarse.
+  EXPIRADA: {
+    label: 'Expirada',
+    bg: 'bg-gray-100',
+    text: 'text-gray-600',
+    border: 'border-gray-200',
+    icon: XCircle,
+  },
 };
 
 export function metaEstadoReserva(estado: EstadoReserva): EstadoMeta {
@@ -90,7 +100,7 @@ export function pasosTimeline(estado: EstadoReserva): PasoTimeline[] {
   else if (estado === 'PAGADA') idxActivo = 3;
   else if (estado === 'FINALIZADA') idxActivo = 3;
 
-  if (estado === 'RECHAZADA' || estado === 'CANCELADA') {
+  if (estado === 'RECHAZADA' || estado === 'CANCELADA' || estado === 'EXPIRADA') {
     return [
       { ...pasos[0], completado: true, activo: false },
       { ...pasos[1], completado: false, activo: true },

@@ -34,7 +34,7 @@ public class ModeracionService {
         registrar(admin, AccionModeracion.BLOQUEAR_MENSAJE, TargetModeracion.MENSAJE, mensajeId, motivo);
 
         Conversacion c = m.getConversacion();
-        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
+        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getSegundoParticipanteId(),
                 new EventoModeracion("MENSAJE_BLOQUEADO", c.getId(), mensajeId, motivo));
         return MensajeDTO.from(m);
     }
@@ -46,7 +46,7 @@ public class ModeracionService {
         registrar(admin, AccionModeracion.DESBLOQUEAR_MENSAJE, TargetModeracion.MENSAJE, mensajeId, motivo);
 
         Conversacion c = m.getConversacion();
-        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
+        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getSegundoParticipanteId(),
                 new EventoModeracion("MENSAJE_DESBLOQUEADO", c.getId(), mensajeId, motivo));
         return MensajeDTO.from(m);
     }
@@ -57,7 +57,7 @@ public class ModeracionService {
         Conversacion c = conversacionService.cambiarEstado(conversacionId, EstadoConversacion.SUSPENDIDA);
         registrar(admin, AccionModeracion.SUSPENDER_CONVERSACION, TargetModeracion.CONVERSACION, conversacionId, motivo);
 
-        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
+        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getSegundoParticipanteId(),
                 new EventoModeracion("CONVERSACION_SUSPENDIDA", c.getId(), null, motivo));
         return ConversacionDTO.from(c);
     }
@@ -68,7 +68,7 @@ public class ModeracionService {
         Conversacion c = conversacionService.cambiarEstado(conversacionId, EstadoConversacion.ACTIVA);
         registrar(admin, AccionModeracion.REACTIVAR_CONVERSACION, TargetModeracion.CONVERSACION, conversacionId, motivo);
 
-        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getArrendadorId(),
+        wsNotify.enviarEventoAParticipantes(c, c.getEstudianteId(), c.getSegundoParticipanteId(),
                 new EventoModeracion("CONVERSACION_REACTIVADA", c.getId(), null, motivo));
         return ConversacionDTO.from(c);
     }

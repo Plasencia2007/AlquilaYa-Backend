@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/cn';
 
 interface ParsedVideo {
-  kind: 'youtube' | 'vimeo' | 'file' | 'unknown';
+  kind: 'youtube' | 'vimeo' | 'file' | 'tour360' | 'unknown';
   embedUrl?: string;
   fileUrl?: string;
   youtubeId?: string;
@@ -41,6 +41,17 @@ function parseVideoUrl(raw: string): ParsedVideo {
   }
   if (/\.(mp4|webm|ogg)$/i.test(url.pathname)) {
     return { kind: 'file', fileUrl: raw };
+  }
+  if (host === 'kuula.co') {
+    if (url.pathname.startsWith('/share/') && url.pathname.length > '/share/'.length) {
+      return { kind: 'tour360', embedUrl: raw };
+    }
+  }
+  if (host === 'my.matterport.com' || host === 'matterport.com') {
+    const spaceId = url.searchParams.get('m');
+    if (url.pathname.startsWith('/show') && spaceId) {
+      return { kind: 'tour360', embedUrl: raw };
+    }
   }
   return { kind: 'unknown' };
 }
@@ -82,6 +93,21 @@ export function PropertyVideo({ url, titulo, className }: Props) {
           playsInline
           preload="metadata"
           className="h-full w-full"
+        />
+      </div>
+    );
+  }
+
+  if (parsed.kind === 'tour360') {
+    return (
+      <div className={cn('relative aspect-video w-full overflow-hidden rounded-2xl bg-black', className)}>
+        <iframe
+          src={parsed.embedUrl}
+          title={titulo ?? 'Tour virtual 360° de la propiedad'}
+          allow="xr-spatial-tracking; gyroscope; accelerometer"
+          allowFullScreen
+          loading="lazy"
+          className="absolute inset-0 h-full w-full"
         />
       </div>
     );

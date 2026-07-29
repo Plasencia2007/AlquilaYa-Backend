@@ -1,6 +1,7 @@
 package com.alquilaya.servicio_mensajeria.entities;
 
 import com.alquilaya.servicio_mensajeria.enums.EstadoConversacion;
+import com.alquilaya.servicio_mensajeria.enums.TipoConversacion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -32,7 +33,9 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_conv_estudiante_actividad",
                         columnList = "estudiante_id, fecha_ultima_actividad DESC"),
                 @Index(name = "idx_conv_arrendador_actividad",
-                        columnList = "arrendador_id, fecha_ultima_actividad DESC")
+                        columnList = "arrendador_id, fecha_ultima_actividad DESC"),
+                @Index(name = "idx_conv_estudiante2_actividad",
+                        columnList = "estudiante2_id, fecha_ultima_actividad DESC")
         }
 )
 @Data
@@ -49,13 +52,27 @@ public class Conversacion {
     @Column(name = "estudiante_id", nullable = false)
     private Long estudianteId;
 
-    @NotNull
-    @Column(name = "arrendador_id", nullable = false)
+    /**
+     * Null en conversaciones {@code ROOMMATE} (no hay arrendador). Obligatorio en
+     * {@code ESTUDIANTE_ARRENDADOR} — validado en el service, no aquí, porque la
+     * obligatoriedad depende de {@link #tipo}.
+     */
+    @Column(name = "arrendador_id")
     private Long arrendadorId;
 
-    @NotNull
-    @Column(name = "propiedad_id", nullable = false)
+    /** Segundo estudiante de una conversación {@code ROOMMATE}; null en las demás. */
+    @Column(name = "estudiante2_id")
+    private Long estudiante2Id;
+
+    /** Null en conversaciones {@code ROOMMATE}; obligatorio en {@code ESTUDIANTE_ARRENDADOR}. */
+    @Column(name = "propiedad_id")
     private Long propiedadId;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private TipoConversacion tipo = TipoConversacion.ESTUDIANTE_ARRENDADOR;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -78,6 +95,12 @@ public class Conversacion {
         if (fechaCreacion == null) fechaCreacion = now;
         if (fechaUltimaActividad == null) fechaUltimaActividad = now;
         if (estado == null) estado = EstadoConversacion.ACTIVA;
+        if (tipo == null) tipo = TipoConversacion.ESTUDIANTE_ARRENDADOR;
+    }
+
+    /** El otro participante para efectos de broadcast: arrendadorId, o estudiante2Id en ROOMMATE. */
+    public Long getSegundoParticipanteId() {
+        return tipo == TipoConversacion.ROOMMATE ? estudiante2Id : arrendadorId;
     }
 
     @PreUpdate

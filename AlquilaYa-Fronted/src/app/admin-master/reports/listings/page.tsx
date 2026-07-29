@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   adminDenunciaService,
   type DenunciaAdmin,
+  type DenunciaConteos,
   type EstadoDenuncia,
 } from '@/services/admin-denuncia-service';
 import { cn } from '@/lib/cn';
@@ -46,6 +47,32 @@ function estadoBadge(estado: EstadoDenuncia) {
   return map[estado];
 }
 
+type Severidad = 'ALTA' | 'MEDIA' | 'BAJA';
+
+/** Motivos que, por sí solos (una única denuncia), ya ameritan atención prioritaria. */
+const MOTIVOS_GRAVES = new Set(['FRAUDE', 'INFO_FALSA', 'CONTACTO_EXTERNO']);
+
+/**
+ * Severidad real (ítem 376), reemplaza el "Alta" hardcodeado de la card de stats.
+ * `propiedadTotalDenuncias` viene ya agregado del backend (mismo query que la lista, sin
+ * llamadas extra). Regla:
+ *  - ALTA: la propiedad acumula 2+ denuncias (cualquier estado) — patrón de reincidencia.
+ *  - MEDIA: denuncia única pero con un motivo grave (fraude / info falsa / contacto externo).
+ *  - BAJA: denuncia única con un motivo menor (duplicado, inapropiado, otro).
+ */
+function severidad(d: DenunciaAdmin): Severidad {
+  const total = d.propiedadTotalDenuncias ?? 1;
+  if (total >= 2) return 'ALTA';
+  return MOTIVOS_GRAVES.has(d.motivo) ? 'MEDIA' : 'BAJA';
+}
+
+const SEVERIDAD_LABEL: Record<Severidad, string> = { ALTA: 'Alta', MEDIA: 'Media', BAJA: 'Baja' };
+const SEVERIDAD_BADGE: Record<Severidad, string> = {
+  ALTA: 'bg-destructive/10 text-destructive border-destructive/20',
+  MEDIA: 'bg-amber-50 text-amber-700 border-amber-100',
+  BAJA: 'bg-slate-100 text-slate-500 border-slate-200',
+};
+
 export default function AdminDenunciasPage() {
   const [items, setItems] = useState<DenunciaAdmin[]>([]);
   const [filtro, setFiltro] = useState<EstadoDenuncia | 'TODAS'>('PENDIENTE');
@@ -55,6 +82,8 @@ export default function AdminDenunciasPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  // Conteo agregado por estado (ítem 376) — independiente del filtro activo, reemplaza el "—".
+  const [conteos, setConteos] = useState<DenunciaConteos | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -65,10 +94,14 @@ export default function AdminDenunciasPage() {
     setLoading(true);
     try {
       const estado = filtro === 'TODAS' ? undefined : filtro;
-      const data = await adminDenunciaService.listar(estado, page, PAGE_SIZE);
+      const [data, conteosData] = await Promise.all([
+        adminDenunciaService.listar(estado, page, PAGE_SIZE),
+        adminDenunciaService.conteos().catch(() => null),
+      ]);
       setItems(data.content ?? []);
       setTotalPages(data.totalPages ?? 0);
       setTotalElements(data.totalElements ?? 0);
+      if (conteosData) setConteos(conteosData);
     } catch {
       showToast('No se pudieron cargar las denuncias', 'error');
     } finally {
@@ -79,6 +112,8 @@ export default function AdminDenunciasPage() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  const urgenciaAlta = items.filter((d) => severidad(d) === 'ALTA').length;
 
   const actualizar = async (d: DenunciaAdmin, estado: EstadoDenuncia) => {
     setBusy(d.id);
@@ -102,7 +137,7 @@ export default function AdminDenunciasPage() {
             'fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-bottom-2 duration-400 backdrop-blur-md border',
             toast.type === 'success'
               ? 'bg-green-500/90 text-white border-green-400/20 shadow-green-500/10'
-              : 'bg-[#c14b4c]/90 text-white border-[#c14b4c]/20 shadow-red-500/10',
+              : 'bg-destructive/90 text-destructive-foreground border-destructive/20 shadow-red-500/10',
           )}
         >
           <span className="material-symbols-outlined text-[18px]">
@@ -115,8 +150,8 @@ export default function AdminDenunciasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pb-2 border-b border-slate-100">
         <div>
-          <p className="text-[10px] font-black tracking-[0.2em] uppercase text-[#c14b4c] mb-1.5 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#c14b4c]" />
+          <p className="text-[10px] font-black tracking-[0.2em] uppercase text-primary mb-1.5 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Moderación
           </p>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
@@ -138,7 +173,7 @@ export default function AdminDenunciasPage() {
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
             <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Por Revisar</p>
             <h3 className="text-xl font-black text-amber-600 mt-1">
-              {filtro === 'PENDIENTE' ? totalElements : '—'}
+              {conteos ? conteos.pendientes : '—'}
             </h3>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
@@ -148,8 +183,9 @@ export default function AdminDenunciasPage() {
             </h3>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Urgencia</p>
-            <h3 className="text-xl font-black text-red-500 mt-1">Alta</h3>
+            <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Urgencia Alta</p>
+            <h3 className="text-xl font-black text-destructive mt-1">{urgenciaAlta}</h3>
+            <p className="text-[9px] text-slate-300 mt-0.5">Propiedades con 2+ denuncias (esta página)</p>
           </div>
         </div>
       )}
@@ -217,6 +253,19 @@ export default function AdminDenunciasPage() {
                     <span className={cn('px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider', estadoBadge(d.estado))}>
                       {d.estado}
                     </span>
+                    <span
+                      className={cn(
+                        'px-2.5 py-0.5 rounded-lg border text-[10px] font-black uppercase tracking-wider',
+                        SEVERIDAD_BADGE[severidad(d)],
+                      )}
+                      title={
+                        severidad(d) === 'ALTA'
+                          ? `Esta propiedad acumula ${d.propiedadTotalDenuncias ?? 1} denuncias`
+                          : undefined
+                      }
+                    >
+                      Urgencia {SEVERIDAD_LABEL[severidad(d)]}
+                    </span>
                     <span className="text-[10px] font-bold text-slate-400">{formatFecha(d.fechaCreacion)}</span>
                   </div>
 
@@ -234,7 +283,7 @@ export default function AdminDenunciasPage() {
 
                   {d.descripcion && (
                     <div className="rounded-2xl border-l-[3px] border-slate-200 bg-slate-50/40 p-3">
-                      <p className="text-xs text-slate-600 leading-relaxed italic">"{d.descripcion}"</p>
+                      <p className="text-xs text-slate-600 leading-relaxed italic">&ldquo;{d.descripcion}&rdquo;</p>
                     </div>
                   )}
                 </div>
@@ -274,14 +323,16 @@ export default function AdminDenunciasPage() {
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0 || loading}
-              className="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label="Página anterior"
+              className="h-11 w-11 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1 || loading}
-              className="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label="Página siguiente"
+              className="h-11 w-11 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>

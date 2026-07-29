@@ -3,6 +3,7 @@ package com.alquilaya.servicio_mensajeria.dto;
 import com.alquilaya.servicio_mensajeria.entities.Mensaje;
 import com.alquilaya.servicio_mensajeria.enums.EstadoMensaje;
 import com.alquilaya.servicio_mensajeria.enums.RolEmisor;
+import com.alquilaya.servicio_mensajeria.enums.TipoMensaje;
 import lombok.Builder;
 import lombok.Value;
 
@@ -19,6 +20,9 @@ public class MensajeDTO {
     EstadoMensaje estado;
     LocalDateTime fechaEnvio;
     LocalDateTime fechaLectura;
+    // Ítem 254: tipo de contenido + URL del adjunto (solo IMAGEN).
+    TipoMensaje tipo;
+    String urlAdjunto;
 
     public static MensajeDTO from(Mensaje m) {
         return MensajeDTO.builder()
@@ -30,6 +34,8 @@ public class MensajeDTO {
                 .estado(m.getEstado())
                 .fechaEnvio(m.getFechaEnvio())
                 .fechaLectura(m.getFechaLectura())
+                .tipo(m.getTipo())
+                .urlAdjunto(m.getUrlAdjunto())
                 .build();
     }
 }

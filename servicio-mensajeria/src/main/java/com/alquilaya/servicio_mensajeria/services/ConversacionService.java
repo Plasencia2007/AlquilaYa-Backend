@@ -6,13 +6,16 @@ import com.alquilaya.servicio_mensajeria.config.CurrentUser;
 import com.alquilaya.servicio_mensajeria.dto.ConversacionAdminDTO;
 import com.alquilaya.servicio_mensajeria.dto.ConversacionResumenDTO;
 import com.alquilaya.servicio_mensajeria.dto.CrearConversacionRequest;
+import com.alquilaya.servicio_mensajeria.dto.ParticipanteConversacionDTO;
 import com.alquilaya.servicio_mensajeria.dto.PropiedadResumenDTO;
 import com.alquilaya.servicio_mensajeria.dto.UsuarioPerfilDTO;
 import com.alquilaya.servicio_mensajeria.entities.Conversacion;
 import com.alquilaya.servicio_mensajeria.entities.ConversacionOculta;
+import com.alquilaya.servicio_mensajeria.entities.Mensaje;
 import com.alquilaya.servicio_mensajeria.enums.EstadoConversacion;
 import com.alquilaya.servicio_mensajeria.enums.EstadoMensaje;
 import com.alquilaya.servicio_mensajeria.enums.RolEmisor;
+import com.alquilaya.servicio_mensajeria.enums.TipoConversacion;
 import com.alquilaya.servicio_mensajeria.repositories.ConversacionOcultaRepository;
 import com.alquilaya.servicio_mensajeria.repositories.ConversacionRepository;
 import com.alquilaya.servicio_mensajeria.repositories.MensajeRepository;
@@ -72,8 +75,11 @@ public class ConversacionService {
             throw new AccessDeniedException("Usuario sin perfil");
         }
         boolean esEstudiante = perfil.equals(c.getEstudianteId()) && "ESTUDIANTE".equalsIgnoreCase(user.getRol());
-        boolean esArrendador = perfil.equals(c.getArrendadorId()) && "ARRENDADOR".equalsIgnoreCase(user.getRol());
-        if (!esEstudiante && !esArrendador) {
+        boolean esSegundoEstudiante = c.getEstudiante2Id() != null
+                && perfil.equals(c.getEstudiante2Id()) && "ESTUDIANTE".equalsIgnoreCase(user.getRol());
+        boolean esArrendador = c.getArrendadorId() != null
+                && perfil.equals(c.getArrendadorId()) && "ARRENDADOR".equalsIgnoreCase(user.getRol());
+        if (!esEstudiante && !esSegundoEstudiante && !esArrendador) {
             throw new AccessDeniedException("No participas en esta conversación");
         }
         return c;
@@ -84,14 +90,22 @@ public class ConversacionService {
     // =========================================================================
 
     /**
-     * Crea la conversación si no existe la tupla (estudianteId, arrendadorId, propiedadId),
-     * o devuelve la existente. El rol del caller determina quién es estudiante y quién
-     * arrendador en la tupla.
+     * Crea la conversación si no existe, o devuelve la existente. Con {@code tipo} omitido
+     * o {@code ESTUDIANTE_ARRENDADOR} (default, compatibilidad con clientes existentes) usa
+     * la tupla (estudianteId, arrendadorId, propiedadId), donde el rol del caller determina
+     * quién es estudiante y quién arrendador. Con {@code ROOMMATE} crea una conversación
+     * entre dos estudiantes, ver {@link #crearOObtenerRoommate}.
      */
     @Transactional
     public Conversacion crearOObtener(CrearConversacionRequest req, CurrentUser user) {
         if (user == null || user.getPerfilId() == null) {
             throw new AccessDeniedException("Usuario sin perfil para crear conversación");
+        }
+        if (req.getTipo() == TipoConversacion.ROOMMATE) {
+            return crearOObtenerRoommate(req, user);
+        }
+        if (req.getPropiedadId() == null) {
+            throw new IllegalArgumentException("propiedadId es obligatorio para conversaciones con un arrendador");
         }
         Long estudianteId;
         Long arrendadorId;
@@ -108,6 +122,7 @@ public class ConversacionService {
                 .findByEstudianteIdAndArrendadorIdAndPropiedadId(estudianteId, arrendadorId, req.getPropiedadId())
                 .orElseGet(() -> {
                     Conversacion nueva = Conversacion.builder()
+                            .tipo(TipoConversacion.ESTUDIANTE_ARRENDADOR)
                             .estudianteId(estudianteId)
                             .arrendadorId(arrendadorId)
                             .propiedadId(req.getPropiedadId())
@@ -120,10 +135,51 @@ public class ConversacionService {
                 });
     }
 
+    /**
+     * Conversación roommate (estudiante↔estudiante): sin propiedad ni arrendador. La
+     * pareja se guarda en orden canónico (menor, mayor) para que el índice único parcial
+     * (estudiante_id, estudiante2_id) WHERE tipo='ROOMMATE' garantice idempotencia sin
+     * importar cuál de los dos la inicia.
+     */
+    private Conversacion crearOObtenerRoommate(CrearConversacionRequest req, CurrentUser user) {
+        if (!"ESTUDIANTE".equalsIgnoreCase(user.getRol())) {
+            throw new AccessDeniedException("Solo estudiantes pueden iniciar conversaciones de roommates");
+        }
+        Long miId = user.getPerfilId();
+        Long otroId = req.getContraparteId();
+        if (otroId.equals(miId)) {
+            throw new IllegalArgumentException("No puedes iniciar una conversación contigo mismo");
+        }
+        Long a = Math.min(miId, otroId);
+        Long b = Math.max(miId, otroId);
+        return conversacionRepo.findByEstudianteIdAndEstudiante2IdAndTipo(a, b, TipoConversacion.ROOMMATE)
+                .orElseGet(() -> {
+                    Conversacion nueva = Conversacion.builder()
+                            .tipo(TipoConversacion.ROOMMATE)
+                            .estudianteId(a)
+                            .estudiante2Id(b)
+                            .estado(EstadoConversacion.ACTIVA)
+                            .build();
+                    Conversacion saved = conversacionRepo.save(nueva);
+                    log.info("Conversación roommate creada id={} entre estudiantes {} y {}", saved.getId(), a, b);
+                    return saved;
+                });
+    }
+
     /** Indica si la conversación ya existía antes de la operación (para decidir 200 vs 201). */
     @Transactional(readOnly = true)
     public boolean yaExistia(CrearConversacionRequest req, CurrentUser user) {
         if (user == null || user.getPerfilId() == null) return false;
+        if (req.getTipo() == TipoConversacion.ROOMMATE) {
+            if (!"ESTUDIANTE".equalsIgnoreCase(user.getRol())) return false;
+            Long miId = user.getPerfilId();
+            Long otroId = req.getContraparteId();
+            if (otroId == null || otroId.equals(miId)) return false;
+            Long a = Math.min(miId, otroId);
+            Long b = Math.max(miId, otroId);
+            return conversacionRepo.findByEstudianteIdAndEstudiante2IdAndTipo(a, b, TipoConversacion.ROOMMATE)
+                    .isPresent();
+        }
         Long estudianteId;
         Long arrendadorId;
         if ("ESTUDIANTE".equalsIgnoreCase(user.getRol())) {
@@ -159,6 +215,44 @@ public class ConversacionService {
                 .filter(c -> !ocultas.contains(c.getId()))
                 .map(c -> toResumen(c, user))
                 .toList();
+    }
+
+    /**
+     * Ítem 262: lo INVERSO de {@link #listarDelUsuario} — solo las conversaciones que el
+     * caller SÍ ocultó ("archivó"). Reutiliza {@link #toResumen} para no duplicar el
+     * enriquecimiento (contraparte, preview, no-leídos, ultimoMensajeEsMio).
+     */
+    @Transactional(readOnly = true)
+    public List<ConversacionResumenDTO> listarArchivadasDelUsuario(CurrentUser user) {
+        if (user == null || user.getPerfilId() == null) {
+            return List.of();
+        }
+        RolEmisor rol = rolEmisorDelUser(user);
+        if (rol == null) return List.of();
+        List<Long> archivadasIds = ocultaRepo.findConversacionIdsOcultasPara(user.getPerfilId(), rol);
+        if (archivadasIds.isEmpty()) return List.of();
+        // findAllById no garantiza el orden de la lista de ids: se reordena igual que
+        // findDelParticipante (más reciente primero).
+        return conversacionRepo.findAllById(archivadasIds).stream()
+                .sorted(java.util.Comparator.comparing(Conversacion::getFechaUltimaActividad).reversed())
+                .map(c -> toResumen(c, user))
+                .toList();
+    }
+
+    /**
+     * Ítem 264: versión paginada de {@link #listarDelUsuario}, para el endpoint nuevo y
+     * separado {@code GET /conversaciones/paginadas}. A diferencia de listarDelUsuario,
+     * no excluye las archivadas (el filtro en memoria rompería totalElements/totalPages
+     * de la Page); quien necesite "mis conversaciones sin las archivadas" sigue usando
+     * el endpoint sin paginar.
+     */
+    @Transactional(readOnly = true)
+    public Page<ConversacionResumenDTO> listarDelUsuarioPaginado(CurrentUser user, Pageable pageable) {
+        if (user == null || user.getPerfilId() == null || rolEmisorDelUser(user) == null) {
+            return Page.empty(pageable);
+        }
+        Page<Conversacion> page = conversacionRepo.findDelParticipantePaginado(user.getPerfilId(), user.getRol(), pageable);
+        return page.map(c -> toResumen(c, user));
     }
 
     /**
@@ -201,8 +295,11 @@ public class ConversacionService {
 
     @Transactional(readOnly = true)
     public Page<ConversacionAdminDTO> listarParaAdmin(EstadoConversacion estado, Long estudianteId,
-                                                       Long arrendadorId, Long propiedadId, Pageable pageable) {
-        Page<Conversacion> page = conversacionRepo.buscarParaAdmin(estado, estudianteId, arrendadorId, propiedadId, pageable);
+                                                       Long arrendadorId, Long propiedadId, String q,
+                                                       Pageable pageable) {
+        String qNormalizado = (q == null || q.isBlank()) ? null : q.trim();
+        Page<Conversacion> page = conversacionRepo.buscarParaAdmin(
+                estado, estudianteId, arrendadorId, propiedadId, qNormalizado, pageable);
         return page.map(this::toAdmin);
     }
 
@@ -211,21 +308,41 @@ public class ConversacionService {
     // =========================================================================
 
     private ConversacionResumenDTO toResumen(Conversacion c, CurrentUser user) {
-        // Quién es el caller dentro de la conversación se decide por ROL, no por
-        // perfilId (que colisiona entre roles).
-        RolEmisor miRol = rolEmisorDelUser(user);
-        boolean soyEstudiante = miRol == RolEmisor.ESTUDIANTE;
-        Long contraparteId = soyEstudiante ? c.getArrendadorId() : c.getEstudianteId();
-        String contraparteRol = soyEstudiante ? "ARRENDADOR" : "ESTUDIANTE";
-        UsuarioPerfilDTO contraparte = soyEstudiante
-                ? obtenerArrendadorResiliente(contraparteId).join()
-                : obtenerEstudianteResiliente(contraparteId).join();
+        Long contraparteId;
+        String contraparteRol;
+        UsuarioPerfilDTO contraparte;
+        String propiedadTitulo = null;
 
-        PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
+        if (c.getTipo() == TipoConversacion.ROOMMATE) {
+            // Ambos participantes son ESTUDIANTE: la contraparte es "el otro" de los dos
+            // ids guardados, identificado por perfilId (no hay rol que los distinga).
+            contraparteId = user.getPerfilId().equals(c.getEstudianteId()) ? c.getEstudiante2Id() : c.getEstudianteId();
+            contraparteRol = "ESTUDIANTE";
+            contraparte = obtenerEstudianteResiliente(contraparteId).join();
+        } else {
+            // Quién es el caller dentro de la conversación se decide por ROL, no por
+            // perfilId (que colisiona entre roles).
+            boolean soyEstudiante = rolEmisorDelUser(user) == RolEmisor.ESTUDIANTE;
+            contraparteId = soyEstudiante ? c.getArrendadorId() : c.getEstudianteId();
+            contraparteRol = soyEstudiante ? "ARRENDADOR" : "ESTUDIANTE";
+            contraparte = soyEstudiante
+                    ? obtenerArrendadorResiliente(contraparteId).join()
+                    : obtenerEstudianteResiliente(contraparteId).join();
+            PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
+            propiedadTitulo = prop != null ? prop.getTitulo() : null;
+        }
 
-        // No-leídos = mensajes del OTRO participante aún en estado ENVIADO.
-        long noLeidos = mensajeRepo.countByConversacionIdAndEmisorRolNotAndEstado(
-                c.getId(), miRol, EstadoMensaje.ENVIADO);
+        // No-leídos = mensajes de la contraparte (identificada por perfilId, ver
+        // MensajeRepository) aún en estado ENVIADO.
+        long noLeidos = mensajeRepo.countByConversacionIdAndEmisorPerfilIdNotAndEstado(
+                c.getId(), user.getPerfilId(), EstadoMensaje.ENVIADO);
+
+        // Ítem 265: "Tú: …" — se calcula consultando el último mensaje REAL (en vez de
+        // agregar un campo a Conversacion) para no depender de que MensajeService.enviar()
+        // (de otro agente, no tocado aquí) pase un emisorPerfilId nuevo.
+        List<Mensaje> ultimoMensaje = mensajeRepo.findTop1ByConversacionIdOrderByFechaEnvioDesc(c.getId());
+        boolean ultimoMensajeEsMio = !ultimoMensaje.isEmpty()
+                && user.getPerfilId().equals(ultimoMensaje.get(0).getEmisorPerfilId());
 
         return ConversacionResumenDTO.builder()
                 .id(c.getId())
@@ -233,20 +350,47 @@ public class ConversacionService {
                 .contraparteNombre(nombreCompleto(contraparte))
                 .contraparteRol(contraparteRol)
                 .propiedadId(c.getPropiedadId())
-                .propiedadTitulo(prop != null ? prop.getTitulo() : null)
+                .propiedadTitulo(propiedadTitulo)
                 .estado(c.getEstado())
                 .fechaUltimaActividad(c.getFechaUltimaActividad())
                 .ultimoMensajePreview(c.getUltimoMensajePreview())
                 .noLeidos(noLeidos)
+                .ultimoMensajeEsMio(ultimoMensajeEsMio)
                 .build();
     }
 
     private ConversacionAdminDTO toAdmin(Conversacion c) {
         UsuarioPerfilDTO est = obtenerEstudianteResiliente(c.getEstudianteId()).join();
+        PropiedadResumenDTO prop = c.getPropiedadId() != null
+                ? obtenerPropiedadResiliente(c.getPropiedadId()).join() : null;
+
+        if (c.getTipo() == TipoConversacion.ROOMMATE) {
+            UsuarioPerfilDTO est2 = obtenerEstudianteResiliente(c.getEstudiante2Id()).join();
+            List<ParticipanteConversacionDTO> participantes = List.of(
+                    new ParticipanteConversacionDTO(c.getEstudianteId(), nombreCompleto(est), "ESTUDIANTE"),
+                    new ParticipanteConversacionDTO(c.getEstudiante2Id(), nombreCompleto(est2), "ESTUDIANTE"));
+            return ConversacionAdminDTO.builder()
+                    .id(c.getId())
+                    .tipo(c.getTipo())
+                    .participantes(participantes)
+                    .estudianteId(c.getEstudianteId())
+                    .estudianteNombre(nombreCompleto(est))
+                    .estudiante2Id(c.getEstudiante2Id())
+                    .estudiante2Nombre(nombreCompleto(est2))
+                    .estado(c.getEstado())
+                    .fechaCreacion(c.getFechaCreacion())
+                    .fechaUltimaActividad(c.getFechaUltimaActividad())
+                    .ultimoMensajePreview(c.getUltimoMensajePreview())
+                    .build();
+        }
         UsuarioPerfilDTO arr = obtenerArrendadorResiliente(c.getArrendadorId()).join();
-        PropiedadResumenDTO prop = obtenerPropiedadResiliente(c.getPropiedadId()).join();
+        List<ParticipanteConversacionDTO> participantes = List.of(
+                new ParticipanteConversacionDTO(c.getEstudianteId(), nombreCompleto(est), "ESTUDIANTE"),
+                new ParticipanteConversacionDTO(c.getArrendadorId(), nombreCompleto(arr), "ARRENDADOR"));
         return ConversacionAdminDTO.builder()
                 .id(c.getId())
+                .tipo(c.getTipo())
+                .participantes(participantes)
                 .estudianteId(c.getEstudianteId())
                 .estudianteNombre(nombreCompleto(est))
                 .arrendadorId(c.getArrendadorId())

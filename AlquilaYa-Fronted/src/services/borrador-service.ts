@@ -6,6 +6,8 @@ export interface BorradorPayload {
   titulo?: string;
   descripcion?: string;
   precio?: number;
+  /** Depósito de garantía (S/), adicional a la renta. */
+  deposito?: number;
   direccion?: string;
   ubicacionGps?: string;
   tipoPropiedad?: string;

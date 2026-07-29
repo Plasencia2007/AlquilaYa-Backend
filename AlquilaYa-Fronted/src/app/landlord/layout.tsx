@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { useStomp } from '@/hooks/use-stomp';
 import LandlordSidebar from '@/components/landlord/landlord-sidebar';
+import { LandlordBottomNav } from '@/components/landlord/landlord-bottom-nav';
+import { SkipLink } from '@/components/shared/skip-link';
 
 export default function LandlordLayout({
   children,
@@ -14,12 +17,8 @@ export default function LandlordLayout({
   const { estaAutenticado, usuario, cargando } = useAuth();
   const router = useRouter();
   useStomp();
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useHasMounted();
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   useEffect(() => {
     // Seguridad Multinivel: Si el navegador restaura la página desde caché (bfcache)
@@ -57,6 +56,8 @@ export default function LandlordLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-card animate-in fade-in slide-in-from-bottom-2 duration-400 relative selection:bg-primary/20">
+      {/* Ítem 394: apunta al `<main id="contenido">` de abajo. */}
+      <SkipLink href="#contenido" />
       <LandlordSidebar mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* Backdrop del drawer en móvil */}
@@ -68,7 +69,7 @@ export default function LandlordLayout({
         />
       )}
 
-      <main className="flex-1 overflow-y-auto lg:pl-[280px]">
+      <main id="contenido" className="flex-1 overflow-y-auto lg:pl-[280px]">
         {/* Barra superior solo en móvil: abre el drawer */}
         <div className="lg:hidden sticky top-0 z-50 flex items-center gap-3 h-14 px-4 border-b border-border bg-card/95 backdrop-blur">
           <button
@@ -82,10 +83,14 @@ export default function LandlordLayout({
           <span className="font-bold tracking-tight text-foreground">AlquilaYa</span>
         </div>
 
-        <div className="max-w-[1400px] mx-auto p-6 lg:p-10">
+        <div className="max-w-[1400px] mx-auto p-6 pb-24 lg:p-10">
           {children}
         </div>
       </main>
+
+      {/* Ítem 349: accesos rápidos fijos en móvil/tablet — el drawer sigue disponible desde la
+          barra superior para el resto de secciones. */}
+      <LandlordBottomNav />
     </div>
   );
 }

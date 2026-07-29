@@ -3,10 +3,8 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ChangeEvent,
-  type DragEvent,
   type FormEvent,
 } from 'react';
 import Link from 'next/link';
@@ -21,6 +19,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useDraft } from '@/hooks/use-draft';
 import { borradorService, type BorradorPayload } from '@/services/borrador-service';
 import { notify } from '@/lib/notify';
+import { Stepper, type StepperStep } from '@/components/ui/stepper';
+import type { StagedImage } from '@/components/ui/image-uploader';
 import {
   UPEU_COORDS,
   UPEU_RADIO_MAX_KM,
@@ -32,7 +32,6 @@ import {
 } from '@/lib/geo';
 import { universidadService, type ZonaResolucion } from '@/services/universidad-service';
 import { cn } from '@/lib/cn';
-import { leerDimensionesImagen, MIN_LADO_PX } from '@/lib/img';
 import type {
   CrearPropiedadRequest,
   PeriodoAlquiler,
@@ -42,10 +41,8 @@ import type {
 
 import { resolveIcon } from './property-form-icons';
 import {
-  ACCEPTED_IMAGE_TYPES,
   INITIAL_FORM,
   MAX_IMAGES,
-  MAX_IMAGE_BYTES,
   type Errores,
   type FormState,
 } from './property-form-types';
@@ -56,6 +53,37 @@ import { ServiciosSection } from './servicios-section';
 import { ReglasSection } from './reglas-section';
 import { FotosSidebar } from './fotos-sidebar';
 import { AccionesSidebar } from './acciones-sidebar';
+
+// =============================================================================
+// Wizard multi-paso (ítem 332) — SOLO en mobile (`lg:hidden`); en desktop las 6
+// secciones se muestran todas en scroll continuo, como antes. Cada paso declara
+// qué campos de `FormState` valida antes de dejar avanzar (los pasos sin campos
+// obligatorios, como Servicios/Reglas, no bloquean el avance).
+// =============================================================================
+
+type StepKey = keyof FormState | 'imagen';
+
+interface WizardStep extends StepperStep {
+  fields: StepKey[];
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  { key: 'info', label: 'Datos', fields: ['titulo', 'descripcion', 'precio'] },
+  { key: 'ubicacion', label: 'Ubicación', fields: ['direccion', 'latitud', 'longitud'] },
+  {
+    key: 'detalles',
+    label: 'Detalles',
+    fields: ['area', 'nroPiso', 'deposito', 'numDormitorios', 'numBanos', 'capacidadPersonas'],
+  },
+  { key: 'servicios', label: 'Servicios', fields: [] },
+  { key: 'reglas', label: 'Reglas', fields: [] },
+  { key: 'fotos', label: 'Fotos', fields: ['imagen'] },
+];
+
+function stepIndexForField(field: string): number {
+  const idx = WIZARD_STEPS.findIndex((s) => s.fields.includes(field as StepKey));
+  return idx === -1 ? 0 : idx;
+}
 
 // =============================================================================
 // Página principal
@@ -91,14 +119,48 @@ export default function AddPropertyPage() {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [coverIndex, setCoverIndex] = useState(0);
+  // Paso actual del wizard mobile (ítem 332). Irrelevante en desktop (`lg:`), donde
+  // todas las secciones se ven a la vez sin importar este valor.
+  const [currentStep, setCurrentStep] = useState(0);
+
+  /** Mueve el wizard al paso que contiene `field` y hace scroll a él (mobile). */
+  const jumpToField = (field: string) => {
+    setCurrentStep(stepIndexForField(field));
+    setTimeout(() => {
+      document.querySelector(`[data-field="${field}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+  };
+
+  /** Avanza un paso del wizard mobile, bloqueando si el paso actual tiene campos inválidos. */
+  const goToNextStep = () => {
+    const stepFields = WIZARD_STEPS[currentStep].fields;
+    if (stepFields.length > 0) {
+      const validationErrors = validar();
+      const stepErrors = Object.fromEntries(
+        Object.entries(validationErrors).filter(([k]) => stepFields.includes(k as StepKey)),
+      ) as Errores;
+      if (Object.keys(stepErrors).length > 0) {
+        setErrores((prev) => ({ ...prev, ...stepErrors }));
+        jumpToField(Object.keys(stepErrors)[0]);
+        return;
+      }
+    }
+    setCurrentStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goToPrevStep = () => {
+    setCurrentStep((s) => Math.max(s - 1, 0));
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /** Visibilidad de una sección según el paso del wizard: solo en mobile (`lg:` siempre visible). */
+  const stepVisibleCls = (idx: number) => cn(currentStep === idx ? 'block' : 'hidden', 'lg:block');
+
+  const [images, setImages] = useState<StagedImage[]>([]);
   /** Imágenes agregadas por URL externa (no consumen Cloudinary). Se adjuntan tras crear. */
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [requestingGeo, setRequestingGeo] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -177,70 +239,11 @@ export default function AddPropertyPage() {
     ];
   }, [catalogos]);
 
-  const handleFiles = async (incoming: File[]) => {
-    const remaining = MAX_IMAGES - imageFiles.length;
-    if (remaining <= 0) return;
-    const candidates = incoming.slice(0, remaining);
-    const invalid = candidates.find(
-      (f) => !ACCEPTED_IMAGE_TYPES.includes(f.type) || f.size > MAX_IMAGE_BYTES,
-    );
-    if (invalid) {
-      setErrores((p) => ({ ...p, imagen: `"${invalid.name}": formato no soportado o excede 10 MB.` }));
-      return;
+  const onImagesChange = (next: StagedImage[]) => {
+    setImages(next);
+    if (next.length > 0 || imageUrls.length > 0) {
+      setErrores((p) => { const { imagen: _omit, ...rest } = p; return rest; });
     }
-    // Resolución mínima (feedback inmediato; el backend valida igual al subir).
-    for (const f of candidates) {
-      try {
-        const { width, height } = await leerDimensionesImagen(f);
-        if (width < MIN_LADO_PX || height < MIN_LADO_PX) {
-          setErrores((p) => ({
-            ...p,
-            imagen: `"${f.name}": muy pequeña (${width}×${height}). Mínimo ${MIN_LADO_PX}px por lado.`,
-          }));
-          return;
-        }
-      } catch {
-        /* si no se puede medir, deja pasar: el backend decide */
-      }
-    }
-    setErrores((p) => { const { imagen: _omit, ...rest } = p; return rest; });
-    candidates.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageFiles((prev) => [...prev, file]);
-        setPreviews((prev) => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const onFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    void handleFiles(Array.from(e.target.files ?? []));
-    e.target.value = '';
-  };
-
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    void handleFiles(Array.from(e.dataTransfer.files));
-  };
-
-  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const onDragLeave = () => setIsDragging(false);
-
-  const removeImage = (index: number) => {
-    setImageFiles((prev) => prev.filter((_, i) => i !== index));
-    setPreviews((prev) => prev.filter((_, i) => i !== index));
-    setCoverIndex((prev) => {
-      if (imageFiles.length <= 1) return 0;
-      if (index === prev) return 0;
-      if (index < prev) return prev - 1;
-      return prev;
-    });
   };
 
   /** Valida un enlace DIRECTO a imagen (https + extensión). Refleja al backend. */
@@ -256,7 +259,7 @@ export default function AddPropertyPage() {
   const agregarImagenUrl = () => {
     const url = urlInput.trim();
     if (!url) return;
-    if (imageFiles.length + imageUrls.length >= MAX_IMAGES) {
+    if (images.length + imageUrls.length >= MAX_IMAGES) {
       setErrores((p) => ({ ...p, imagen: `Máximo ${MAX_IMAGES} fotos.` }));
       return;
     }
@@ -453,15 +456,27 @@ export default function AddPropertyPage() {
           e.longitud = `La ubicación está a ${formatearDistancia(km)} de UPeU. Máx: ${UPEU_RADIO_MAX_KM} km.`;
       }
     }
-    if (imageFiles.length === 0 && imageUrls.length === 0)
-      e.imagen = 'Agrega al menos una foto (archivo o enlace).';
+    const imagenesListas = images.filter((img) => img.status === 'ready');
+    if (imagenesListas.length === 0 && imageUrls.length === 0) {
+      e.imagen = images.some((img) => img.status === 'reading')
+        ? 'Espera a que las fotos terminen de procesarse.'
+        : 'Agrega al menos una foto (archivo o enlace).';
+    }
     return e;
   };
 
-  // Servicios con estado: incluidos (en el precio) + aparte (se pagan extra).
+  // Servicios con estado: incluidos (en el precio) + aparte (se pagan extra, con su monto
+  // opcional — item 156, permite un "estimado mensual" real en la ficha pública).
   const construirServicios = (): ServicioConEstado[] => [
     ...form.serviciosIncluidos.map((s) => ({ servicio: s, estado: 'INCLUIDO' as const })),
-    ...form.serviciosAparte.map((s) => ({ servicio: s, estado: 'APARTE' as const })),
+    ...form.serviciosAparte.map((s) => {
+      const monto = parseFloat(form.montosServiciosAparte[s] ?? '');
+      return {
+        servicio: s,
+        estado: 'APARTE' as const,
+        monto: Number.isFinite(monto) && monto > 0 ? monto : undefined,
+      };
+    }),
   ];
 
   // Payload lenient para guardar el borrador (no exige campos completos).
@@ -471,6 +486,7 @@ export default function AddPropertyPage() {
       titulo: form.titulo.trim() || undefined,
       descripcion: form.descripcion.trim() || undefined,
       precio: num(form.precio),
+      deposito: num(form.deposito),
       direccion: form.direccion.trim() || undefined,
       tipoPropiedad: form.tipoPropiedad || undefined,
       periodoAlquiler: form.periodoAlquiler || undefined,
@@ -522,8 +538,7 @@ export default function AddPropertyPage() {
     const validationErrors = validar();
     if (Object.keys(validationErrors).length > 0) {
       setErrores(validationErrors);
-      const firstField = Object.keys(validationErrors)[0];
-      document.querySelector(`[data-field="${firstField}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      jumpToField(Object.keys(validationErrors)[0]);
       return;
     }
     setLoading(true);
@@ -538,9 +553,9 @@ export default function AddPropertyPage() {
         setDraftId(id);
       }
       // Subir las fotos al borrador para que la publicación programada ya las tenga.
-      const coverFile = imageFiles[coverIndex] ?? imageFiles[0];
-      const extraFiles = imageFiles.filter((_, i) => i !== imageFiles.indexOf(coverFile));
-      const ordenadas = [coverFile, ...extraFiles].filter(Boolean) as File[];
+      // El orden del array YA refleja lo que el arrendador armó (drag & drop): la portada
+      // (primera imagen lista) va primero.
+      const ordenadas = images.filter((img) => img.status === 'ready').map((img) => img.file);
       if (ordenadas.length > 0 && id) {
         await propiedadService.subirImagenes(id, ordenadas);
       }
@@ -571,6 +586,7 @@ export default function AddPropertyPage() {
           titulo: b.titulo ?? '',
           descripcion: b.descripcion ?? '',
           precio: b.precio != null ? String(b.precio) : '',
+          deposito: b.deposito != null ? String(b.deposito) : '',
           direccion: b.direccion ?? '',
           tipoPropiedad: (b.tipoPropiedad as TipoPropiedad) || '',
           periodoAlquiler: (b.periodoAlquiler as PeriodoAlquiler) || '',
@@ -590,6 +606,11 @@ export default function AddPropertyPage() {
             ?? b.serviciosIncluidos ?? [],
           serviciosAparte:
             b.servicios?.filter((s) => s.estado === 'APARTE').map((s) => s.servicio) ?? [],
+          montosServiciosAparte: Object.fromEntries(
+            (b.servicios ?? [])
+              .filter((s) => s.estado === 'APARTE' && s.monto != null)
+              .map((s) => [s.servicio, String(s.monto)]),
+          ),
           reglas: b.reglas ?? [],
           estaDisponible: b.estaDisponible ?? true,
           disponibleDesde: b.disponibleDesde ?? '',
@@ -608,8 +629,7 @@ export default function AddPropertyPage() {
     const validationErrors = validar();
     if (Object.keys(validationErrors).length > 0) {
       setErrores(validationErrors);
-      const firstField = Object.keys(validationErrors)[0];
-      document.querySelector(`[data-field="${firstField}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      jumpToField(Object.keys(validationErrors)[0]);
       return;
     }
     const arrendadorIdNumber = Number(usuario.perfilId ?? usuario.id);
@@ -621,6 +641,7 @@ export default function AddPropertyPage() {
       titulo: form.titulo.trim(),
       descripcion: form.descripcion.trim() || undefined,
       precio: parseFloat(form.precio),
+      deposito: form.deposito !== '' ? parseFloat(form.deposito) : undefined,
       direccion: form.direccion.trim(),
       tipoPropiedad: form.tipoPropiedad || undefined,
       periodoAlquiler: form.periodoAlquiler || undefined,
@@ -648,15 +669,17 @@ export default function AddPropertyPage() {
       politicaCancelacion: form.politicaCancelacion,
       arrendadorId: arrendadorIdNumber,
     };
-    setLoading(true);
-    try {
-      const coverFile = imageFiles[coverIndex] ?? imageFiles[0];
-      const extraFiles = imageFiles.filter((_, i) => i !== imageFiles.indexOf(coverFile));
+    // Orden ya definido por el arrendador en el uploader (drag & drop): la portada
+    // (primera imagen lista) se sube primero.
+    const ordenadas = images.filter((img) => img.status === 'ready').map((img) => img.file);
+    const coverFile = ordenadas[0];
+    const extraFiles = ordenadas.slice(1);
+
+    const publicarPropiedad = async () => {
       if (draftId) {
         // Publicar un borrador: persistir últimos cambios → validar+publicar en backend → subir fotos.
         await borradorService.actualizar(draftId, construirBorradorPayload());
         const publicada = await borradorService.publicar(draftId);
-        const ordenadas = [coverFile, ...extraFiles].filter(Boolean) as File[];
         if (publicada?.id) {
           if (ordenadas.length > 0) await propiedadService.subirImagenes(publicada.id, ordenadas);
           for (const url of imageUrls) await propiedadService.agregarImagenPorUrl(publicada.id, url);
@@ -669,6 +692,17 @@ export default function AddPropertyPage() {
           for (const url of imageUrls) await propiedadService.agregarImagenPorUrl(nuevaPropiedad.id, url);
         }
       }
+    };
+
+    setLoading(true);
+    const promesa = publicarPropiedad();
+    notify.promise(promesa, {
+      loading: 'Publicando tu propiedad…',
+      success: 'Propiedad publicada',
+      error: 'Hubo un error al publicar la propiedad',
+    });
+    try {
+      await promesa;
       limpiarDraft(); // publicado con éxito → descartar la copia local
       router.push('/landlord/properties/active');
     } catch (err) {
@@ -739,6 +773,38 @@ export default function AddPropertyPage() {
         </div>
       )}
 
+      {/* ── Wizard mobile (ítem 332) — en desktop (`lg:`) se oculta y las 6 secciones ────
+          se muestran todas en scroll continuo, como antes. ─────────────────────────── */}
+      <div className="lg:hidden">
+        <Stepper steps={WIZARD_STEPS} currentIndex={currentStep} />
+        <div className="mt-5 mb-1 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={goToPrevStep}
+            disabled={currentStep === 0}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-bold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            Atrás
+          </button>
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            Paso {currentStep + 1} de {WIZARD_STEPS.length} · {WIZARD_STEPS[currentStep].label}
+          </span>
+          {currentStep < WIZARD_STEPS.length - 1 ? (
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Siguiente
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          ) : (
+            <span className="w-[78px]" aria-hidden />
+          )}
+        </div>
+      </div>
+
       <form
         onSubmit={handleSubmit}
         className="grid grid-cols-1 lg:grid-cols-3 gap-5"
@@ -746,87 +812,90 @@ export default function AddPropertyPage() {
       >
         {/* ── Columna principal ─────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
-          <InfoBasicaSection
-            form={form}
-            errores={errores}
-            onInput={onInput}
-            setField={setField}
-            tiposOptions={tiposOptions}
-            periodosOptions={periodosOptions}
-            precioSugerido={precioSugerido}
-          />
+          <div className={stepVisibleCls(0)}>
+            <InfoBasicaSection
+              form={form}
+              errores={errores}
+              onInput={onInput}
+              setField={setField}
+              tiposOptions={tiposOptions}
+              periodosOptions={periodosOptions}
+              precioSugerido={precioSugerido}
+            />
+          </div>
 
-          <UbicacionSection
-            form={form}
-            errores={errores}
-            onInput={onInput}
-            zonas={zonas}
-            requestingGeo={requestingGeo}
-            usarMiUbicacion={usarMiUbicacion}
-            geocoding={geocoding}
-            ubicarDireccion={ubicarDireccion}
-            geoMsg={geoMsg}
-            distanciaUpeu={distanciaUpeu}
-            zonaActual={zonaActual}
-            onPinChange={onPinChange}
-          />
+          <div className={stepVisibleCls(1)}>
+            <UbicacionSection
+              form={form}
+              errores={errores}
+              onInput={onInput}
+              zonas={zonas}
+              requestingGeo={requestingGeo}
+              usarMiUbicacion={usarMiUbicacion}
+              geocoding={geocoding}
+              ubicarDireccion={ubicarDireccion}
+              geoMsg={geoMsg}
+              distanciaUpeu={distanciaUpeu}
+              zonaActual={zonaActual}
+              onPinChange={onPinChange}
+            />
+          </div>
 
-          <DetallesSection
-            form={form}
-            errores={errores}
-            onInput={onInput}
-            setField={setField}
-            esInmuebleCompleto={esInmuebleCompleto}
-          />
+          <div className={stepVisibleCls(2)}>
+            <DetallesSection
+              form={form}
+              errores={errores}
+              onInput={onInput}
+              setField={setField}
+              esInmuebleCompleto={esInmuebleCompleto}
+            />
+          </div>
 
-          <ServiciosSection
-            cargandoCat={cargandoCat}
-            catalogos={catalogos}
-            form={form}
-            setForm={setForm}
-            setField={setField}
-          />
+          <div className={stepVisibleCls(3)}>
+            <ServiciosSection
+              cargandoCat={cargandoCat}
+              catalogos={catalogos}
+              form={form}
+              setForm={setForm}
+              setField={setField}
+            />
+          </div>
 
-          <ReglasSection
-            cargandoCat={cargandoCat}
-            catalogos={catalogos}
-            form={form}
-            setField={setField}
-          />
+          <div className={stepVisibleCls(4)}>
+            <ReglasSection
+              cargandoCat={cargandoCat}
+              catalogos={catalogos}
+              form={form}
+              setField={setField}
+            />
+          </div>
         </div>
 
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
         <aside className="space-y-4 lg:sticky lg:top-6 self-start">
-          <FotosSidebar
-            imageFiles={imageFiles}
-            imageUrls={imageUrls}
-            previews={previews}
-            coverIndex={coverIndex}
-            setCoverIndex={setCoverIndex}
-            removeImage={removeImage}
-            isDragging={isDragging}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            errores={errores}
-            fileInputRef={fileInputRef}
-            onFileInput={onFileInput}
-            removeImagenUrl={removeImagenUrl}
-            urlInput={urlInput}
-            setUrlInput={setUrlInput}
-            agregarImagenUrl={agregarImagenUrl}
-          />
+          <div className={cn('space-y-4', stepVisibleCls(5))}>
+            <FotosSidebar
+              images={images}
+              onImagesChange={onImagesChange}
+              imageUrls={imageUrls}
+              errores={errores}
+              removeImagenUrl={removeImagenUrl}
+              urlInput={urlInput}
+              setUrlInput={setUrlInput}
+              agregarImagenUrl={agregarImagenUrl}
+            />
 
-          <AccionesSidebar
-            submitError={submitError}
-            loading={loading}
-            guardandoBorrador={guardandoBorrador}
-            guardarBorrador={guardarBorrador}
-            draftId={draftId}
-            fechaProgramada={fechaProgramada}
-            setFechaProgramada={setFechaProgramada}
-            programarPublicacion={programarPublicacion}
-          />
+            <AccionesSidebar
+              submitError={submitError}
+              loading={loading}
+              guardandoBorrador={guardandoBorrador}
+              guardarBorrador={guardarBorrador}
+              draftId={draftId}
+              fechaProgramada={fechaProgramada}
+              setFechaProgramada={setFechaProgramada}
+              programarPublicacion={programarPublicacion}
+            />
+          </div>
         </aside>
       </form>
     </div>

@@ -1,30 +1,16 @@
 'use client';
 
-import {
-  type ChangeEvent,
-  type Dispatch,
-  type DragEvent,
-  type RefObject,
-  type SetStateAction,
-} from 'react';
+import { type Dispatch, type SetStateAction, useCallback } from 'react';
 
-import { cn } from '@/lib/cn';
-import { MAX_IMAGES, type Errores } from './property-form-types';
+import { ImageUploader, type StagedImage } from '@/components/ui/image-uploader';
+import { leerDimensionesImagen, MIN_LADO_PX } from '@/lib/img';
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, type Errores } from './property-form-types';
 
 interface FotosSidebarProps {
-  imageFiles: File[];
+  images: StagedImage[];
+  onImagesChange: (images: StagedImage[]) => void;
   imageUrls: string[];
-  previews: string[];
-  coverIndex: number;
-  setCoverIndex: Dispatch<SetStateAction<number>>;
-  removeImage: (index: number) => void;
-  isDragging: boolean;
-  onDrop: (e: DragEvent<HTMLDivElement>) => void;
-  onDragOver: (e: DragEvent<HTMLDivElement>) => void;
-  onDragLeave: () => void;
   errores: Errores;
-  fileInputRef: RefObject<HTMLInputElement | null>;
-  onFileInput: (e: ChangeEvent<HTMLInputElement>) => void;
   removeImagenUrl: (index: number) => void;
   urlInput: string;
   setUrlInput: Dispatch<SetStateAction<string>>;
@@ -32,136 +18,52 @@ interface FotosSidebarProps {
 }
 
 export function FotosSidebar({
-  imageFiles,
+  images,
+  onImagesChange,
   imageUrls,
-  previews,
-  coverIndex,
-  setCoverIndex,
-  removeImage,
-  isDragging,
-  onDrop,
-  onDragOver,
-  onDragLeave,
   errores,
-  fileInputRef,
-  onFileInput,
   removeImagenUrl,
   urlInput,
   setUrlInput,
   agregarImagenUrl,
 }: FotosSidebarProps) {
+  // Feedback inmediato de resolución mínima; el backend valida igual al subir.
+  const validateImage = useCallback(async (file: File) => {
+    try {
+      const { width, height } = await leerDimensionesImagen(file);
+      if (width < MIN_LADO_PX || height < MIN_LADO_PX) {
+        return `Muy pequeña (${width}×${height}). Mínimo ${MIN_LADO_PX}px por lado.`;
+      }
+      return null;
+    } catch {
+      return null; // si no se puede medir, deja pasar: el backend decide
+    }
+  }, []);
+
+  const remainingSlots = MAX_IMAGES - images.length - imageUrls.length;
+
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-foreground">Fotos del cuarto</h3>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Sube hasta {MAX_IMAGES} fotos · elige la portada
+            Sube hasta {MAX_IMAGES} fotos · arrastra para ordenar
           </p>
         </div>
         <span className="text-xs font-semibold text-muted-foreground tabular-nums">
-          {imageFiles.length + imageUrls.length}/{MAX_IMAGES}
+          {images.length + imageUrls.length}/{MAX_IMAGES}
         </span>
       </div>
 
       <div data-field="imagen" className="p-5 space-y-3">
-
-        {/* Grid de previews */}
-        {previews.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            {previews.map((src, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'relative aspect-[4/3] rounded-lg overflow-hidden group',
-                  i === coverIndex && 'ring-2 ring-primary ring-offset-1 ring-offset-card',
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                {i === coverIndex && (
-                  <div className="absolute top-1 left-1 bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none select-none">
-                    Portada
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                  {i !== coverIndex && (
-                    <button
-                      type="button"
-                      onClick={() => setCoverIndex(i)}
-                      title="Usar como portada"
-                      className="w-7 h-7 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">star</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    title="Eliminar foto"
-                    className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/80 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[13px]">close</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {imageFiles.length + imageUrls.length < MAX_IMAGES && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-[4/3] rounded-lg border-2 border-dashed border-border hover:border-primary/50 bg-background flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-              >
-                <span className="material-symbols-outlined text-[22px]">add_photo_alternate</span>
-                <span className="text-[10px] font-semibold">Agregar</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Dropzone vacío */}
-        {previews.length === 0 && (
-          <div
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              'flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all select-none',
-              isDragging
-                ? 'border-primary bg-accent/50'
-                : errores.imagen
-                  ? 'border-destructive/50 bg-destructive/5'
-                  : 'border-border hover:border-primary/50 hover:bg-muted/50',
-            )}
-          >
-            <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
-              <span className="material-symbols-outlined text-[26px] text-accent-foreground">
-                add_photo_alternate
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">
-                {isDragging ? 'Suelta aquí' : 'Arrastra fotos aquí'}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                o haz clic para explorar
-              </p>
-            </div>
-            <p className="text-[10px] text-muted-foreground/70 text-center">
-              JPG, PNG o WEBP · Máx. 10 MB por foto
-            </p>
-          </div>
-        )}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/jpg,image/png,image/webp"
-          multiple
-          onChange={onFileInput}
-          className="hidden"
+        <ImageUploader
+          images={images}
+          onImagesChange={onImagesChange}
+          remainingSlots={remainingSlots}
+          maxBytes={MAX_IMAGE_BYTES}
+          acceptedTypes={ACCEPTED_IMAGE_TYPES}
+          validateImage={validateImage}
         />
 
         {/* Miniaturas de imágenes agregadas por URL */}
@@ -179,6 +81,7 @@ export function FotosSidebar({
                     type="button"
                     onClick={() => removeImagenUrl(i)}
                     title="Quitar"
+                    aria-label={`Quitar imagen enlazada ${i + 1}`}
                     className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/80 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[13px]">close</span>
@@ -222,12 +125,6 @@ export function FotosSidebar({
           <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 animate-in fade-in slide-in-from-bottom-2 duration-400">
             <span className="material-symbols-outlined text-[13px]">error</span>
             {errores.imagen}
-          </p>
-        )}
-
-        {previews.length > 0 && (
-          <p className="text-[10px] text-muted-foreground text-center">
-            Toca <span className="font-bold">★</span> sobre una imagen para elegirla como portada
           </p>
         )}
       </div>

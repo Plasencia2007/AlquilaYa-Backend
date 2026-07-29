@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Phone, Mail, MessageSquare, GraduationCap, BadgeCheck } from 'lucide-react';
-import { ReputationBadge } from '@/components/reputation-badge';
+import { ReputationBadge } from '@/components/shared/reputation-badge';
 import type { Reserva } from '@/types/reserva';
 import { Button } from '@/components/ui/legacy-button';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { labelOpcion, roommateService, type PerfilConvivencia } from '@/services/roommate-service';
 
 interface StudentProfileModalProps {
@@ -16,43 +18,35 @@ interface StudentProfileModalProps {
 
 export function StudentProfileModal({ open, reserva, onClose }: StudentProfileModalProps) {
   const [convivencia, setConvivencia] = useState<PerfilConvivencia | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  // ESC to close
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  // Id del estudiante al que corresponde `convivencia` (o al que correspondió el
+  // último intento, si falló). `loading` se deriva comparándolo contra la reserva
+  // abierta ahora mismo, en vez de un `setLoading(true)` síncrono en el efecto
+  // (violaba react-hooks/set-state-in-effect) — y de paso evita mostrar el perfil
+  // de convivencia de un estudiante anterior mientras carga el del nuevo, ya que
+  // el modal no se remonta entre una apertura y otra (mismo componente, prop
+  // `reserva` distinta).
+  const [convivenciaDe, setConvivenciaDe] = useState<string | null>(null);
+  const loading = !!(open && reserva && convivenciaDe !== reserva.estudianteId);
+  const mounted = useHasMounted();
+  // Ítem 396: focus trap básico (reemplaza el listener de Escape a mano de más
+  // abajo — el hook ya se encarga de Tab/Shift+Tab y Escape en un solo lugar).
+  const trapRef = useFocusTrap<HTMLDivElement>({ active: open, onEscape: onClose });
 
   // Fetch cohabitation profile on open
   useEffect(() => {
-    if (!open || !reserva) {
-      setConvivencia(null);
-      return;
-    }
-    
-    setLoading(true);
+    if (!open || !reserva) return;
+    if (convivenciaDe === reserva.estudianteId) return; // ya cargado (o intentado)
+
     roommateService.convivenciaDe(reserva.estudianteId)
       .then((data) => {
         setConvivencia(data);
+        setConvivenciaDe(reserva.estudianteId);
       })
       .catch((err) => {
         console.error('Error cargando perfil de convivencia del estudiante:', err);
-      })
-      .finally(() => {
-        setLoading(false);
+        setConvivenciaDe(reserva.estudianteId);
       });
-  }, [open, reserva]);
+  }, [open, reserva, convivenciaDe]);
 
   // Safety fallback if no reservation or not mounted
   if (!reserva || !mounted) return null;
@@ -74,22 +68,25 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
   };
 
   const habitos = [
-    { key: 'fuma', val: convivencia?.fuma, icon: 'smoking_rooms', label: 'Tabaco' },
-    { key: 'horario', val: convivencia?.horario, icon: 'schedule', label: 'Horarios' },
-    { key: 'orden', val: convivencia?.orden, icon: 'cleaning_services', label: 'Limpieza' },
-    { key: 'ruido', val: convivencia?.ruido, icon: 'volume_up', label: 'Ruido' },
-    { key: 'sociabilidad', val: convivencia?.sociabilidad, icon: 'groups', label: 'Visitas/Social' },
-    { key: 'mascotas', val: convivencia?.mascotas, icon: 'pets', label: 'Mascotas' },
-    { key: 'invitados', val: convivencia?.invitados, icon: 'person_add', label: 'Invitados' },
+    { key: 'fuma' as const, val: convivencia?.fuma, icon: 'smoking_rooms', label: 'Tabaco' },
+    { key: 'horario' as const, val: convivencia?.horario, icon: 'schedule', label: 'Horarios' },
+    { key: 'orden' as const, val: convivencia?.orden, icon: 'cleaning_services', label: 'Limpieza' },
+    { key: 'ruido' as const, val: convivencia?.ruido, icon: 'volume_up', label: 'Ruido' },
+    { key: 'sociabilidad' as const, val: convivencia?.sociabilidad, icon: 'groups', label: 'Visitas/Social' },
+    { key: 'mascotas' as const, val: convivencia?.mascotas, icon: 'pets', label: 'Mascotas' },
+    { key: 'invitados' as const, val: convivencia?.invitados, icon: 'person_add', label: 'Invitados' },
   ].filter((h) => !!h.val);
 
   const tienePreferencias = convivencia?.presupuestoMax || (convivencia?.zonasPreferidas && convivencia.zonasPreferidas.length > 0);
 
   return createPortal(
     <div
+      ref={trapRef}
       className={`fixed inset-0 z-[110] flex justify-end overflow-hidden ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
+      aria-label={`Perfil de ${nombre}`}
+      tabIndex={-1}
     >
       {/* Backdrop */}
       <div
@@ -115,7 +112,8 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
           <button
             onClick={onClose}
             type="button"
-            className="absolute top-6 right-6 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-250 cursor-pointer"
+            aria-label="Cerrar"
+            className="absolute top-6 right-6 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-250 cursor-pointer"
           >
             <X className="size-4" />
           </button>
@@ -172,7 +170,7 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
                     Sobre mí
                   </span>
                   <p className="text-xs text-foreground font-medium bg-muted/40 border border-border/40 rounded-2xl p-4 leading-relaxed whitespace-pre-line select-none">
-                    "{convivencia.bio}"
+                    &ldquo;{convivencia.bio}&rdquo;
                   </p>
                 </div>
               )}
@@ -275,7 +273,7 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
                             {h.label}
                           </p>
                           <p className="text-xs font-black text-foreground truncate leading-tight">
-                            {labelOpcion(h.key as any, h.val)}
+                            {labelOpcion(h.key, h.val)}
                           </p>
                         </div>
                       </div>
@@ -391,5 +389,5 @@ export function StudentProfileModal({ open, reserva, onClose }: StudentProfileMo
       </div>
     </div>,
     document.body
-  ) as any;
+  );
 }

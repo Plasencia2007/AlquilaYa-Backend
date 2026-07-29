@@ -4,10 +4,13 @@ import com.alquilaya.serviciopropiedades.clients.MensajeriaClient;
 import com.alquilaya.serviciopropiedades.dto.ActividadDTO;
 import com.alquilaya.serviciopropiedades.dto.DashboardArrendadorDTO;
 import com.alquilaya.serviciopropiedades.dto.IngresoMensualDTO;
+import com.alquilaya.serviciopropiedades.dto.PuntoMensualDTO;
 import com.alquilaya.serviciopropiedades.entities.Propiedad;
 import com.alquilaya.serviciopropiedades.entities.Reserva;
 import com.alquilaya.serviciopropiedades.enums.EstadoPropiedad;
 import com.alquilaya.serviciopropiedades.enums.EstadoReserva;
+import com.alquilaya.serviciopropiedades.enums.TipoEvento;
+import com.alquilaya.serviciopropiedades.repositories.EventoPropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.PropiedadRepository;
 import com.alquilaya.serviciopropiedades.repositories.ReservaRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -38,6 +42,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final PropiedadRepository propiedadRepository;
     private final ReservaRepository reservaRepository;
+    private final EventoPropiedadRepository eventoPropiedadRepository;
     private final MensajeriaClient mensajeriaClient;
 
     @Override
@@ -86,6 +91,42 @@ public class DashboardServiceImpl implements DashboardService {
                     .build());
         }
 
+        // Ítem 321: ocupación histórica retroactiva. No hay snapshot persistido del estado
+        // mes a mes de cada propiedad, así que se reconstruye desde las reservas ya cerradas
+        // — mismo enfoque que ingresosPorMes arriba (misma ventana de 7 meses, misma fuente
+        // `reservas` ya cargada). Un mes cuenta como "ocupado" para una propiedad si existió
+        // al menos una reserva PAGADA/FINALIZADA cuyo rango [fechaInicio,fechaFin] se cruza
+        // con ese mes (no exige que la reserva se haya originado ese mes, a diferencia de
+        // ingresosPorMes que sí agrupa por fecha de pago).
+        // Limitación conocida (documentada, igual que tasaOcupacion arriba): el denominador
+        // usa el conteo ACTUAL de propiedadesActivas — no existe historial de qué propiedades
+        // estaban activas en cada mes pasado, así que se usa como proxy constante.
+        List<Reserva> reservasCerradas = reservas.stream()
+                .filter(r -> r.getEstado() == EstadoReserva.PAGADA || r.getEstado() == EstadoReserva.FINALIZADA)
+                .toList();
+
+        List<PuntoMensualDTO> ocupacionPorMes = new ArrayList<>();
+        for (int i = 6; i >= 0; i--) {
+            YearMonth ym = mesActual.minusMonths(i);
+            LocalDate inicioMes = ym.atDay(1);
+            LocalDate finMes = ym.atEndOfMonth();
+
+            long propiedadesOcupadasEnMes = reservasCerradas.stream()
+                    .filter(r -> !r.getFechaInicio().isAfter(finMes) && !r.getFechaFin().isBefore(inicioMes))
+                    .map(Reserva::getPropiedadId)
+                    .distinct()
+                    .count();
+
+            double ocupacionMes = propiedadesActivas == 0
+                    ? 0.0
+                    : Math.round((propiedadesOcupadasEnMes * 1000.0 / propiedadesActivas)) / 10.0;
+
+            ocupacionPorMes.add(PuntoMensualDTO.builder()
+                    .mes(ym.format(MES_FMT))
+                    .valor(ocupacionMes)
+                    .build());
+        }
+
         long reservasPendientes = reservas.stream()
                 .filter(r -> r.getEstado() == EstadoReserva.SOLICITADA).count();
         long reservasActivas = reservas.stream()
@@ -113,9 +154,18 @@ public class DashboardServiceImpl implements DashboardService {
             log.warn("No se pudo obtener mensajes sin leer para arrendador {}: {}", arrendadorId, e.getMessage());
         }
 
-        // TODO: vistasUltimos30Dias requiere una tabla de vistas/eventos por propiedad que aún
-        // no existe en este servicio. Devolvemos 0 hasta que se implemente el tracking.
-        long vistasUltimos30Dias = 0L;
+        // Vistas de los últimos 30 días across TODAS las propiedades del arrendador.
+        // Suma las filas EventoPropiedad(tipo=VISTA) que registra incrementarVistasAsync en
+        // cada visita al detalle, en UNA sola query agregada (COUNT + IN + >=). Si el
+        // arrendador no tiene propiedades evitamos un IN () vacío devolviendo 0 directo.
+        // Nota de correctitud: solo cuenta vistas ocurridas desde que se activó el tracking
+        // de eventos; propiedades vistas antes no tienen filas históricas. Es correcto para
+        // una métrica "últimos 30 días", que solo mira hacia adelante.
+        List<Long> propiedadIds = propiedades.stream().map(Propiedad::getId).toList();
+        long vistasUltimos30Dias = propiedadIds.isEmpty()
+                ? 0L
+                : eventoPropiedadRepository.countByPropiedadIdInAndTipoAndFechaCreacionAfter(
+                        propiedadIds, TipoEvento.VISTA, LocalDateTime.now().minusDays(30));
 
         return DashboardArrendadorDTO.builder()
                 .ingresosMesActual(ingresosMesActual)
@@ -129,6 +179,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .reservasActivas(reservasActivas)
                 .actividadReciente(actividad)
                 .ingresosPorMes(ingresosPorMes)
+                .ocupacionPorMes(ocupacionPorMes)
                 .build();
     }
 

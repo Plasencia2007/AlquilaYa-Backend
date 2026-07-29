@@ -5,6 +5,9 @@ import { createPortal } from 'react-dom';
 import { Check, Loader2, Lock, Pencil, Plus, Shield, Trash2, UserCog, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { cn } from '@/lib/cn';
 import { notify } from '@/lib/notify';
 import {
@@ -23,6 +26,7 @@ export function CustomRolesManager() {
   const [funcs, setFuncs] = useState<Funcionalidad[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<RolPersonalizado | 'nuevo' | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const cargar = async () => {
     setLoading(true);
@@ -41,15 +45,23 @@ export function CustomRolesManager() {
     void cargar();
   }, []);
 
-  const eliminar = async (rol: RolPersonalizado) => {
-    if (!confirm(`¿Eliminar el rol "${rol.nombre}"? Se quitará de todos los usuarios que lo tengan.`)) return;
-    try {
-      await rbacService.eliminarRol(rol.id);
-      notify.success('Rol eliminado');
-      void cargar();
-    } catch (err) {
-      notify.error(err, 'No se pudo eliminar el rol.');
-    }
+  const eliminar = (rol: RolPersonalizado) => {
+    confirm({
+      title: `¿Eliminar el rol "${rol.nombre}"?`,
+      description: 'Se quitará de todos los usuarios que lo tengan.',
+      tone: 'danger',
+      confirmLabel: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await rbacService.eliminarRol(rol.id);
+          notify.success('Rol eliminado');
+          void cargar();
+        } catch (err) {
+          notify.error(err, 'No se pudo eliminar el rol.');
+          return false;
+        }
+      },
+    });
   };
 
   return (
@@ -127,6 +139,7 @@ export function CustomRolesManager() {
           }}
         />
       )}
+      {ConfirmDialog}
     </section>
   );
 }
@@ -146,11 +159,8 @@ function RolModal({
   const [descripcion, setDescripcion] = useState(rol?.descripcion ?? '');
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set(rol?.funcionalidades ?? []));
   const [guardando, setGuardando] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
+  const trapRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   const porCategoria = useMemo(() => {
     const map = new Map<string, Funcionalidad[]>();
@@ -196,10 +206,17 @@ function RolModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:items-center">
-      <div className="relative my-auto w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rol-modal-title"
+        tabIndex={-1}
+        className="relative my-auto w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl"
+      >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h3 className="text-lg font-black text-slate-900">{rol ? `Editar "${rol.nombre}"` : 'Nuevo rol'}</h3>
-          <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100">
+          <h3 id="rol-modal-title" className="text-lg font-black text-slate-900">{rol ? `Editar "${rol.nombre}"` : 'Nuevo rol'}</h3>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-full p-1.5 min-h-11 min-w-11 flex items-center justify-center text-slate-400 hover:bg-slate-100">
             <X className="size-5" />
           </button>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
 
 import { type ItemCatalogo } from '@/services/catalogos-service';
 import { cn } from '@/lib/cn';
@@ -57,9 +57,36 @@ interface FieldProps {
 }
 
 export function Field({ label, hint, error, required, children }: FieldProps) {
+  const autoId = useId();
+  const errorId = useId();
+
+  // Ítem 406: la mayoría de los usos de `Field` envuelven un único control (InputField,
+  // NumberInput, un <textarea> nativo o CustomSelect) que hasta ahora no tenía `id` ni
+  // vínculo con el mensaje de error — el <label> tampoco tenía `htmlFor`, así que quedaba
+  // suelto sin asociación programática. Cuando el hijo es un único elemento le inyectamos
+  // `id` (respetando uno explícito si el caller ya lo puso) y, si hay error, `aria-describedby`
+  // apuntando al <p> de abajo + `aria-invalid`. Si el hijo no es un elemento único (raro), no
+  // se toca nada — el fallback es el comportamiento anterior.
+  let fieldId: string | undefined;
+  let content = children;
+  if (isValidElement(children)) {
+    const childProps = children.props as { id?: string; 'aria-describedby'?: string };
+    fieldId = childProps.id ?? autoId;
+    content = cloneElement(children, {
+      id: fieldId,
+      'aria-describedby': error
+        ? [childProps['aria-describedby'], errorId].filter(Boolean).join(' ')
+        : childProps['aria-describedby'],
+      'aria-invalid': error ? true : undefined,
+    } as Record<string, unknown>);
+  }
+
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+      <label
+        htmlFor={fieldId}
+        className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"
+      >
         {label}
         {required && <span className="text-destructive text-[13px] leading-none">*</span>}
         {hint && (
@@ -68,9 +95,13 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
           </span>
         )}
       </label>
-      {children}
+      {content}
       {error && (
-        <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-bottom-2 duration-400">
+        <p
+          id={errorId}
+          role="alert"
+          className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-bottom-2 duration-400"
+        >
           <span className="material-symbols-outlined text-[13px]">error</span>
           {error}
         </p>
@@ -128,6 +159,10 @@ interface CustomSelectProps<T extends string> {
   options: Array<{ value: T; label: string; icon?: string; description?: string }>;
   placeholder?: string;
   error?: string;
+  /** Inyectados por `Field` (ítem 406) para linkear el trigger con su <label> y su mensaje de error. */
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 export function CustomSelect<T extends string>({
@@ -136,6 +171,8 @@ export function CustomSelect<T extends string>({
   options,
   placeholder = 'Selecciona una opción',
   error,
+  id,
+  'aria-describedby': ariaDescribedby,
 }: CustomSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -153,6 +190,10 @@ export function CustomSelect<T extends string>({
     <div className="relative" ref={ref}>
       <button
         type="button"
+        id={id}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-describedby={ariaDescribedby}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           'w-full flex items-center justify-between gap-3 bg-input border rounded-xl py-2.5 px-4 text-sm text-left outline-none transition-all',

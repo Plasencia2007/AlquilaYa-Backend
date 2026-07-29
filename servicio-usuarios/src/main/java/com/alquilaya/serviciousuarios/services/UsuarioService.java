@@ -17,12 +17,15 @@ import com.alquilaya.serviciousuarios.exceptions.RecursoNoEncontradoException;
 import com.alquilaya.serviciousuarios.util.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -101,6 +104,10 @@ public class UsuarioService {
                 .rol(rol)
                 .estado(EstadoUsuario.PENDING)
                 .telefonoVerificado(false)
+                // ítem 185: @AssertTrue en RegisterRequest ya garantiza aceptaTerminos == true
+                // para llegar hasta acá (si no, @Valid rechaza el request antes del controller).
+                // Se registra con el reloj del servidor, no el del cliente (cobertura legal real).
+                .aceptaTerminosEn(request.isAceptaTerminos() ? LocalDateTime.now() : null)
                 .build();
 
         Usuario savedUser = usuarioRepository.save(usuario);
@@ -147,9 +154,9 @@ public class UsuarioService {
         return savedUser;
     }
 
-    public java.util.List<Usuario> listarTodos() {
+    public Page<Usuario> listarTodos(Pageable pageable) {
         // Excluye cuentas dadas de baja/anonimizadas (GDPR, G8-B).
-        return usuarioRepository.findByEliminadoFalse();
+        return usuarioRepository.findByEliminadoFalse(pageable);
     }
 
     public Usuario obtenerPorId(Long id) {
@@ -160,6 +167,12 @@ public class UsuarioService {
     public java.util.List<Usuario> listarPorRol(Rol rol) {
         // Excluye cuentas dadas de baja/anonimizadas (GDPR, G8-B).
         return usuarioRepository.findByRolAndEliminadoFalse(rol);
+    }
+
+    /** Listado por estado de cuenta (#367, p.ej. BANNED) para el panel admin de baneos activos. */
+    public java.util.List<Usuario> listarPorEstado(EstadoUsuario estado) {
+        // Excluye cuentas dadas de baja/anonimizadas (GDPR, G8-B).
+        return usuarioRepository.findByEstadoAndEliminadoFalse(estado);
     }
 
     public java.util.List<com.alquilaya.serviciousuarios.dto.AdminArrendadorDTO> listarArrendadoresAdmin() {
@@ -197,7 +210,17 @@ public class UsuarioService {
             usuario.setTelefono(updates.getTelefono());
             usuario.setTelefonoVerificado(false);
         }
-        if (updates.getEstado() != null) usuario.setEstado(updates.getEstado());
+        if (updates.getEstado() != null) {
+            usuario.setEstado(updates.getEstado());
+            // Solo se persiste/actualiza el motivo cuando el nuevo estado es BANNED. Si el estado
+            // cambia a otra cosa (p. ej. ACTIVE al reactivar), motivoBaneo se deja tal cual: así
+            // queda como histórico del último baneo y, si se vuelve a banear, se sobreescribe con
+            // el motivo nuevo. Decisión: no limpiarlo al reactivar (útil para ver el motivo del
+            // baneo anterior en auditoría/soporte).
+            if (updates.getEstado() == EstadoUsuario.BANNED) {
+                usuario.setMotivoBaneo(updates.getMotivo());
+            }
+        }
 
         if (usuario.getRol() == Rol.ARRENDADOR && updates.getDetallesArrendador() != null) {
             arrendadorRepository.findByUsuario(usuario).ifPresent(a -> {
@@ -225,12 +248,19 @@ public class UsuarioService {
         return usuarioRepository.save(usuario);
     }
 
+    /**
+     * Baja de cuenta iniciada por un ADMIN ({@code DELETE /api/v1/usuarios/{id}}).
+     * Delega en {@link #anonimizarCuenta(Long)} en vez de un borrado físico: reservas/pagos/
+     * mensajes en otros microservicios referencian este {@code id} vía Feign/Kafka sin FK real
+     * en BD, así que un {@code deleteById} los dejaría huérfanos (llamadas Feign a un ID
+     * inexistente devolverían 404). Anonimizar preserva el id y solo invalida la cuenta.
+     * {@link #anonimizarCuenta(Long)} no depende del contexto de autenticación (recibe el id
+     * como parámetro), por lo que es seguro invocarlo aquí en nombre de un admin sobre OTRO
+     * usuario, igual que cuando el propio usuario se da de baja vía {@code DELETE /me}.
+     */
     @Transactional
     public void eliminarUsuario(Long id) {
-        if (!usuarioRepository.existsById(id)) {
-            throw new RecursoNoEncontradoException("No se encontró el usuario con ID " + id);
-        }
-        usuarioRepository.deleteById(id);
+        anonimizarCuenta(id);
     }
 
     /**

@@ -1,21 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentProps } from 'react';
 import Link from 'next/link';
+import { es } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
+import { DayButton } from 'react-day-picker';
 import { Badge } from '@/components/ui/legacy-badge';
 import { Button } from '@/components/ui/legacy-button';
+import { Button as CalendarButton } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ReservationCard } from '@/components/landlord/ReservationCard';
-import { ConfirmActionModal } from '@/components/landlord/ConfirmActionModal';
 import { StudentProfileModal } from '@/components/landlord/StudentProfileModal';
 import { useReservationsStore } from '@/stores/reservations-store';
+import { useConfirm } from '@/hooks/use-confirm';
+import { useTabParam } from '@/hooks/use-tab-param';
 import type { Reserva, EstadoReserva } from '@/types/reserva';
 import { catalogosService, type ItemCatalogo } from '@/services/catalogos-service';
+import { cn } from '@/lib/cn';
 
-type Tab = 'pendientes' | 'confirmadas';
-type AccionPendiente =
-  | { tipo: 'aprobar'; reserva: Reserva }
-  | { tipo: 'rechazar'; reserva: Reserva }
-  | null;
+type Tab = 'pendientes' | 'confirmadas' | 'calendario';
+
+const TAB_VALUES: readonly Tab[] = ['pendientes', 'confirmadas', 'calendario'];
 
 const FILTROS_CONFIRMADAS: { id: 'TODOS' | 'APROBADA' | 'PAGADA'; label: string }[] = [
   { id: 'TODOS',    label: 'Todas' },
@@ -24,6 +31,75 @@ const FILTROS_CONFIRMADAS: { id: 'TODOS' | 'APROBADA' | 'PAGADA'; label: string 
 ];
 
 const ESTADOS_CONFIRMADAS: EstadoReserva[] = ['APROBADA', 'PAGADA'];
+
+/** Estados de reserva que ocupan de verdad el calendario (#325). Rechazadas/canceladas/
+ * expiradas no bloquean fechas, así que se excluyen. */
+const ESTADOS_CALENDARIO: { estado: EstadoReserva; label: string; badgeClass: string; dotClass: string }[] = [
+  { estado: 'SOLICITADA', label: 'Solicitada', badgeClass: 'bg-warning/15 text-warning font-bold', dotClass: 'bg-warning' },
+  { estado: 'APROBADA',   label: 'Aprobada',   badgeClass: 'bg-info/15 text-info font-bold',       dotClass: 'bg-info' },
+  { estado: 'PAGADA',     label: 'Pagada',     badgeClass: 'bg-success/15 text-success font-bold', dotClass: 'bg-success' },
+  { estado: 'FINALIZADA', label: 'Finalizada', badgeClass: 'bg-muted text-muted-foreground font-bold', dotClass: 'bg-muted-foreground' },
+];
+const ESTADOS_CALENDARIO_SET = new Set(ESTADOS_CALENDARIO.map((e) => e.estado));
+
+/** `fechaInicio`/`fechaFin` llegan como "YYYY-MM-DD" (ver `reservation-service.ts`); sin
+ * hora explícita, `new Date(...)` las interpreta en UTC y en Perú (UTC-5) corren un día. */
+function parseFechaLocal(fecha: string): Date {
+  const soloFecha = /^\d{4}-\d{2}-\d{2}$/.test(fecha);
+  return soloFecha ? new Date(`${fecha}T00:00:00`) : new Date(fecha);
+}
+
+function claveDia(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Día custom con tooltip: reutiliza el patrón de `CalendarDayButton` (`ui/calendar.tsx`
+ * líneas ~175-211) pero envuelto en un `Tooltip` que lista quién ocupa ese día (ítem 325,
+ * bonus opcional). Se crea vía factory memoizada porque `DayPicker` no deja pasarle props
+ * extra a `components.DayButton` — el mapa de ocupación viaja por clausura. */
+function crearDayButtonConTooltip(reservasPorDia: Map<string, Reserva[]>) {
+  function DayButtonConTooltip({ className, day, modifiers, ...props }: ComponentProps<typeof DayButton>) {
+    const ref = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+      if (modifiers.focused) ref.current?.focus();
+    }, [modifiers.focused]);
+
+    const ocupantes = reservasPorDia.get(claveDia(day.date)) ?? [];
+
+    const boton = (
+      <CalendarButton
+        ref={ref}
+        variant="ghost"
+        size="icon"
+        data-day={day.date.toLocaleDateString()}
+        className={cn(
+          'flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 font-normal leading-none',
+          className,
+        )}
+        {...props}
+      />
+    );
+
+    if (ocupantes.length === 0) return boton;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{boton}</TooltipTrigger>
+        <TooltipContent className="max-w-56 space-y-1 text-xs">
+          {ocupantes.map((r) => {
+            const meta = ESTADOS_CALENDARIO.find((e) => e.estado === r.estado);
+            return (
+              <p key={r.id} className="font-medium">
+                {meta?.label ?? r.estado} · {r.estudianteNombre ?? `Estudiante ${r.estudianteId}`}
+              </p>
+            );
+          })}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  return DayButtonConTooltip;
+}
 
 function CardSkeleton() {
   return (
@@ -42,12 +118,10 @@ function CardSkeleton() {
   );
 }
 
-export default function ReservationsActivePage() {
+function ReservationsActiveContent() {
   const { reservas, loading, error, cargar, aprobar, rechazar, finalizar } = useReservationsStore();
-  const [tab, setTab] = useState<Tab>('pendientes');
-  const [accion, setAccion] = useState<AccionPendiente>(null);
-  const [seleccion, setSeleccion] = useState<Reserva | null>(null);
-  const [working, setWorking] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirm();
+  const [tab, setTab] = useTabParam({ values: TAB_VALUES, defaultValue: 'pendientes' });
   const [filtroConf, setFiltroConf] = useState<'TODOS' | 'APROBADA' | 'PAGADA'>('TODOS');
   const [perfilEstudiante, setPerfilEstudiante] = useState<Reserva | null>(null);
   const [motivosRechazo, setMotivosRechazo] = useState<ItemCatalogo[]>([]);
@@ -75,23 +149,94 @@ export default function ReservationsActivePage() {
     return confirmadas.filter((r) => r.estado === filtroConf);
   }, [confirmadas, filtroConf]);
 
-  const handleConfirmAprobarRechazar = async (motivo?: string) => {
-    if (!accion) return;
-    setWorking(true);
-    const ok =
-      accion.tipo === 'aprobar'
-        ? await aprobar(accion.reserva.id)
-        : await rechazar(accion.reserva.id, motivo);
-    setWorking(false);
-    if (ok) setAccion(null);
+  // ── Calendario de ocupación (#325) ─────────────────────────────────────
+  // Un `DateRange` por reserva y por estado — mismo patrón que
+  // `components/student/availability-panel.tsx` (modifiers + modifiersClassNames).
+  const rangosPorEstado = useMemo(() => {
+    const mapa = new Map<EstadoReserva, DateRange[]>();
+    for (const r of reservas) {
+      if (!ESTADOS_CALENDARIO_SET.has(r.estado)) continue;
+      const from = parseFechaLocal(r.fechaInicio);
+      const to = parseFechaLocal(r.fechaFin);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) continue;
+      const lista = mapa.get(r.estado) ?? [];
+      lista.push({ from, to });
+      mapa.set(r.estado, lista);
+    }
+    return mapa;
+  }, [reservas]);
+
+  const modifiers = useMemo(() => {
+    const obj: Record<string, DateRange[]> = {};
+    for (const { estado } of ESTADOS_CALENDARIO) obj[estado] = rangosPorEstado.get(estado) ?? [];
+    return obj;
+  }, [rangosPorEstado]);
+
+  const modifiersClassNames = useMemo(() => {
+    const obj: Record<string, string> = {};
+    for (const { estado, badgeClass } of ESTADOS_CALENDARIO) obj[estado] = badgeClass;
+    return obj;
+  }, []);
+
+  // Mapa día → reservas que lo ocupan, solo para el tooltip (bonus opcional). Expande
+  // cada rango día a día con un tope defensivo ante datos corruptos (rango absurdamente largo).
+  const reservasPorDia = useMemo(() => {
+    const mapa = new Map<string, Reserva[]>();
+    for (const r of reservas) {
+      if (!ESTADOS_CALENDARIO_SET.has(r.estado)) continue;
+      const desde = parseFechaLocal(r.fechaInicio);
+      const hasta = parseFechaLocal(r.fechaFin);
+      if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime())) continue;
+      const cursor = new Date(desde);
+      let guard = 0;
+      while (cursor <= hasta && guard < 400) {
+        const clave = claveDia(cursor);
+        const lista = mapa.get(clave) ?? [];
+        lista.push(r);
+        mapa.set(clave, lista);
+        cursor.setDate(cursor.getDate() + 1);
+        guard++;
+      }
+    }
+    return mapa;
+  }, [reservas]);
+
+  const dayButtonConTooltip = useMemo(
+    () => crearDayButtonConTooltip(reservasPorDia),
+    [reservasPorDia],
+  );
+
+  const handleAprobar = (reserva: Reserva) => {
+    confirm({
+      title: '¿Aprobar esta reserva?',
+      description: `Confirmarás la solicitud de ${reserva.estudianteNombre ?? 'el estudiante'} para ${reserva.propiedadTitulo ?? 'tu propiedad'}.`,
+      confirmLabel: 'Sí, aprobar',
+      tone: 'success',
+      onConfirm: () => aprobar(reserva.id),
+    });
   };
 
-  const handleFinalizar = async () => {
-    if (!seleccion) return;
-    setWorking(true);
-    const ok = await finalizar(seleccion.id);
-    setWorking(false);
-    if (ok) setSeleccion(null);
+  const handleRechazar = (reserva: Reserva) => {
+    confirm({
+      title: 'Rechazar reserva',
+      description: 'Comparte un motivo claro. El estudiante recibirá esta respuesta.',
+      confirmLabel: 'Rechazar reserva',
+      tone: 'danger',
+      requireReason: true,
+      predefinedReasons: motivosRechazo,
+      reasonPlaceholder: 'Ej. Las fechas ya no están disponibles…',
+      onConfirm: (motivo) => rechazar(reserva.id, motivo),
+    });
+  };
+
+  const handleFinalizar = (reserva: Reserva) => {
+    confirm({
+      title: '¿Finalizar reserva?',
+      description: `Marcarás como cerrada la estancia de ${reserva.estudianteNombre ?? 'el estudiante'} en ${reserva.propiedadTitulo ?? 'tu propiedad'}. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Sí, finalizar',
+      tone: 'neutral',
+      onConfirm: () => finalizar(reserva.id),
+    });
   };
 
   const TABS: { id: Tab; label: string; count: number; badge: React.ReactNode }[] = [
@@ -107,6 +252,12 @@ export default function ReservationsActivePage() {
       count: confirmadas.length,
       badge: <Badge variant="success">Confirmadas</Badge>,
     },
+    {
+      id: 'calendario',
+      label: 'Calendario',
+      count: 0,
+      badge: <Badge variant="surface">Calendario</Badge>,
+    },
   ];
 
   return (
@@ -121,7 +272,9 @@ export default function ReservationsActivePage() {
           <p className="text-muted-foreground text-[12px] font-medium mt-0.5 tracking-tight">
             {tab === 'pendientes'
               ? 'Revisa y responde las solicitudes de tus estudiantes a tiempo.'
-              : 'Estudiantes con tu aprobación o que ya completaron el pago.'}
+              : tab === 'confirmadas'
+                ? 'Estudiantes con tu aprobación o que ya completaron el pago.'
+                : 'Vista mensual de ocupación de tus propiedades por estado de reserva.'}
           </p>
         </div>
         <Button
@@ -197,8 +350,8 @@ export default function ReservationsActivePage() {
                 <ReservationCard
                   key={reserva.id}
                   reserva={reserva}
-                  onAprobar={(r) => setAccion({ tipo: 'aprobar', reserva: r })}
-                  onRechazar={(r) => setAccion({ tipo: 'rechazar', reserva: r })}
+                  onAprobar={handleAprobar}
+                  onRechazar={handleRechazar}
                   onVerPerfil={(r) => setPerfilEstudiante(r)}
                 />
               ))}
@@ -251,10 +404,10 @@ export default function ReservationsActivePage() {
           ) : (
             <div className="space-y-4">
               {confirmadasFiltradas.map((reserva) => (
-                <ReservationCard 
-                  key={reserva.id} 
-                  reserva={reserva} 
-                  onFinalizar={(r) => setSeleccion(r)} 
+                <ReservationCard
+                  key={reserva.id}
+                  reserva={reserva}
+                  onFinalizar={handleFinalizar}
                   onVerPerfil={(r) => setPerfilEstudiante(r)}
                 />
               ))}
@@ -263,54 +416,33 @@ export default function ReservationsActivePage() {
         </>
       )}
 
-      {/* Modals aprobar / rechazar */}
-      <ConfirmActionModal
-        open={accion?.tipo === 'aprobar'}
-        title="¿Aprobar esta reserva?"
-        description={
-          accion?.tipo === 'aprobar'
-            ? `Confirmarás la solicitud de ${accion.reserva.estudianteNombre ?? 'el estudiante'} para ${accion.reserva.propiedadTitulo ?? 'tu propiedad'}.`
-            : undefined
-        }
-        confirmLabel="Sí, aprobar"
-        tone="success"
-        isLoading={working}
-        onConfirm={handleConfirmAprobarRechazar}
-        onCancel={() => !working && setAccion(null)}
-      />
-      <ConfirmActionModal
-        open={accion?.tipo === 'rechazar'}
-        title="Rechazar reserva"
-        description={
-          accion?.tipo === 'rechazar'
-            ? 'Comparte un motivo claro. El estudiante recibirá esta respuesta.'
-            : undefined
-        }
-        confirmLabel="Rechazar reserva"
-        tone="danger"
-        requireReason
-        predefinedReasons={motivosRechazo}
-        reasonPlaceholder="Ej. Las fechas ya no están disponibles…"
-        isLoading={working}
-        onConfirm={handleConfirmAprobarRechazar}
-        onCancel={() => !working && setAccion(null)}
-      />
+      {/* ── Tab Calendario ─────────────────────────────────── */}
+      {!loading && tab === 'calendario' && (
+        <div className="space-y-4 rounded-[2.5rem] border border-border bg-card p-6">
+          <TooltipProvider delayDuration={150}>
+            <Calendar
+              locale={es}
+              showOutsideDays={false}
+              defaultMonth={new Date()}
+              modifiers={modifiers}
+              modifiersClassNames={modifiersClassNames}
+              components={{ DayButton: dayButtonConTooltip }}
+              className="mx-auto"
+            />
+          </TooltipProvider>
 
-      {/* Modal finalizar */}
-      <ConfirmActionModal
-        open={!!seleccion}
-        title="¿Finalizar reserva?"
-        description={
-          seleccion
-            ? `Marcarás como cerrada la estancia de ${seleccion.estudianteNombre ?? 'el estudiante'} en ${seleccion.propiedadTitulo ?? 'tu propiedad'}. Esta acción no se puede deshacer.`
-            : undefined
-        }
-        confirmLabel="Sí, finalizar"
-        tone="neutral"
-        isLoading={working}
-        onConfirm={handleFinalizar}
-        onCancel={() => !working && setSeleccion(null)}
-      />
+          <div className="flex flex-wrap items-center justify-center gap-4 border-t border-border pt-4 text-xs text-muted-foreground">
+            {ESTADOS_CALENDARIO.map(({ estado, label, dotClass }) => (
+              <span key={estado} className="inline-flex items-center gap-1.5">
+                <span className={cn('size-2 rounded-full', dotClass)} aria-hidden />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ConfirmDialog}
 
       {/* Modal ver perfil estudiante */}
       <StudentProfileModal
@@ -319,5 +451,20 @@ export default function ReservationsActivePage() {
         onClose={() => setPerfilEstudiante(null)}
       />
     </div>
+  );
+}
+
+export default function ReservationsActivePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      }
+    >
+      <ReservationsActiveContent />
+    </Suspense>
   );
 }

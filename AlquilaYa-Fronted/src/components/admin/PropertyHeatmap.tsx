@@ -24,7 +24,7 @@ export default function PropertyHeatmap() {
         const data = await adminService.getRealProperties();
         setPropiedades(data);
       } catch (error) {
-        console.error('Failed to fetch real properties');
+        console.error('Failed to fetch real properties', error);
       } finally {
         setLoading(false);
       }

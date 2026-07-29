@@ -1,3 +1,5 @@
+import type { FieldValues, UseFormSetError } from 'react-hook-form';
+
 /**
  * Extrae un mensaje legible de un error del backend.
  *
@@ -70,16 +72,66 @@ export function parseAxiosError(error: unknown, fallback?: string): string {
   return fallback ?? 'Error desconocido';
 }
 
+/** Intenta parsear un body crudo (JSON) a `BackendError`. `undefined` si no es JSON válido. */
+function tryParseBackendError(raw: string): BackendError | undefined {
+  try {
+    return JSON.parse(raw) as BackendError;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Intenta parsear un body crudo y formatear. Si no es JSON válido, lo devuelve tal cual. */
 function formatPayload(raw: string, status?: number, fallback?: string): string {
   if (!raw) return fallback ?? mensajePorStatus(status) ?? 'Error desconocido';
-  try {
-    const obj = JSON.parse(raw) as BackendError;
-    return formatBackendError(obj, status, fallback);
-  } catch {
-    // No es JSON, devolver el texto plano truncado por si acaso
-    return raw.length > 300 ? raw.slice(0, 300) + '…' : raw;
+  const obj = tryParseBackendError(raw);
+  if (obj) return formatBackendError(obj, status, fallback);
+  // No es JSON, devolver el texto plano truncado por si acaso
+  return raw.length > 300 ? raw.slice(0, 300) + '…' : raw;
+}
+
+/**
+ * Extrae el `BackendError` (ya parseado) del payload de un error de Axios, sea el body un
+ * string JSON o ya un objeto. Mismo parsing que usa `parseAxiosError` internamente
+ * (`tryParseBackendError`) — no lo reimplementa, lo comparte. `undefined` si no hay payload
+ * reconocible.
+ */
+function extractBackendError(error: unknown): BackendError | undefined {
+  if (!error) return undefined;
+  const e = error as { response?: { data?: unknown } };
+  const data = e.response?.data;
+  if (data === undefined) return undefined;
+  if (typeof data === 'string') return tryParseBackendError(data);
+  if (data && typeof data === 'object') return data as BackendError;
+  return undefined;
+}
+
+/**
+ * Mapea los `validationErrors` del backend a errores de campo de react-hook-form (ítem 190).
+ * A diferencia de `parseAxiosError` (que arma un string para un toast genérico), esta función
+ * setea el error directamente en cada campo del formulario.
+ *
+ * Uso: `if (!applyServerErrors(form.setError, err)) notify.error(err, 'fallback')`.
+ *
+ * Tipado como `UseFormSetError<TFieldValues>` (el tipo real de `form.setError`) para que
+ * cualquier formulario pueda pasar su `form.setError` directo, sin adaptarlo.
+ *
+ * @returns `true` si mapeó al menos un error de campo (el caller puede omitir el toast
+ *   genérico); `false` si no había `validationErrors` (el caller debe mostrar un fallback).
+ */
+export function applyServerErrors<TFieldValues extends FieldValues = FieldValues>(
+  setError: UseFormSetError<TFieldValues>,
+  err: unknown,
+): boolean {
+  const data = extractBackendError(err);
+  const entradas = Object.entries(data?.validationErrors ?? {});
+  if (entradas.length === 0) return false;
+  for (const [campo, mensaje] of entradas) {
+    // El nombre de campo llega en runtime desde el backend: no se puede acotar en tiempo de
+    // compilación al union literal (`FieldPath<TFieldValues>`) que exige react-hook-form.
+    setError(campo as never, { message: mensaje });
   }
+  return true;
 }
 
 function formatBackendError(data: BackendError, status?: number, fallback?: string): string {

@@ -28,3 +28,34 @@ export const POLITICA_CANCELACION_INFO: Record<
 };
 
 export const POLITICAS_CANCELACION: PoliticaCancelacion[] = ['FLEXIBLE', 'MODERADA', 'ESTRICTA'];
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/**
+ * Calculadora de reembolso al cancelar (ítem 288). Traduce a lógica las reglas ya descritas en
+ * `POLITICA_CANCELACION_INFO`: todas las políticas son "todo o nada" — reembolso completo si la
+ * cancelación ocurre con al menos `diasMin` días de anticipación al check-in (`fechaInicio`), y
+ * 0% en caso contrario. Para FLEXIBLE (`diasMin: 0`) esto equivale a "reembolso completo si
+ * cancelas antes del check-in".
+ *
+ * Los días de anticipación se cuentan en días calendario completos (medianoche a medianoche),
+ * ignorando la hora de `hoy` y de `fechaInicio`, para que el resultado no dependa de a qué hora
+ * del día se abre el diálogo de cancelación.
+ */
+export function calcularReembolso(
+  politica: PoliticaCancelacion,
+  fechaInicio: string,
+  hoy: Date,
+  montoTotal: number,
+): { porcentaje: number; monto: number } {
+  const { diasMin } = POLITICA_CANCELACION_INFO[politica];
+  const inicio = new Date(fechaInicio);
+  const inicioUTC = Date.UTC(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  const hoyUTC = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const diasAnticipacion = Math.floor((inicioUTC - hoyUTC) / MS_POR_DIA);
+
+  const porcentaje = diasAnticipacion >= diasMin ? 100 : 0;
+  const monto = Math.round(montoTotal * (porcentaje / 100) * 100) / 100;
+
+  return { porcentaje, monto };
+}

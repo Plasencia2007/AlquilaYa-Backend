@@ -1,13 +1,17 @@
 package com.alquilaya.serviciopropiedades.entities;
 
 import com.alquilaya.serviciopropiedades.enums.EstadoHabitacion;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
@@ -21,6 +25,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Habitación reservable dentro de una propiedad gestionada por habitaciones
@@ -70,6 +76,14 @@ public class Habitacion {
 
     @Column(updatable = false)
     private LocalDateTime fechaCreacion;
+
+    /** URLs de fotos propias de esta habitación (no comparte las fotos generales de la propiedad). */
+    @ElementCollection
+    @CollectionTable(name = "habitacion_imagenes", joinColumns = @JoinColumn(name = "habitacion_id"))
+    @OrderColumn(name = "posicion")
+    @Column(name = "url", length = 512)
+    @Builder.Default
+    private List<String> imagenes = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
